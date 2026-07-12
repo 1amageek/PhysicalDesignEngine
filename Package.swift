@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PhysicalDesignEngine",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     products: [
         .library(name: "PhysicalDesignCore", targets: ["PhysicalDesignCore"]),
         .library(name: "FloorplanEngine", targets: ["FloorplanEngine"]),
