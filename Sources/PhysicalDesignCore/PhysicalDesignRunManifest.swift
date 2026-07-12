@@ -25,6 +25,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var sourceLayoutDigest: String?
     public var sourceParserID: String?
     public var sourceParserVersion: String?
+    public var implementationConfiguration: PhysicalDesignConfiguration?
     public var createdAt: Date
     public var completedAt: Date
 
@@ -47,6 +48,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         case sourceLayoutDigest
         case sourceParserID
         case sourceParserVersion
+        case implementationConfiguration
         case createdAt
         case completedAt
     }
@@ -70,7 +72,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         sourceLayoutFormat: XcircuiteFileFormat? = nil,
         sourceLayoutDigest: String? = nil,
         sourceParserID: String? = nil,
-        sourceParserVersion: String? = nil
+        sourceParserVersion: String? = nil,
+        implementationConfiguration: PhysicalDesignConfiguration? = nil
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -90,6 +93,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         self.sourceLayoutDigest = sourceLayoutDigest
         self.sourceParserID = sourceParserID
         self.sourceParserVersion = sourceParserVersion
+        self.implementationConfiguration = implementationConfiguration
         self.createdAt = createdAt
         self.completedAt = completedAt
     }
@@ -114,6 +118,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         sourceLayoutDigest = try container.decodeIfPresent(String.self, forKey: .sourceLayoutDigest)
         sourceParserID = try container.decodeIfPresent(String.self, forKey: .sourceParserID)
         sourceParserVersion = try container.decodeIfPresent(String.self, forKey: .sourceParserVersion)
+        implementationConfiguration = try container.decodeIfPresent(PhysicalDesignConfiguration.self, forKey: .implementationConfiguration)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         completedAt = try container.decode(Date.self, forKey: .completedAt)
     }
@@ -129,6 +134,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if design.designDigest.isEmpty {
             diagnostics.append("design digest is empty")
         }
+        diagnostics.append(contentsOf: LogicDesignProvenanceValidation.issues(for: design)
+            .filter { $0.code != "design_digest_missing" }
+            .map { "design provenance: \($0.message)" })
         if pdk.processID.isEmpty || pdk.version.isEmpty || pdk.digest.isEmpty {
             diagnostics.append("PDK provenance is incomplete")
         }
@@ -143,6 +151,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
             if sourceParserID?.isEmpty != false || sourceParserVersion?.isEmpty != false {
                 diagnostics.append("source parser provenance is incomplete")
             }
+        }
+        if let implementationConfiguration {
+            diagnostics.append(contentsOf: implementationConfiguration.validationDiagnostics().map { "implementation configuration: \($0)" })
         }
         if implementationID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || implementationVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append("implementation provenance is incomplete")

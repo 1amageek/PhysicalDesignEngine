@@ -1,4 +1,5 @@
 import Foundation
+import LogicIR
 import XcircuitePackage
 
 public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
@@ -291,7 +292,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             sourceLayoutFormat: source.sourceLayoutFormat,
             sourceLayoutDigest: source.sourceLayoutDigest,
             sourceParserID: source.sourceParserID,
-            sourceParserVersion: source.sourceParserVersion
+            sourceParserVersion: source.sourceParserVersion,
+            implementationConfiguration: request.configuration
         )
         let manifestDiagnostics = manifest.validationDiagnostics()
         guard manifestDiagnostics.isEmpty else {
@@ -343,6 +345,16 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         if request.design.designDigest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(diagnostic(severity: .error, code: "design_digest_missing", message: "The mapped design digest is required for reproducibility.", actions: ["record_design_digest"]))
         }
+        let provenanceIssues = LogicDesignProvenanceValidation.issues(for: request.design)
+            .filter { $0.code != "design_digest_missing" }
+        diagnostics.append(contentsOf: provenanceIssues.map {
+            diagnostic(
+                severity: .error,
+                code: $0.diagnosticCode,
+                message: $0.message,
+                actions: ["repair_design_provenance", "recreate_design_handoff"]
+            )
+        })
         if request.constraints.modeIDs.isEmpty {
             diagnostics.append(diagnostic(severity: .error, code: "timing_mode_missing", message: "At least one timing mode is required for physical implementation.", actions: ["declare_timing_modes"]))
         }
@@ -383,6 +395,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         if before.fills != after.fills { count += max(before.fills.count, after.fills.count) }
         if before.hotspots != after.hotspots { count += max(before.hotspots.count, after.hotspots.count) }
         if before.antennaRepairs != after.antennaRepairs { count += max(before.antennaRepairs.count, after.antennaRepairs.count) }
+        if before.implementationState != after.implementationState { count += 1 }
         return count
     }
 

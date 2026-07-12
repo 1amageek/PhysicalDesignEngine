@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import XcircuitePackage
+import LogicIR
 import PhysicalDesignCLISupport
 import FloorplanEngine
 @testable import PhysicalDesignCore
@@ -28,6 +29,28 @@ struct NativeExecutionTests {
             from: Data("{\"physicalDesign\":null,\"changedObjectCount\":0,\"candidateActions\":[]}".utf8)
         )
         #expect(legacyPayload.metrics.isEmpty)
+    }
+
+    @Test("rejects a design handoff with mismatched provenance input")
+    func rejectsMismatchedDesignProvenance() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var request = PhysicalDesignFixtureFactory.request(
+            stage: .floorplan,
+            snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+        )
+        request.design.provenance = LogicDesignProvenance(
+            sourceDesignDigest: "source",
+            inputDesignDigest: "different",
+            transformationID: "mapped",
+            producerID: "test-producer",
+            producerVersion: "1.0.0"
+        )
+
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+
+        #expect(result.status == .blocked)
+        let diagnosticCodes = result.diagnostics.map(\.code)
+        #expect(diagnosticCodes.contains("DESIGN_PROVENANCE_INPUT_DIGEST_MISMATCH"))
     }
 
     @Test("floorplan emits immutable JSON, DEF and design diff artifacts")
@@ -78,7 +101,11 @@ struct NativeExecutionTests {
             nets: [PhysicalDesignSnapshot.Net(id: "DATA", pinIDs: ["pin_IN", "pin_U1_A"])],
             blockages: [PhysicalDesignSnapshot.Rect(x: 5_000, y: 5_000, width: 500, height: 700)],
             powerStructures: [PhysicalDesignSnapshot.PowerStructure(id: "ring_vdd", netID: "VDD", kind: "power", layer: 1, geometry: PhysicalDesignSnapshot.Rect(x: 100, y: 100, width: 19_800, height: 19_800))],
-            routes: [PhysicalDesignSnapshot.Route(id: "route_DATA", netID: "DATA", segments: [PhysicalDesignSnapshot.RouteSegment(id: "segment_0", layer: 2, x1: 2_000, y1: 1_000, x2: 3_000, y2: 1_000)])]
+            routes: [PhysicalDesignSnapshot.Route(id: "route_DATA", netID: "DATA", segments: [PhysicalDesignSnapshot.RouteSegment(id: "segment_0", layer: 2, x1: 2_000, y1: 1_000, x2: 3_000, y2: 1_000)])],
+            implementationState: PhysicalDesignImplementationState(
+                tracks: [PhysicalDesignImplementationState.Track(id: "track_M2_X", layer: 2, direction: "vertical", origin: 1_000, spacing: 100, count: 180)],
+                pads: [PhysicalDesignImplementationState.Pad(id: "pad_pin_IN", pinID: "pin_IN", side: "left", geometry: PhysicalDesignSnapshot.Rect(x: 0, y: 5_000, width: 100, height: 100), placed: true)]
+            )
         )
         let def = PhysicalDesignDEFWriter().write(snapshot)
         let result = PhysicalDesignDEFParser().parse(Data(def.utf8))
@@ -99,6 +126,8 @@ struct NativeExecutionTests {
         #expect(parsed.routes[0].segments[0].layer == 2)
         #expect(parsed.routes[0].segments[0].x1 == 2_000)
         #expect(parsed.routes[0].segments[0].x2 == 3_000)
+        #expect(parsed.implementationState?.tracks == snapshot.implementationState?.tracks)
+        #expect(parsed.implementationState?.pads == snapshot.implementationState?.pads)
     }
 
     @Test("DEF parser reports line and section diagnostics")
@@ -169,6 +198,96 @@ struct NativeExecutionTests {
         #expect(manifest.sourceParserID == PhysicalDesignDEFParser.parserID)
         #expect(manifest.sourceParserVersion == PhysicalDesignDEFParser.parserVersion)
         #expect(result.diagnostics.contains { $0.code == "def_core_inferred_from_rows" })
+    }
+
+    @Test("floorplan persists implementation state for IO, power and routing constraints")
+    func floorplanImplementationState() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let snapshot = PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .floorplan, snapshot: snapshot)
+        )
+
+        #expect(result.status == .completed)
+        let revision = try #require(result.payload.physicalDesign)
+        let data = try #require(await store.data(at: revision.layoutArtifact.path))
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        #expect(output.implementationState?.tracks.isEmpty == false)
+        #expect(output.implementationState?.powerDomains.count == 1)
+        #expect(output.implementationState?.pads.isEmpty == true)
+    }
+
+    @Test("placement emits legal placement proof and avoids blockages")
+    func placementProof() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var snapshot = PhysicalDesignFixtureFactory.snapshot(includeFloorplan: true, includePlacement: false, includeRoutes: false, includeVias: false, includeHotspot: false)
+        snapshot.rows = [PhysicalDesignSnapshot.Row(id: "row_0", originX: 10_000, originY: 10_000, siteWidth: 100, height: 1_000, siteCount: 100)]
+        snapshot.blockages = [PhysicalDesignSnapshot.Rect(x: 10_000, y: 10_000, width: 100, height: 1_000)]
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .placement, snapshot: snapshot)
+        )
+
+        #expect(result.status == .completed)
+        let revision = try #require(result.payload.physicalDesign)
+        let data = try #require(await store.data(at: revision.layoutArtifact.path))
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let proof = try #require(output.implementationState?.placementProof)
+        #expect(proof.legalCellCount == proof.cellCount)
+        #expect(proof.blockageConflictCount > 0)
+        #expect(output.cells.allSatisfy { $0.placed })
+        #expect(output.cells.allSatisfy { cell in
+            !snapshot.blockages.contains { $0.intersects(PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)) }
+        })
+    }
+
+    @Test("CTS materializes clock buffers, branch nets and route constraints")
+    func ctsMaterialization() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis, snapshot: PhysicalDesignFixtureFactory.snapshot())
+        )
+
+        #expect(result.status == .completed)
+        let revision = try #require(result.payload.physicalDesign)
+        let data = try #require(await store.data(at: revision.layoutArtifact.path))
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        #expect(output.cells.contains { $0.isClockBuffer })
+        #expect(output.nets.contains { $0.id.hasPrefix("CLK_branch_") && $0.isClock })
+        #expect(output.implementationState?.clockRouteConstraints.isEmpty == false)
+        #expect(output.clockTrees.contains { !$0.bufferCellIDs.isEmpty })
+    }
+
+    @Test("routing records layer, spacing and antenna evidence")
+    func routingEvidence() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .globalRouting, snapshot: PhysicalDesignFixtureFactory.snapshot())
+        )
+
+        #expect(result.status == .completed)
+        let revision = try #require(result.payload.physicalDesign)
+        let data = try #require(await store.data(at: revision.layoutArtifact.path))
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let evidence = try #require(output.implementationState?.routingEvidence)
+        #expect(evidence.routedNetCount == output.routes.count)
+        #expect(evidence.antennaRiskNetIDs == ["DATA"])
+        #expect(evidence.viaCount > 0)
+        #expect(output.routes.flatMap(\.segments).contains { $0.layer % 2 == 1 })
+        #expect(output.routes.flatMap(\.segments).contains { $0.layer % 2 == 0 })
+    }
+
+    @Test("routing fails closed on blockage conflicts")
+    func routingBlockageDiagnostic() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var snapshot = PhysicalDesignFixtureFactory.snapshot()
+        snapshot.blockages = [PhysicalDesignSnapshot.Rect(x: 19_000, y: 9_000, width: 13_000, height: 4_000)]
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .globalRouting, snapshot: snapshot)
+        )
+
+        #expect(result.status == .blocked)
+        #expect(result.diagnostics.contains { $0.code == "routing_blockage_conflict" })
+        #expect(result.artifacts.isEmpty)
     }
 
     @Test("missing canonical state is blocked with a structured diagnostic")

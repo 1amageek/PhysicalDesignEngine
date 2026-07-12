@@ -4,7 +4,7 @@
 
 **Canonical native backend implemented. Process qualification and foundry-facing external adapters remain intentionally unclaimed.**
 
-Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete for native scope, M3 physical implementation algorithms is next.
+Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation slice complete, M4 repair and DFM closure is next.
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -28,9 +28,9 @@ Milestone status: M0 complete, M1 immutable run transaction complete, M2 support
 |---|---|---|---|---|
 | Floorplan and IO planning | Contract defined | Native canonical backend | Fixture smoke test | Not process-qualified |
 | Power planning | Contract defined | Native canonical backend | Stage regression | Not process-qualified |
-| Placement | Contract defined | Native legalizer | Stage regression | Not process-qualified |
-| Clock-tree synthesis | Contract defined | Native topology estimator | Stage regression | Not process-qualified |
-| Routing | Contract defined | Native Manhattan router | Stage regression | Not process-qualified |
+| Placement | Contract defined | Blockage-aware legalizer with placement proof and objective metrics | Placement proof regression | Not process-qualified |
+| Clock-tree synthesis | Contract defined | Materialized clock buffers, branch nets and route constraints | CTS materialization regression | Not process-qualified |
+| Routing | Contract defined | Directional layers, bend vias, blockage/spacing checks and antenna evidence | Routing evidence/blockage regression | Not process-qualified |
 | Physical ECO | Contract defined | Typed native actions | Stage regression | Not process-qualified |
 | Antenna repair | Contract defined | Native repair candidates | Stage regression | External DRC required |
 | Physical DFM | Contract defined | Native fill/via/hotspot candidates | Stage regression | External DRC required |

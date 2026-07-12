@@ -24,6 +24,10 @@ public struct PhysicalDesignDEFWriter: Sendable {
         for row in sortedRows {
             lines.append("ROW \(row.id) coreSite \(row.originX) \(row.originY) N DO \(max(1, row.siteCount)) BY 1 STEP \(row.siteWidth) \(row.height) ;")
         }
+        for track in snapshot.implementationState?.tracks.sorted(by: { $0.id < $1.id }) ?? [] {
+            let axis = track.direction.lowercased() == "vertical" ? "X" : "Y"
+            lines.append("TRACKS \(axis) \(track.origin) DO \(track.count) STEP \(track.spacing) LAYER M\(track.layer) ;")
+        }
         lines.append(contentsOf: [
             "COMPONENTS \(sortedCells.count) ;"
         ])
@@ -35,10 +39,15 @@ public struct PhysicalDesignDEFWriter: Sendable {
 
         if !topPins.isEmpty {
             lines.append("PINS \(topPins.count) ;")
+            let padByPinID = Dictionary(uniqueKeysWithValues: (snapshot.implementationState?.pads ?? []).map { ($0.pinID, $0) })
             for pin in topPins {
                 let net = pin.netID ?? "UNCONNECTED"
                 let direction = pin.direction.uppercased()
-                lines.append("- \(pin.name) + NET \(net) + DIRECTION \(direction) + USE SIGNAL + PLACED ( \(pin.x) \(pin.y) ) N ;")
+                var line = "- \(pin.name) + NET \(net) + DIRECTION \(direction) + USE SIGNAL + PLACED ( \(pin.x) \(pin.y) ) N"
+                if let pad = padByPinID[pin.id] {
+                    line += " + PROPERTY XCI_PAD_SIDE \"\(pad.side)\" + PROPERTY XCI_PAD_X \(pad.geometry.x) + PROPERTY XCI_PAD_Y \(pad.geometry.y) + PROPERTY XCI_PAD_WIDTH \(pad.geometry.width) + PROPERTY XCI_PAD_HEIGHT \(pad.geometry.height)"
+                }
+                lines.append(line + " ;")
             }
             lines.append("END PINS")
         }

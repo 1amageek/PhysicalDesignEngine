@@ -20,6 +20,30 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
     public var ecoDeltaX: Int64
     public var ecoDeltaY: Int64
     public var deterministicSeed: UInt64
+    public var implementationConstraints: PhysicalDesignImplementationConstraints?
+
+    private enum CodingKeys: String, CodingKey {
+        case dieWidth
+        case dieHeight
+        case coreMargin
+        case rowHeight
+        case siteWidth
+        case placementSpacing
+        case preferredRoutingLayers
+        case maximumRoutingLayer
+        case targetUtilization
+        case powerNetNames
+        case maximumAntennaRatio
+        case fillWindowSize
+        case fillSpacing
+        case ecoAction
+        case ecoTargetCellID
+        case ecoTargetNetID
+        case ecoDeltaX
+        case ecoDeltaY
+        case deterministicSeed
+        case implementationConstraints
+    }
 
     public init(
         dieWidth: Int64 = 1_000_000,
@@ -40,7 +64,8 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         ecoTargetNetID: String? = nil,
         ecoDeltaX: Int64 = 0,
         ecoDeltaY: Int64 = 0,
-        deterministicSeed: UInt64 = 0
+        deterministicSeed: UInt64 = 0,
+        implementationConstraints: PhysicalDesignImplementationConstraints? = .default
     ) {
         self.dieWidth = dieWidth
         self.dieHeight = dieHeight
@@ -61,6 +86,31 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         self.ecoDeltaX = ecoDeltaX
         self.ecoDeltaY = ecoDeltaY
         self.deterministicSeed = deterministicSeed
+        self.implementationConstraints = implementationConstraints
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dieWidth = try container.decodeIfPresent(Int64.self, forKey: .dieWidth) ?? 1_000_000
+        dieHeight = try container.decodeIfPresent(Int64.self, forKey: .dieHeight) ?? 1_000_000
+        coreMargin = try container.decodeIfPresent(Int64.self, forKey: .coreMargin) ?? 100_000
+        rowHeight = try container.decodeIfPresent(Int64.self, forKey: .rowHeight) ?? 10_000
+        siteWidth = try container.decodeIfPresent(Int64.self, forKey: .siteWidth) ?? 1_000
+        placementSpacing = try container.decodeIfPresent(Int64.self, forKey: .placementSpacing) ?? 200
+        preferredRoutingLayers = try container.decodeIfPresent([Int].self, forKey: .preferredRoutingLayers) ?? [2, 3, 4, 5]
+        maximumRoutingLayer = try container.decodeIfPresent(Int.self, forKey: .maximumRoutingLayer) ?? 6
+        targetUtilization = try container.decodeIfPresent(Double.self, forKey: .targetUtilization) ?? 0.70
+        powerNetNames = try container.decodeIfPresent([String].self, forKey: .powerNetNames) ?? ["VDD", "VSS"]
+        maximumAntennaRatio = try container.decodeIfPresent(Double.self, forKey: .maximumAntennaRatio) ?? 300.0
+        fillWindowSize = try container.decodeIfPresent(Int64.self, forKey: .fillWindowSize) ?? 20_000
+        fillSpacing = try container.decodeIfPresent(Int64.self, forKey: .fillSpacing) ?? 2_000
+        ecoAction = try container.decodeIfPresent(PhysicalECOAction.self, forKey: .ecoAction) ?? .resizeCell
+        ecoTargetCellID = try container.decodeIfPresent(String.self, forKey: .ecoTargetCellID)
+        ecoTargetNetID = try container.decodeIfPresent(String.self, forKey: .ecoTargetNetID)
+        ecoDeltaX = try container.decodeIfPresent(Int64.self, forKey: .ecoDeltaX) ?? 0
+        ecoDeltaY = try container.decodeIfPresent(Int64.self, forKey: .ecoDeltaY) ?? 0
+        deterministicSeed = try container.decodeIfPresent(UInt64.self, forKey: .deterministicSeed) ?? 0
+        implementationConstraints = try container.decodeIfPresent(PhysicalDesignImplementationConstraints.self, forKey: .implementationConstraints) ?? .default
     }
 
     public static let `default` = Self()
@@ -87,6 +137,9 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         }
         if maximumAntennaRatio <= 0 || fillWindowSize <= 0 || fillSpacing < 0 {
             diagnostics.append("antenna and fill configuration values are invalid")
+        }
+        if let implementationConstraints {
+            diagnostics.append(contentsOf: implementationConstraints.validationDiagnostics())
         }
         return diagnostics
     }

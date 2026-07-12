@@ -19,7 +19,16 @@ The native implementation accepts a `PhysicalDesignRequest` carrying a canonical
 
 Every completed stage emits a new canonical JSON revision, DEF handoff, and `XcircuiteDesignDiff`. Every artifact has a SHA-256 digest, byte count and producer run ID.
 
-Every completed stage also emits a run manifest binding the design digest, timing constraints, PDK identity, base revision, proposed revision, design diff, deterministic seed and implementation identity.
+Every completed stage also emits a run manifest binding the design digest, timing constraints, PDK identity, base revision, proposed revision, design diff, implementation configuration, deterministic seed and implementation identity.
+
+M3 also persists `implementationState` in the canonical snapshot:
+
+| Evidence | Native behavior |
+|---|---|
+| Tracks / power domains / pads | Generated deterministically during floorplan when absent |
+| Placement proof | Reports legal cells, overlaps, core bounds, blockage attempts, utilization and timing/congestion proxy objectives |
+| CTS state | Materializes clock buffer cells, branch nets and clock route constraints |
+| Routing evidence | Selects directional layers, emits bend vias, checks blockages/spacing and records antenna-risk nets |
 
 ## Layout interchange
 
@@ -40,4 +49,4 @@ The backend returns `blocked` for missing canonical state, unsupported opaque la
 
 ## Qualification boundary
 
-This implementation is deterministic and fixture-tested, but it is not process-qualified. DRC, LVS, PEX and Timing remain independent oracles. Native antenna, DFM and hotspot operations produce repair candidates and never claim signoff. GDSII/OASIS stream-out requires a qualified external adapter and is fail-closed through the adapter gate. Tool trust, process qualification, reference correlation and release approval remain Xcircuite/ToolQualification responsibilities.
+This implementation is deterministic and fixture-tested, but it is not process-qualified. DRC, LVS, PEX and Timing remain independent oracles. Timing and congestion objectives are native proxy metrics, not signoff timing. Native antenna, DFM and hotspot operations produce repair candidates and never claim signoff. GDSII/OASIS stream-out requires a qualified external adapter and is fail-closed through the adapter gate. Tool trust, process qualification, reference correlation and release approval remain Xcircuite/ToolQualification responsibilities.

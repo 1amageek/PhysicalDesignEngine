@@ -24,6 +24,14 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public func containsPoint(x pointX: Int64, y pointY: Int64) -> Bool {
             pointX >= x && pointX <= maxX && pointY >= y && pointY <= maxY
         }
+
+        public func intersects(_ other: Rect) -> Bool {
+            x < other.maxX && maxX > other.x && y < other.maxY && maxY > other.y
+        }
+
+        public func expanded(by margin: Int64) -> Rect {
+            Rect(x: x - margin, y: y - margin, width: width + margin * 2, height: height + margin * 2)
+        }
     }
 
     public struct Row: Sendable, Hashable, Codable {
@@ -324,6 +332,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
     public var hotspots: [Hotspot]
     public var antennaRepairs: [AntennaRepair]
     public var metadata: [String: String]
+    public var implementationState: PhysicalDesignImplementationState?
 
     public init(
         schemaVersion: Int = 1,
@@ -343,7 +352,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         fills: [Fill] = [],
         hotspots: [Hotspot] = [],
         antennaRepairs: [AntennaRepair] = [],
-        metadata: [String: String] = [:]
+        metadata: [String: String] = [:],
+        implementationState: PhysicalDesignImplementationState? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.topCell = topCell
@@ -363,6 +373,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         self.hotspots = hotspots
         self.antennaRepairs = antennaRepairs
         self.metadata = metadata
+        self.implementationState = implementationState
     }
 
     public static func empty(topCell: String) -> Self {
@@ -403,6 +414,25 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             let missingPins = net.pinIDs.filter { !pinIDs.contains($0) }
             if !missingPins.isEmpty {
                 diagnostics.append("net \(net.id) refers to missing pins \(missingPins.sorted().joined(separator: ","))")
+            }
+        }
+        if let implementationState {
+            diagnostics.append(contentsOf: implementationState.tracks.flatMap { track in
+                track.layer <= 0 || track.spacing <= 0 || track.count <= 0 ? ["track \(track.id) has invalid geometry"] : []
+            })
+            diagnostics.append(contentsOf: implementationState.powerDomains.flatMap { domain in
+                domain.netIDs.isEmpty || !isValid(domain.geometry) ? ["power domain \(domain.id) is invalid"] : []
+            })
+            diagnostics.append(contentsOf: implementationState.pads.flatMap { pad in
+                pad.pinID.isEmpty || !isValid(pad.geometry) ? ["pad \(pad.id) is invalid"] : []
+            })
+            if let proof = implementationState.placementProof {
+                if proof.cellCount < 0 || proof.legalCellCount < 0 || proof.overlapCount < 0 || proof.outsideCoreCount < 0 || proof.blockageConflictCount < 0 || proof.blockedCellCount < 0 {
+                    diagnostics.append("placement proof contains negative counts")
+                }
+                if !proof.utilization.isFinite || proof.utilization < 0 {
+                    diagnostics.append("placement proof utilization is invalid")
+                }
             }
         }
         return diagnostics

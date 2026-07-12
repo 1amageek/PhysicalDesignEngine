@@ -34,8 +34,10 @@ public struct PhysicalDesignDEFParser: Sendable {
         private var unitsPerMicron = 1_000
         private var die: PhysicalDesignSnapshot.Rect?
         private var rows: [PhysicalDesignSnapshot.Row] = []
+        private var tracks: [PhysicalDesignImplementationState.Track] = []
         private var cells: [PhysicalDesignSnapshot.Cell] = []
         private var pins: [PhysicalDesignSnapshot.Pin] = []
+        private var pads: [PhysicalDesignImplementationState.Pad] = []
         private var nets: [PhysicalDesignSnapshot.Net] = []
         private var blockages: [PhysicalDesignSnapshot.Rect] = []
         private var powerStructures: [PhysicalDesignSnapshot.PowerStructure] = []
@@ -63,6 +65,8 @@ public struct PhysicalDesignDEFParser: Sendable {
                     parseDieArea(token)
                 case "ROW":
                     parseRow(token)
+                case "TRACKS":
+                    parseTrack(token)
                 case "COMPONENTS":
                     parseComponents(token)
                 case "PINS":
@@ -140,7 +144,8 @@ public struct PhysicalDesignDEFParser: Sendable {
                     (lhs.x, lhs.y, lhs.width, lhs.height) < (rhs.x, rhs.y, rhs.width, rhs.height)
                 },
                 powerStructures: powerStructures.sorted { $0.id < $1.id },
-                routes: routes.sorted { $0.id < $1.id }
+                routes: routes.sorted { $0.id < $1.id },
+                implementationState: implementationState()
             )
             let snapshotDiagnostics = snapshot.validationDiagnostics()
             if !snapshotDiagnostics.isEmpty {
@@ -316,6 +321,38 @@ public struct PhysicalDesignDEFParser: Sendable {
             ))
         }
 
+        private mutating func parseTrack(_ token: PhysicalDesignDEFToken) {
+            let statement = readStatementTokens()
+            let uppercased = statement.map { $0.text.uppercased() }
+            guard let axis = statement.first, statement.count >= 8,
+                  let origin = integer(statement[1], section: "TRACKS"),
+                  let doIndex = uppercased.firstIndex(of: "DO"), doIndex + 1 < statement.count,
+                  let count = integer(statement[doIndex + 1], section: "TRACKS"),
+                  let stepIndex = uppercased.firstIndex(of: "STEP"), stepIndex + 1 < statement.count,
+                  let spacing = integer(statement[stepIndex + 1], section: "TRACKS"),
+                  let layerIndex = uppercased.firstIndex(of: "LAYER"), layerIndex + 1 < statement.count,
+                  let layer = parseLayer(statement[layerIndex + 1]) else {
+                addDiagnostic(
+                    severity: .error,
+                    code: "def_track_invalid",
+                    message: "TRACKS requires an axis, origin, count, spacing and layer.",
+                    token: token,
+                    section: "TRACKS",
+                    suggestedActions: ["provide_a_complete_tracks_statement"]
+                )
+                return
+            }
+            let direction = axis.text.uppercased() == "X" ? "vertical" : "horizontal"
+            tracks.append(PhysicalDesignImplementationState.Track(
+                id: "track_M\(layer)_\(axis.text.uppercased())",
+                layer: layer,
+                direction: direction,
+                origin: origin,
+                spacing: spacing,
+                count: count
+            ))
+        }
+
         private mutating func parseComponents(_ token: PhysicalDesignDEFToken) {
             guard let expectedCount = beginSection(named: "COMPONENTS", token: token) else { return }
             var actualCount = 0
@@ -466,12 +503,32 @@ public struct PhysicalDesignDEFParser: Sendable {
             var direction = "input"
             var x: Int64 = 0
             var y: Int64 = 0
+            var padSide: String?
+            var padX: Int64?
+            var padY: Int64?
+            var padWidth: Int64?
+            var padHeight: Int64?
             let uppercased = item.map { $0.text.uppercased() }
             if let netIndex = uppercased.firstIndex(of: "NET"), netIndex + 1 < item.count {
                 netID = item[netIndex + 1].text
             }
             if let directionIndex = uppercased.firstIndex(of: "DIRECTION"), directionIndex + 1 < item.count {
                 direction = item[directionIndex + 1].text.lowercased()
+            }
+            if let propertyIndex = uppercased.firstIndex(of: "XCI_PAD_SIDE"), propertyIndex + 1 < item.count {
+                padSide = item[propertyIndex + 1].text.lowercased()
+            }
+            if let propertyIndex = uppercased.firstIndex(of: "XCI_PAD_X"), propertyIndex + 1 < item.count {
+                padX = integer(item[propertyIndex + 1], section: "PINS")
+            }
+            if let propertyIndex = uppercased.firstIndex(of: "XCI_PAD_Y"), propertyIndex + 1 < item.count {
+                padY = integer(item[propertyIndex + 1], section: "PINS")
+            }
+            if let propertyIndex = uppercased.firstIndex(of: "XCI_PAD_WIDTH"), propertyIndex + 1 < item.count {
+                padWidth = integer(item[propertyIndex + 1], section: "PINS")
+            }
+            if let propertyIndex = uppercased.firstIndex(of: "XCI_PAD_HEIGHT"), propertyIndex + 1 < item.count {
+                padHeight = integer(item[propertyIndex + 1], section: "PINS")
             }
             for position in item.indices where uppercased[position] == "PLACED" || uppercased[position] == "FIXED" || uppercased[position] == "COVER" {
                 if position + 1 < item.count, let point = coordinatePair(in: item, start: position + 1, section: "PINS") {
@@ -489,6 +546,15 @@ public struct PhysicalDesignDEFParser: Sendable {
                 netID: netID,
                 direction: direction
             ))
+            if let padSide, let padX, let padY, let padWidth, let padHeight {
+                pads.append(PhysicalDesignImplementationState.Pad(
+                    id: "pad_\(id)",
+                    pinID: id,
+                    side: padSide,
+                    geometry: PhysicalDesignSnapshot.Rect(x: padX, y: padY, width: padWidth, height: padHeight),
+                    placed: true
+                ))
+            }
         }
 
         private mutating func parseNets(_ token: PhysicalDesignDEFToken) {
@@ -812,6 +878,14 @@ public struct PhysicalDesignDEFParser: Sendable {
 
         private func pinKey(cellID: String?, name: String) -> String {
             "\(cellID ?? "PIN")::\(name)"
+        }
+
+        private func implementationState() -> PhysicalDesignImplementationState? {
+            guard !tracks.isEmpty || !pads.isEmpty else { return nil }
+            return PhysicalDesignImplementationState(
+                tracks: tracks.sorted { $0.id < $1.id },
+                pads: pads.sorted { $0.id < $1.id }
+            )
         }
 
         private func coreInferredFromRows() -> PhysicalDesignSnapshot.Rect? {

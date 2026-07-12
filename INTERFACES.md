@@ -61,6 +61,8 @@ Each output reference records format, digest, byte count and producer run ID.
 
 `PhysicalDesignMaskDataAdapter` is the protocol boundary for future GDSII/OASIS adapters. `PhysicalDesignMaskDataAdapterGate` requires a matching format and explicit process qualification before invoking an adapter.
 
+`PhysicalDesignSnapshot.implementationState` is the canonical evidence surface for M3. It carries generated tracks, power domains, pads, placement proof, clock route constraints and routing evidence. These fields are included in JSON revisions and `XcircuiteDesignDiff`; the run manifest also records the implementation configuration used to produce them.
+
 
 ## Error contract
 

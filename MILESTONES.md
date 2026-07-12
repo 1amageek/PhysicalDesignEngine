@@ -53,7 +53,7 @@ Evidence: `PhysicalDesignDEFParser`, `PhysicalDesignDEFWriter`, `PhysicalDesignM
 
 ## M3 — Physical implementation algorithms
 
-Status: next.
+Status: complete for the deterministic native rule-aware slice; process qualification and oracle correlation remain open.
 
 Acceptance criteria:
 
@@ -62,9 +62,11 @@ Acceptance criteria:
 - CTS materializes buffers, clock connectivity and route constraints, not only estimated tree records.
 - Routing accounts for blockages, layer direction, vias, spacing and antenna risk with structured failure diagnostics.
 
+Evidence: `PhysicalDesignImplementationState`, `PhysicalDesignImplementationConstraints`, native floorplan/placement/CTS/routing paths, implementation proof and routing regression tests, and immutable diff/run-manifest persistence.
+
 ## M4 — Repair and DFM closure
 
-Status: planned.
+Status: next.
 
 Acceptance criteria:
 

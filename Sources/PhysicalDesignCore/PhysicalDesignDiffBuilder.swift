@@ -84,6 +84,7 @@ public struct PhysicalDesignDiffBuilder: Sendable {
         try appendChange("/fills", before.fills, after.fills, "Updated fill geometry.")
         try appendChange("/hotspots", before.hotspots, after.hotspots, "Updated physical hotspot repair state.")
         try appendChange("/antennaRepairs", before.antennaRepairs, after.antennaRepairs, "Updated antenna repair records.")
+        try appendChange("/implementationState", before.implementationState, after.implementationState, "Updated physical implementation constraints or proof evidence.")
         if changes.isEmpty {
             changes.append(
                 XcircuiteDesignDiffChange(
