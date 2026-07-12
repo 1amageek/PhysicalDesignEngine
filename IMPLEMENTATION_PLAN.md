@@ -36,4 +36,4 @@ The native backend now covers floorplan, power planning, placement, CTS, global 
 
 Remaining release gates are process-specific corpus retention, reference-oracle correlation, qualification evidence, and a qualified GDSII/OASIS stream-out adapter.
 
-The next implementation slice is M1 in `MILESTONES.md`: persist and validate the immutable physical-design run manifest for every completed mutation.
+The next implementation slice is M3 in `MILESTONES.md`: replace heuristic physical mutations with rule-aware floorplan, placement, CTS and routing algorithms while preserving the immutable artifact and diagnostic contracts.

@@ -63,6 +63,114 @@ struct NativeExecutionTests {
         #expect(manifest.artifacts.count == 3)
     }
 
+    @Test("supported DEF round trip preserves interchange structures")
+    func defRoundTrip() throws {
+        let snapshot = PhysicalDesignSnapshot(
+            topCell: "def_top",
+            unitsPerMicron: 1_000,
+            die: PhysicalDesignSnapshot.Rect(x: 0, y: 0, width: 20_000, height: 20_000),
+            rows: [PhysicalDesignSnapshot.Row(id: "row_0", originX: 1_000, originY: 1_000, siteWidth: 100, height: 1_000, siteCount: 180)],
+            cells: [PhysicalDesignSnapshot.Cell(id: "U1", master: "INV_X1", x: 2_000, y: 1_000, width: 1_234, height: 2_345, placed: true)],
+            pins: [
+                PhysicalDesignSnapshot.Pin(id: "pin_IN", name: "IN", x: 1_000, y: 5_000, netID: "DATA", direction: "input"),
+                PhysicalDesignSnapshot.Pin(id: "pin_U1_A", cellID: "U1", name: "A", x: 2_000, y: 1_000, netID: "DATA", direction: "input")
+            ],
+            nets: [PhysicalDesignSnapshot.Net(id: "DATA", pinIDs: ["pin_IN", "pin_U1_A"])],
+            blockages: [PhysicalDesignSnapshot.Rect(x: 5_000, y: 5_000, width: 500, height: 700)],
+            powerStructures: [PhysicalDesignSnapshot.PowerStructure(id: "ring_vdd", netID: "VDD", kind: "power", layer: 1, geometry: PhysicalDesignSnapshot.Rect(x: 100, y: 100, width: 19_800, height: 19_800))],
+            routes: [PhysicalDesignSnapshot.Route(id: "route_DATA", netID: "DATA", segments: [PhysicalDesignSnapshot.RouteSegment(id: "segment_0", layer: 2, x1: 2_000, y1: 1_000, x2: 3_000, y2: 1_000)])]
+        )
+        let def = PhysicalDesignDEFWriter().write(snapshot)
+        let result = PhysicalDesignDEFParser().parse(Data(def.utf8))
+
+        let parsed = try #require(result.snapshot)
+        #expect(result.isValid)
+        #expect(parsed.topCell == snapshot.topCell)
+        #expect(parsed.die == snapshot.die)
+        #expect(parsed.rows == snapshot.rows)
+        #expect(parsed.cells == snapshot.cells)
+        #expect(parsed.pins.contains { $0.name == "IN" && $0.cellID == nil && $0.netID == "DATA" })
+        #expect(parsed.nets.map(\.id) == ["DATA"])
+        #expect(parsed.nets[0].pinIDs == ["pin_IN", "pin_U1_A"])
+        #expect(parsed.blockages == snapshot.blockages)
+        #expect(parsed.powerStructures == snapshot.powerStructures)
+        #expect(parsed.routes.count == 1)
+        #expect(parsed.routes[0].netID == "DATA")
+        #expect(parsed.routes[0].segments[0].layer == 2)
+        #expect(parsed.routes[0].segments[0].x1 == 2_000)
+        #expect(parsed.routes[0].segments[0].x2 == 3_000)
+    }
+
+    @Test("DEF parser reports line and section diagnostics")
+    func defParserDiagnostics() throws {
+        let input = Data("""
+        VERSION 5.8 ;
+        DESIGN bad_top ;
+        DIEAREA ( 0 0 ) ( 1000 1000 ) ;
+        COMPONENTS 1 ;
+        - U1 INV_X1 + PLACED ( invalid 0 ) N ;
+        END COMPONENTS
+        NETS 0 ;
+        END NETS
+        END DESIGN
+        """.utf8)
+        let result = PhysicalDesignDEFParser().parse(input)
+
+        #expect(result.snapshot == nil)
+        let diagnostic = try #require(result.diagnostics.first { $0.code == "def_integer_invalid" })
+        #expect(diagnostic.section == "COMPONENTS")
+        #expect(diagnostic.line == 5)
+        #expect(diagnostic.severity == .error)
+    }
+
+    @Test("retained DEF interchange fixture parses")
+    func defFixtureParses() throws {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/positive-interchange.def")
+        let data = try Data(contentsOf: fixtureURL)
+        let result = PhysicalDesignDEFParser().parse(data)
+
+        #expect(result.isValid)
+        #expect(result.snapshot?.topCell == "interchange_top")
+        #expect(result.snapshot?.powerStructures.count == 1)
+        #expect(result.snapshot?.blockages.count == 1)
+    }
+
+    @Test("DEF input execution records source parser provenance")
+    func defInputExecution() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let sourceSnapshot = PhysicalDesignFixtureFactory.snapshot()
+        let sourceData = Data(PhysicalDesignDEFWriter().write(sourceSnapshot).utf8)
+        let sourceReference = try await store.write(
+            sourceData,
+            relativePath: "inputs/base.def",
+            kind: .layout,
+            format: .def,
+            runID: "source"
+        )
+        var request = PhysicalDesignFixtureFactory.request(stage: .placement)
+        request.inputLayout = PhysicalDesignReference(
+            layoutArtifact: sourceReference,
+            topCell: sourceSnapshot.topCell,
+            layoutDigest: try #require(sourceReference.sha256)
+        )
+
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+
+        #expect(result.status == .completed)
+        let manifestReference = try #require(result.payload.runManifest)
+        let manifestData = try #require(await store.data(at: manifestReference.path))
+        let manifest = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: manifestData)
+        #expect(manifest.sourceLayoutFormat == .def)
+        #expect(manifest.sourceLayoutDigest == sourceReference.sha256)
+        #expect(manifest.sourceParserID == PhysicalDesignDEFParser.parserID)
+        #expect(manifest.sourceParserVersion == PhysicalDesignDEFParser.parserVersion)
+        #expect(result.diagnostics.contains { $0.code == "def_core_inferred_from_rows" })
+    }
+
     @Test("missing canonical state is blocked with a structured diagnostic")
     func missingSnapshotIsBlocked() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
@@ -73,6 +181,23 @@ struct NativeExecutionTests {
         #expect(result.status == .blocked)
         #expect(result.diagnostics.contains { $0.code == "physical_snapshot_missing" })
         #expect(result.artifacts.isEmpty)
+    }
+
+    @Test("opaque GDSII input is blocked until an external adapter is qualified")
+    func gdsInputIsBlocked() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let engine = PhysicalDesignEngine(artifactStore: store)
+        var request = PhysicalDesignFixtureFactory.request(stage: .floorplan)
+        request.inputLayout = PhysicalDesignReference(
+            layoutArtifact: XcircuiteFileReference(path: "inputs/base.gds", kind: .layout, format: .gdsii),
+            topCell: "fixture_top",
+            layoutDigest: ""
+        )
+
+        let result = try await engine.execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.diagnostics.contains { $0.code == "unsupported_layout_format" })
     }
 
     @Test("stage-specific native wrappers reject incompatible requests")

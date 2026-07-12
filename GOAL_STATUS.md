@@ -4,7 +4,7 @@
 
 **Canonical native backend implemented. Process qualification and foundry-facing external adapters remain intentionally unclaimed.**
 
-Milestone status: M0 complete, M1 immutable run transaction complete for the native canonical-snapshot scope, M2 standard layout interchange is next.
+Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete for native scope, M3 physical implementation algorithms is next.
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -12,7 +12,7 @@ Milestone status: M0 complete, M1 immutable run transaction complete for the nat
 | Public package products | Implemented for native scope | Package.swift and native products |
 | Shared Xcircuite request/result contract | Implemented for native scope | Public Swift protocols and payloads |
 | Contract build | Passed | swift build |
-| Contract test | Passed | timeout-bounded xcodebuild test |
+| Contract test | Passed | timeout-bounded `swift test` |
 | Domain implementation | Smoke-checked | `NativePhysicalDesignExecutor` and stage regression tests |
 | CLI implementation | Complete | `physical-design` executable and JSON fixtures |
 | Fixture corpus | Smoke-checked | `Fixtures/` positive and negative requests |
@@ -35,6 +35,8 @@ Milestone status: M0 complete, M1 immutable run transaction complete for the nat
 | Antenna repair | Contract defined | Native repair candidates | Stage regression | External DRC required |
 | Physical DFM | Contract defined | Native fill/via/hotspot candidates | Stage regression | External DRC required |
 | Immutable revisions | Contract defined | JSON/DEF/diff/run-manifest artifacts | Integrity gate test | Complete for native scope |
+| DEF interchange | Contract defined | Native parser/writer with structured diagnostics and source provenance | Round-trip, retained fixture and DEF input tests | Complete for supported subset |
+| GDSII/OASIS adapter boundary | Protocol defined | Qualification-gated external adapter protocol | Gate contract pending external implementation | Blocked until qualified |
 
 ## Goal progression
 

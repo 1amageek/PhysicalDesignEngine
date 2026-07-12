@@ -21,10 +21,23 @@ Every completed stage emits a new canonical JSON revision, DEF handoff, and `Xci
 
 Every completed stage also emits a run manifest binding the design digest, timing constraints, PDK identity, base revision, proposed revision, design diff, deterministic seed and implementation identity.
 
+## Layout interchange
+
+The native interchange boundary is:
+
+| Format | Input | Output | Status |
+|---|---:|---:|---|
+| Canonical JSON | Yes | Yes | Native canonical format |
+| DEF 5.8 supported subset | Yes | Yes | Rows, components, pins, nets, routes, blockages and power structures |
+| GDSII | No | No | Protocol-first external adapter; blocked until qualified |
+| OASIS | No | No | Protocol-first external adapter; blocked until qualified |
+
+DEF parsing returns typed diagnostics with `code`, `line`, `section`, `entity` and suggested actions. Component dimensions default when the DEF source does not provide a supported size extension; the diagnostic remains attached to the run. Source format, source digest, parser ID and parser version are persisted in `run-manifest.json`.
+
 ## Fail-closed behavior
 
 The backend returns `blocked` for missing canonical state, unsupported opaque layout formats, invalid geometry, missing placement rows, missing clock or net semantics, and missing repair targets. It returns `failed` only when it cannot produce a valid result envelope, such as artifact persistence failure. Cancellation is preserved as `cancelled`.
 
 ## Qualification boundary
 
-This implementation is deterministic and fixture-tested, but it is not process-qualified. DRC, LVS, PEX and Timing remain independent oracles. Native antenna, DFM and hotspot operations produce repair candidates and never claim signoff. GDSII/OASIS stream-out requires a qualified external adapter. Tool trust, process qualification, reference correlation and release approval remain Xcircuite/ToolQualification responsibilities.
+This implementation is deterministic and fixture-tested, but it is not process-qualified. DRC, LVS, PEX and Timing remain independent oracles. Native antenna, DFM and hotspot operations produce repair candidates and never claim signoff. GDSII/OASIS stream-out requires a qualified external adapter and is fail-closed through the adapter gate. Tool trust, process qualification, reference correlation and release approval remain Xcircuite/ToolQualification responsibilities.

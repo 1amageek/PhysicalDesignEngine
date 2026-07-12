@@ -36,22 +36,24 @@ Acceptance criteria:
 - The manifest validates its cross-reference invariants and is integrity-gated by Xcircuite.
 - Older schema-version-one requests and payloads remain decodable.
 
-Evidence: `PhysicalDesignRunManifest`, `run-manifest.json` output, 7 package tests, and 2 Xcircuite adapter tests.
+Evidence: `PhysicalDesignRunManifest`, `run-manifest.json` output, timeout-bounded native regression tests, and Xcircuite adapter integrity tests.
 
 ## M2 — Standard layout interchange
 
-Status: next.
+Status: complete for the supported native DEF subset; GDSII/OASIS remain qualified external boundaries.
 
 Acceptance criteria:
 
 - Parse and validate the supported DEF subset into the canonical snapshot with line/section diagnostics.
 - Export deterministic DEF with rows, components, pins, nets, blockages and power structures.
-- Define protocol-first GDSII/OASIS adapters; return `blocked` until a qualified implementation is available.
+- Define protocol-first GDSII/OASIS adapters; the adapter gate returns an explicit qualification error until a qualified implementation is available.
 - Preserve source format, digest and parser version in the run manifest.
+
+Evidence: `PhysicalDesignDEFParser`, `PhysicalDesignDEFWriter`, `PhysicalDesignMaskDataAdapter`, `Fixtures/positive-interchange.def`, DEF round-trip/diagnostic/provenance tests, and the native capability declaration.
 
 ## M3 — Physical implementation algorithms
 
-Status: planned.
+Status: next.
 
 Acceptance criteria:
 

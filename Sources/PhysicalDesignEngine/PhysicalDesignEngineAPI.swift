@@ -8,7 +8,7 @@ public enum PhysicalDesignEngineAPI {
     public static let nativeCapability = XcircuiteEngineCapability(
         engineID: "physical-design.native",
         contractVersion: contractVersion,
-        supportedInputFormats: [.json],
+        supportedInputFormats: [.json, .def],
         supportedOutputFormats: [.json, .def],
         features: PhysicalDesignStage.allCases.map(\.rawValue),
         limitations: [

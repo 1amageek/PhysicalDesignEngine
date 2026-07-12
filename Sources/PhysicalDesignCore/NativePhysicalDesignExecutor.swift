@@ -12,6 +12,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     private let codec: PhysicalDesignJSONCodec
     private let diffBuilder: PhysicalDesignDiffBuilder
     private let defWriter: PhysicalDesignDEFWriter
+    private let defParser: PhysicalDesignDEFParser
     private let hasher: XcircuiteHasher
 
     public init(
@@ -30,6 +31,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         self.codec = PhysicalDesignJSONCodec()
         self.diffBuilder = PhysicalDesignDiffBuilder()
         self.defWriter = PhysicalDesignDEFWriter()
+        self.defParser = PhysicalDesignDEFParser()
         self.hasher = XcircuiteHasher()
     }
 
@@ -114,7 +116,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                     before: loaded.snapshot,
                     output: output,
                     outcome: outcome,
-                    startedAt: startedAt
+                    startedAt: startedAt,
+                    source: loaded
                 )
             }
         } catch is CancellationError {
@@ -127,6 +130,15 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                     message: "Physical design execution was cancelled before an immutable revision was committed.",
                     actions: ["resume_from_the_last_immutable_revision"]
                 )],
+                payload: emptyPayload,
+                startedAt: startedAt,
+                seed: request.configuration.deterministicSeed
+            )
+        } catch let error as PhysicalDesignDEFParseError {
+            return envelope(
+                request: request,
+                status: .blocked,
+                diagnostics: error.diagnostics.map(defDiagnostic),
                 payload: emptyPayload,
                 startedAt: startedAt,
                 seed: request.configuration.deterministicSeed
@@ -153,21 +165,56 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             throw PhysicalDesignStoreError.readFailed("request contains both inputLayout and initialSnapshot")
         }
         if let reference = request.inputLayout {
-            guard reference.layoutArtifact.format == .json else {
-                throw PhysicalDesignStoreError.readFailed("native backend accepts canonical JSON layout artifacts only")
+            guard reference.layoutArtifact.format == .json || reference.layoutArtifact.format == .def else {
+                throw PhysicalDesignStoreError.readFailed("native backend accepts canonical JSON or supported DEF layout artifacts only")
             }
             let data = try await artifactStore.read(reference.layoutArtifact)
-            let snapshot = try codec.decode(PhysicalDesignSnapshot.self, from: data)
+            let sourceDigest = hasher.sha256(data: data)
+            let snapshot: PhysicalDesignSnapshot
+            let sourceParserID: String
+            let sourceParserVersion: String
+            let sourceDiagnostics: [PhysicalDesignDEFDiagnostic]
+            if reference.layoutArtifact.format == .json {
+                snapshot = try codec.decode(PhysicalDesignSnapshot.self, from: data)
+                sourceParserID = "physical-design-json-codec"
+                sourceParserVersion = "1.0.0"
+                sourceDiagnostics = []
+            } else {
+                let parseResult = defParser.parse(data)
+                guard let parsedSnapshot = parseResult.snapshot else {
+                    throw PhysicalDesignDEFParseError(diagnostics: parseResult.diagnostics)
+                }
+                snapshot = parsedSnapshot
+                sourceParserID = PhysicalDesignDEFParser.parserID
+                sourceParserVersion = PhysicalDesignDEFParser.parserVersion
+                sourceDiagnostics = parseResult.diagnostics
+            }
             guard snapshot.topCell == reference.topCell else {
                 throw PhysicalDesignStoreError.readFailed("layout top cell does not match the physical design reference")
             }
-            guard reference.layoutDigest.isEmpty || reference.layoutDigest == hasher.sha256(data: data) else {
-                throw PhysicalDesignStoreError.readFailed("layout digest does not match the canonical snapshot artifact")
+            guard reference.layoutDigest.isEmpty || reference.layoutDigest == sourceDigest else {
+                throw PhysicalDesignStoreError.readFailed("layout digest does not match the source layout artifact")
             }
-            return LoadedSnapshot(snapshot: snapshot, baseReference: reference)
+            return LoadedSnapshot(
+                snapshot: snapshot,
+                baseReference: reference,
+                sourceLayoutFormat: reference.layoutArtifact.format,
+                sourceLayoutDigest: sourceDigest,
+                sourceParserID: sourceParserID,
+                sourceParserVersion: sourceParserVersion,
+                sourceDiagnostics: sourceDiagnostics
+            )
         }
         if let snapshot = request.initialSnapshot {
-            return LoadedSnapshot(snapshot: snapshot, baseReference: nil)
+            return LoadedSnapshot(
+                snapshot: snapshot,
+                baseReference: nil,
+                sourceLayoutFormat: nil,
+                sourceLayoutDigest: nil,
+                sourceParserID: nil,
+                sourceParserVersion: nil,
+                sourceDiagnostics: []
+            )
         }
         throw PhysicalDesignStoreError.readFailed("a canonical physical snapshot is required")
     }
@@ -177,7 +224,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         before: PhysicalDesignSnapshot,
         output: PhysicalDesignSnapshot,
         outcome: PhysicalDesignNativeMutationEngine.Outcome,
-        startedAt: Date
+        startedAt: Date,
+        source: LoadedSnapshot
     ) async throws -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload> {
         let snapshotData = try codec.encode(output)
         let snapshotPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.json"
@@ -239,7 +287,11 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             implementationVersion: implementationVersion,
             deterministicSeed: request.configuration.deterministicSeed,
             createdAt: startedAt,
-            completedAt: completedAt
+            completedAt: completedAt,
+            sourceLayoutFormat: source.sourceLayoutFormat,
+            sourceLayoutDigest: source.sourceLayoutDigest,
+            sourceParserID: source.sourceParserID,
+            sourceParserVersion: source.sourceParserVersion
         )
         let manifestDiagnostics = manifest.validationDiagnostics()
         guard manifestDiagnostics.isEmpty else {
@@ -269,7 +321,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         return envelope(
             request: request,
             status: .completed,
-            diagnostics: outcome.diagnostics,
+            diagnostics: source.sourceDiagnostics.map(defDiagnostic) + outcome.diagnostics,
             payload: payload,
             artifacts: [snapshotReference, defReference, diffReference, manifestReference],
             startedAt: startedAt,
@@ -303,8 +355,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         if request.inputLayout != nil && request.initialSnapshot != nil {
             diagnostics.append(diagnostic(severity: .error, code: "ambiguous_input_state", message: "Provide either inputLayout or initialSnapshot, not both.", actions: ["choose_one_canonical_input_state"]))
         }
-        if let inputLayout = request.inputLayout, inputLayout.layoutArtifact.format != .json {
-            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts canonical JSON layout artifacts; \(inputLayout.layoutArtifact.format.rawValue) requires an external adapter.", actions: ["convert_to_canonical_json", "use_a_qualified_external_adapter"]))
+        if let inputLayout = request.inputLayout, inputLayout.layoutArtifact.format != .json && inputLayout.layoutArtifact.format != .def {
+            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts canonical JSON and the supported DEF subset; \(inputLayout.layoutArtifact.format.rawValue) requires an external adapter.", actions: ["convert_to_canonical_json_or_def", "use_a_qualified_external_adapter"]))
         }
         let references = request.inputs + [request.design.artifact, request.constraints.artifact, request.pdk.manifest]
         for reference in references where reference.path.hasPrefix("/") {
@@ -371,8 +423,25 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         XcircuiteEngineDiagnostic(severity: severity, code: code, message: message, entity: entity, suggestedActions: actions)
     }
 
+    private func defDiagnostic(_ diagnostic: PhysicalDesignDEFDiagnostic) -> XcircuiteEngineDiagnostic {
+        let location = "DEF:\(diagnostic.section):\(diagnostic.line)"
+        let entity = diagnostic.entity.map { "\(location)/\($0)" } ?? location
+        return XcircuiteEngineDiagnostic(
+            severity: diagnostic.severity,
+            code: diagnostic.code,
+            message: "\(diagnostic.message) [\(location)]",
+            entity: entity,
+            suggestedActions: diagnostic.suggestedActions
+        )
+    }
+
     private struct LoadedSnapshot: Sendable {
         var snapshot: PhysicalDesignSnapshot
         var baseReference: PhysicalDesignReference?
+        var sourceLayoutFormat: XcircuiteFileFormat?
+        var sourceLayoutDigest: String?
+        var sourceParserID: String?
+        var sourceParserVersion: String?
+        var sourceDiagnostics: [PhysicalDesignDEFDiagnostic]
     }
 }

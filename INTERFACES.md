@@ -48,7 +48,7 @@ Umbrella API. `PhysicalDesignEngine` dispatches the request stage to the determi
 
 ### Canonical input and output
 
-`PhysicalDesignRequest` accepts either `initialSnapshot` or `inputLayout`, never both. Native execution reads JSON snapshots only. A completed mutation emits:
+`PhysicalDesignRequest` accepts either `initialSnapshot` or `inputLayout`, never both. Native execution reads canonical JSON or the supported DEF subset. A completed mutation emits:
 
 | Artifact | Format | Purpose |
 |---|---|---|
@@ -58,6 +58,8 @@ Umbrella API. `PhysicalDesignEngine` dispatches the request stage to the determi
 | `run-manifest.json` | JSON | Provenance binding for the complete physical-design transaction |
 
 Each output reference records format, digest, byte count and producer run ID.
+
+`PhysicalDesignMaskDataAdapter` is the protocol boundary for future GDSII/OASIS adapters. `PhysicalDesignMaskDataAdapterGate` requires a matching format and explicit process qualification before invoking an adapter.
 
 
 ## Error contract

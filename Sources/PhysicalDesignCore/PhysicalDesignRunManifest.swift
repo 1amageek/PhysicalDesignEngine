@@ -21,8 +21,35 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var implementationID: String
     public var implementationVersion: String
     public var deterministicSeed: UInt64?
+    public var sourceLayoutFormat: XcircuiteFileFormat?
+    public var sourceLayoutDigest: String?
+    public var sourceParserID: String?
+    public var sourceParserVersion: String?
     public var createdAt: Date
     public var completedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case runID
+        case stage
+        case status
+        case design
+        case constraints
+        case pdk
+        case baseLayout
+        case proposedLayout
+        case designDiff
+        case artifacts
+        case implementationID
+        case implementationVersion
+        case deterministicSeed
+        case sourceLayoutFormat
+        case sourceLayoutDigest
+        case sourceParserID
+        case sourceParserVersion
+        case createdAt
+        case completedAt
+    }
 
     public init(
         runID: String,
@@ -39,7 +66,11 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         implementationVersion: String,
         deterministicSeed: UInt64?,
         createdAt: Date,
-        completedAt: Date
+        completedAt: Date,
+        sourceLayoutFormat: XcircuiteFileFormat? = nil,
+        sourceLayoutDigest: String? = nil,
+        sourceParserID: String? = nil,
+        sourceParserVersion: String? = nil
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -55,8 +86,36 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         self.implementationID = implementationID
         self.implementationVersion = implementationVersion
         self.deterministicSeed = deterministicSeed
+        self.sourceLayoutFormat = sourceLayoutFormat
+        self.sourceLayoutDigest = sourceLayoutDigest
+        self.sourceParserID = sourceParserID
+        self.sourceParserVersion = sourceParserVersion
         self.createdAt = createdAt
         self.completedAt = completedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        runID = try container.decode(String.self, forKey: .runID)
+        stage = try container.decode(PhysicalDesignStage.self, forKey: .stage)
+        status = try container.decode(XcircuiteEngineExecutionStatus.self, forKey: .status)
+        design = try container.decode(LogicDesignReference.self, forKey: .design)
+        constraints = try container.decode(TimingConstraintReference.self, forKey: .constraints)
+        pdk = try container.decode(PDKReference.self, forKey: .pdk)
+        baseLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .baseLayout)
+        proposedLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .proposedLayout)
+        designDiff = try container.decodeIfPresent(XcircuiteFileReference.self, forKey: .designDiff)
+        artifacts = try container.decode([XcircuiteFileReference].self, forKey: .artifacts)
+        implementationID = try container.decode(String.self, forKey: .implementationID)
+        implementationVersion = try container.decode(String.self, forKey: .implementationVersion)
+        deterministicSeed = try container.decodeIfPresent(UInt64.self, forKey: .deterministicSeed)
+        sourceLayoutFormat = try container.decodeIfPresent(XcircuiteFileFormat.self, forKey: .sourceLayoutFormat)
+        sourceLayoutDigest = try container.decodeIfPresent(String.self, forKey: .sourceLayoutDigest)
+        sourceParserID = try container.decodeIfPresent(String.self, forKey: .sourceParserID)
+        sourceParserVersion = try container.decodeIfPresent(String.self, forKey: .sourceParserVersion)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        completedAt = try container.decode(Date.self, forKey: .completedAt)
     }
 
     public func validationDiagnostics() -> [String] {
@@ -72,6 +131,18 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         }
         if pdk.processID.isEmpty || pdk.version.isEmpty || pdk.digest.isEmpty {
             diagnostics.append("PDK provenance is incomplete")
+        }
+        let sourceFields = [sourceLayoutDigest, sourceParserID, sourceParserVersion]
+        if sourceLayoutFormat == nil && sourceFields.contains(where: { $0 != nil }) {
+            diagnostics.append("source layout provenance is incomplete")
+        }
+        if sourceLayoutFormat != nil {
+            if sourceLayoutDigest?.isEmpty != false {
+                diagnostics.append("source layout digest is empty")
+            }
+            if sourceParserID?.isEmpty != false || sourceParserVersion?.isEmpty != false {
+                diagnostics.append("source parser provenance is incomplete")
+            }
         }
         if implementationID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || implementationVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append("implementation provenance is incomplete")

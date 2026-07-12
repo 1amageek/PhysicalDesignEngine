@@ -4,7 +4,7 @@ Floorplan, placement, CTS, routing, ECO, antenna repair and DFM mutation contrac
 
 ## Status
 
-The package provides a deterministic native backend over the canonical `PhysicalDesignSnapshot` JSON IR. It emits immutable JSON and DEF revisions, machine-readable design diffs, structured diagnostics, and a headless Xcircuite stage adapter. Native execution is smoke-tested against the retained fixtures; process-specific qualification and GDSII/OASIS stream-out remain explicit external boundaries.
+The package provides a deterministic native backend over the canonical `PhysicalDesignSnapshot` JSON IR. It accepts canonical JSON and the supported DEF interchange subset, emits immutable JSON and DEF revisions, records line/section-aware parser diagnostics, and exposes a headless Xcircuite stage adapter. Process-specific qualification and GDSII/OASIS stream-out remain explicit external boundaries.
 
 ## Products
 
@@ -37,7 +37,9 @@ Native execution additionally uses:
 - `PhysicalDesignDiffBuilder` for reviewable `XcircuiteDesignDiff` artifacts;
 - `PhysicalDesignConfiguration` for typed, deterministic stage controls.
 
-The native backend supports canonical JSON input and emits canonical JSON plus DEF. Unsupported opaque layout formats return `blocked`; no native result claims DRC, LVS, PEX, timing, GDSII, OASIS, or foundry qualification.
+The native backend supports canonical JSON and DEF input and emits canonical JSON plus deterministic DEF. The supported DEF subset covers design units, die area, rows, components, top-level pins, net connections, routed segments, placement blockages and power structures. Unsupported opaque layout formats return `blocked` with a structured diagnostic; no native result claims DRC, LVS, PEX, timing, GDSII, OASIS, or foundry qualification.
+
+GDSII/OASIS integration is protocol-first through `PhysicalDesignMaskDataAdapter`. `PhysicalDesignMaskDataAdapterGate` rejects adapters without process qualification, so an external implementation remains blocked until its qualification evidence is supplied.
 
 ## Xcircuite integration
 
@@ -63,10 +65,10 @@ The command emits one JSON result envelope. Successful runs write `revision.json
 ## Test
 
 ```bash
-swift test
+perl -e 'alarm 30; exec @ARGV' swift test
 ```
 
-The current native regression suite covers JSON compatibility, all declared native stages, blocked prerequisites, stage boundaries, artifact provenance and CLI error output. The positive fixture completes with four immutable artifacts; the negative fixture is blocked with `physical_snapshot_missing`.
+The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, artifact provenance and CLI error output. The positive fixture completes with four immutable artifacts; the negative fixture is blocked with `physical_snapshot_missing`.
 
 The Xcircuite adapter is verified from the sibling repository with:
 
@@ -74,6 +76,6 @@ The Xcircuite adapter is verified from the sibling repository with:
 swift test --scratch-path /tmp/lsi-xcircuite-physical-design --filter PhysicalDesignFlowStageExecutorTests
 ```
 
-See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1, the immutable run transaction, is complete for the native canonical-snapshot scope; M2, standard layout interchange, is next.
+See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1, the immutable run transaction, and M2, the supported standard-layout interchange slice, are complete for native scope; M3, physical implementation algorithms, is next.
 
 See `DESIGN.md`, `INTERFACES.md`, `IMPLEMENTATION_PLAN.md`, and `CAPABILITY.md` for the boundary and qualification status.
