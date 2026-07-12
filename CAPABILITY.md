@@ -30,6 +30,16 @@ M3 also persists `implementationState` in the canonical snapshot:
 | CTS state | Materializes clock buffer cells, branch nets and clock route constraints |
 | Routing evidence | Selects directional layers, emits bend vias, checks blockages/spacing and records antenna-risk nets |
 
+M4 repair behavior is qualification-aware at the native contract boundary:
+
+| Repair | Native behavior | Evidence |
+|---|---|---|
+| ECO | Applies typed cell/net/blockage actions and rechecks the native snapshot | `RepairProof` |
+| Antenna | Supports jumper, reroute and protection-device strategies | Ratio result, strategy and repair proof |
+| Fill | Uses window spacing, density, cell, blockage and power-structure exclusions | Fill proof and density checks |
+| Redundant via | Searches spaced candidate offsets and rejects conflicting candidates | Via spacing proof |
+| Hotspot | Applies a bounded repair window and checks core/cell conflicts | Resolved hotspot and repair proof |
+
 ## Layout interchange
 
 The native interchange boundary is:
@@ -49,4 +59,4 @@ The backend returns `blocked` for missing canonical state, unsupported opaque la
 
 ## Qualification boundary
 
-This implementation is deterministic and fixture-tested, but it is not process-qualified. DRC, LVS, PEX and Timing remain independent oracles. Timing and congestion objectives are native proxy metrics, not signoff timing. Native antenna, DFM and hotspot operations produce repair candidates and never claim signoff. GDSII/OASIS stream-out requires a qualified external adapter and is fail-closed through the adapter gate. Tool trust, process qualification, reference correlation and release approval remain Xcircuite/ToolQualification responsibilities.
+This implementation is deterministic and fixture-tested, but it is not process-qualified. DRC, LVS, PEX and Timing remain independent oracles. Timing and congestion objectives are native proxy metrics, not signoff timing. Native antenna, DFM and hotspot operations produce repair candidates with native verification proofs and never claim signoff. GDSII/OASIS stream-out requires a qualified external adapter and is fail-closed through the adapter gate. Tool trust, process qualification, reference correlation and release approval remain Xcircuite/ToolQualification responsibilities.

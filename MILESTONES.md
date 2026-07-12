@@ -66,7 +66,7 @@ Evidence: `PhysicalDesignImplementationState`, `PhysicalDesignImplementationCons
 
 ## M4 — Repair and DFM closure
 
-Status: next.
+Status: complete for the native rule-aware repair slice; external oracle recheck and process qualification remain open.
 
 Acceptance criteria:
 
@@ -74,9 +74,11 @@ Acceptance criteria:
 - Antenna repair supports reroute, jumper and protection-device strategies without claiming a DRC verdict.
 - Fill, redundant-via and hotspot operations are window/rule aware and produce reviewable candidates.
 
+Evidence: `PhysicalDesignRepairConstraints`, `PhysicalDesignAntennaRepairStrategy`, `PhysicalDesignImplementationState.RepairProof`, repair strategy regression tests, and fail-closed native verification diagnostics.
+
 ## M5 — Xcircuite approval and resume flow
 
-Status: partially smoke-checked.
+Status: next; partially smoke-checked.
 
 Acceptance criteria:
 

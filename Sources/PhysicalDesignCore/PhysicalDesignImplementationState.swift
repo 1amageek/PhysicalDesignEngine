@@ -132,12 +132,51 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
         }
     }
 
+    public struct RepairProof: Sendable, Hashable, Codable {
+        public var stage: String
+        public var strategy: String
+        public var targetIDs: [String]
+        public var violationsBefore: Int
+        public var violationsAfter: Int
+        public var verified: Bool
+        public var details: [String]
+
+        public init(
+            stage: String,
+            strategy: String,
+            targetIDs: [String],
+            violationsBefore: Int,
+            violationsAfter: Int,
+            verified: Bool,
+            details: [String] = []
+        ) {
+            self.stage = stage
+            self.strategy = strategy
+            self.targetIDs = targetIDs
+            self.violationsBefore = violationsBefore
+            self.violationsAfter = violationsAfter
+            self.verified = verified
+            self.details = details
+        }
+    }
+
     public var tracks: [Track]
     public var powerDomains: [PowerDomain]
     public var pads: [Pad]
     public var placementProof: PlacementProof?
     public var clockRouteConstraints: [ClockRouteConstraint]
     public var routingEvidence: RoutingEvidence?
+    public var repairProofs: [RepairProof]
+
+    private enum CodingKeys: String, CodingKey {
+        case tracks
+        case powerDomains
+        case pads
+        case placementProof
+        case clockRouteConstraints
+        case routingEvidence
+        case repairProofs
+    }
 
     public init(
         tracks: [Track] = [],
@@ -145,7 +184,8 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
         pads: [Pad] = [],
         placementProof: PlacementProof? = nil,
         clockRouteConstraints: [ClockRouteConstraint] = [],
-        routingEvidence: RoutingEvidence? = nil
+        routingEvidence: RoutingEvidence? = nil,
+        repairProofs: [RepairProof] = []
     ) {
         self.tracks = tracks
         self.powerDomains = powerDomains
@@ -153,5 +193,17 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
         self.placementProof = placementProof
         self.clockRouteConstraints = clockRouteConstraints
         self.routingEvidence = routingEvidence
+        self.repairProofs = repairProofs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tracks = try container.decodeIfPresent([Track].self, forKey: .tracks) ?? []
+        powerDomains = try container.decodeIfPresent([PowerDomain].self, forKey: .powerDomains) ?? []
+        pads = try container.decodeIfPresent([Pad].self, forKey: .pads) ?? []
+        placementProof = try container.decodeIfPresent(PlacementProof.self, forKey: .placementProof)
+        clockRouteConstraints = try container.decodeIfPresent([ClockRouteConstraint].self, forKey: .clockRouteConstraints) ?? []
+        routingEvidence = try container.decodeIfPresent(RoutingEvidence.self, forKey: .routingEvidence)
+        repairProofs = try container.decodeIfPresent([RepairProof].self, forKey: .repairProofs) ?? []
     }
 }

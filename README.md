@@ -39,7 +39,7 @@ Native execution additionally uses:
 
 The native backend supports canonical JSON and DEF input and emits canonical JSON plus deterministic DEF. The supported DEF subset covers design units, die area, rows, components, top-level pins, net connections, routed segments, placement blockages and power structures. Unsupported opaque layout formats return `blocked` with a structured diagnostic; no native result claims DRC, LVS, PEX, timing, GDSII, OASIS, or foundry qualification.
 
-Native M3 execution records tracks, power domains, IO pads, placement legalization proof, CTS branch connectivity and routing evidence in `PhysicalDesignSnapshot.implementationState`. Placement and routing fail closed on physical blockage or spacing conflicts; timing objectives and antenna risk remain review metrics for independent signoff oracles.
+Native M3 execution records tracks, power domains, IO pads, placement legalization proof, CTS branch connectivity and routing evidence in `PhysicalDesignSnapshot.implementationState`. M4 repair stages additionally persist verified repair proofs. Placement, routing and repair verification fail closed on physical conflicts; timing objectives and antenna risk remain review metrics for independent signoff oracles.
 
 GDSII/OASIS integration is protocol-first through `PhysicalDesignMaskDataAdapter`. `PhysicalDesignMaskDataAdapterGate` rejects adapters without process qualification, so an external implementation remains blocked until its qualification evidence is supplied.
 
@@ -78,6 +78,6 @@ The Xcircuite adapter is verified from the sibling repository with:
 swift test --scratch-path /tmp/lsi-xcircuite-physical-design --filter PhysicalDesignFlowStageExecutorTests
 ```
 
-See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1, M2 and the native M3 implementation slice are complete; M4, repair and DFM closure, is next.
+See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1 through the native M4 repair/DFM slice are complete; M5, approval and resume flow, is next.
 
 See `DESIGN.md`, `INTERFACES.md`, `IMPLEMENTATION_PLAN.md`, and `CAPABILITY.md` for the boundary and qualification status.

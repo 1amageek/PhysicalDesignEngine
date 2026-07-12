@@ -4,7 +4,7 @@
 
 **Canonical native backend implemented. Process qualification and foundry-facing external adapters remain intentionally unclaimed.**
 
-Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation slice complete, M4 repair and DFM closure is next.
+Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 approval/resume is next.
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -35,6 +35,7 @@ Milestone status: M0 complete, M1 immutable run transaction complete, M2 support
 | Antenna repair | Contract defined | Native repair candidates | Stage regression | External DRC required |
 | Physical DFM | Contract defined | Native fill/via/hotspot candidates | Stage regression | External DRC required |
 | Immutable revisions | Contract defined | JSON/DEF/diff/run-manifest artifacts | Integrity gate test | Complete for native scope |
+| Repair/DFM closure | Contract defined | Rule-aware ECO, antenna, fill, via and hotspot candidates with repair proofs | Strategy and DFM proof regression | Complete for native scope |
 | DEF interchange | Contract defined | Native parser/writer with structured diagnostics and source provenance | Round-trip, retained fixture and DEF input tests | Complete for supported subset |
 | GDSII/OASIS adapter boundary | Protocol defined | Qualification-gated external adapter protocol | Gate contract pending external implementation | Blocked until qualified |
 

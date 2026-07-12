@@ -290,6 +290,72 @@ struct NativeExecutionTests {
         #expect(result.artifacts.isEmpty)
     }
 
+    @Test("repair strategies persist verified proof evidence")
+    func repairProofs() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var ecoConfiguration = PhysicalDesignConfiguration.default
+        ecoConfiguration.ecoTargetCellID = "U1"
+        ecoConfiguration.ecoAction = .resizeCell
+        let ecoResult = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .timingECO, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: ecoConfiguration)
+        )
+        #expect(ecoResult.status == .completed)
+        let ecoReference = try #require(ecoResult.payload.physicalDesign)
+        let ecoData = try #require(await store.data(at: ecoReference.layoutArtifact.path))
+        let ecoOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: ecoData)
+        #expect(ecoOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.timingECO.rawValue && $0.verified } == true)
+
+        var antennaConfiguration = PhysicalDesignConfiguration.default
+        antennaConfiguration.repairConstraints = PhysicalDesignRepairConstraints(antennaStrategy: .protectionDevice)
+        let antennaResult = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .antennaRepair, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: antennaConfiguration)
+        )
+        #expect(antennaResult.status == .completed)
+        let antennaReference = try #require(antennaResult.payload.physicalDesign)
+        let antennaData = try #require(await store.data(at: antennaReference.layoutArtifact.path))
+        let antennaOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: antennaData)
+        #expect(antennaOutput.cells.contains { $0.master == "ANTENNA_DIODE" })
+        #expect(antennaOutput.antennaRepairs.contains { $0.strategy == PhysicalDesignAntennaRepairStrategy.protectionDevice.rawValue })
+        #expect(antennaOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.antennaRepair.rawValue && $0.verified } == true)
+    }
+
+    @Test("fill, redundant-via and hotspot repairs are constrained and proven")
+    func dfmRepairProofs() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var fillSnapshot = PhysicalDesignFixtureFactory.snapshot()
+        fillSnapshot.blockages = [PhysicalDesignSnapshot.Rect(x: 40_000, y: 40_000, width: 10_000, height: 10_000)]
+        let fillResult = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .fillInsertion, snapshot: fillSnapshot)
+        )
+        #expect(fillResult.status == .completed)
+        let fillReference = try #require(fillResult.payload.physicalDesign)
+        let fillData = try #require(await store.data(at: fillReference.layoutArtifact.path))
+        let fillOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: fillData)
+        #expect(fillOutput.fills.isEmpty == false)
+        #expect(fillOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.fillInsertion.rawValue && $0.verified } == true)
+        #expect(fillOutput.fills.allSatisfy { fill in !fillSnapshot.blockages.contains { $0.intersects(fill.geometry) } })
+
+        let viaResult = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .redundantViaInsertion, snapshot: PhysicalDesignFixtureFactory.snapshot())
+        )
+        #expect(viaResult.status == .completed)
+        let viaReference = try #require(viaResult.payload.physicalDesign)
+        let viaData = try #require(await store.data(at: viaReference.layoutArtifact.path))
+        let viaOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: viaData)
+        #expect(viaOutput.vias.count > 1)
+        #expect(viaOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.redundantViaInsertion.rawValue && $0.verified } == true)
+
+        let hotspotResult = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .hotspotRepair, snapshot: PhysicalDesignFixtureFactory.snapshot())
+        )
+        #expect(hotspotResult.status == .completed)
+        let hotspotReference = try #require(hotspotResult.payload.physicalDesign)
+        let hotspotData = try #require(await store.data(at: hotspotReference.layoutArtifact.path))
+        let hotspotOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: hotspotData)
+        #expect(hotspotOutput.hotspots.allSatisfy { $0.resolved })
+        #expect(hotspotOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.hotspotRepair.rawValue && $0.verified } == true)
+    }
+
     @Test("missing canonical state is blocked with a structured diagnostic")
     func missingSnapshotIsBlocked() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()

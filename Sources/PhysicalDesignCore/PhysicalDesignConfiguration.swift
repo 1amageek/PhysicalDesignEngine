@@ -21,6 +21,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
     public var ecoDeltaY: Int64
     public var deterministicSeed: UInt64
     public var implementationConstraints: PhysicalDesignImplementationConstraints?
+    public var repairConstraints: PhysicalDesignRepairConstraints?
 
     private enum CodingKeys: String, CodingKey {
         case dieWidth
@@ -43,6 +44,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         case ecoDeltaY
         case deterministicSeed
         case implementationConstraints
+        case repairConstraints
     }
 
     public init(
@@ -65,7 +67,8 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         ecoDeltaX: Int64 = 0,
         ecoDeltaY: Int64 = 0,
         deterministicSeed: UInt64 = 0,
-        implementationConstraints: PhysicalDesignImplementationConstraints? = .default
+        implementationConstraints: PhysicalDesignImplementationConstraints? = .default,
+        repairConstraints: PhysicalDesignRepairConstraints? = .default
     ) {
         self.dieWidth = dieWidth
         self.dieHeight = dieHeight
@@ -87,6 +90,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         self.ecoDeltaY = ecoDeltaY
         self.deterministicSeed = deterministicSeed
         self.implementationConstraints = implementationConstraints
+        self.repairConstraints = repairConstraints
     }
 
     public init(from decoder: Decoder) throws {
@@ -111,6 +115,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         ecoDeltaY = try container.decodeIfPresent(Int64.self, forKey: .ecoDeltaY) ?? 0
         deterministicSeed = try container.decodeIfPresent(UInt64.self, forKey: .deterministicSeed) ?? 0
         implementationConstraints = try container.decodeIfPresent(PhysicalDesignImplementationConstraints.self, forKey: .implementationConstraints) ?? .default
+        repairConstraints = try container.decodeIfPresent(PhysicalDesignRepairConstraints.self, forKey: .repairConstraints) ?? .default
     }
 
     public static let `default` = Self()
@@ -140,6 +145,9 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         }
         if let implementationConstraints {
             diagnostics.append(contentsOf: implementationConstraints.validationDiagnostics())
+        }
+        if let repairConstraints {
+            diagnostics.append(contentsOf: repairConstraints.validationDiagnostics())
         }
         return diagnostics
     }

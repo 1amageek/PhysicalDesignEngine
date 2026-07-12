@@ -36,4 +36,4 @@ The native backend now covers floorplan, power planning, placement, CTS, global 
 
 Remaining release gates are process-specific corpus retention, reference-oracle correlation, qualification evidence, and a qualified GDSII/OASIS stream-out adapter.
 
-The next implementation slice is M4 in `MILESTONES.md`: make ECO, antenna repair, fill, redundant-via and hotspot actions rule-aware and independently rechecked while preserving immutable artifacts and diagnostic contracts.
+The next implementation slice is M5 in `MILESTONES.md`: bind human approval, rejection, stale-base detection and resume identity to immutable run manifests and Xcircuite flow results.

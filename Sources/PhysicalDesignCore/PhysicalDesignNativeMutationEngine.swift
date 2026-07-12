@@ -81,9 +81,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .fillInsertion:
             return fillInsertion(input, configuration: request.configuration)
         case .redundantViaInsertion:
-            return redundantViaInsertion(input)
+            return redundantViaInsertion(input, configuration: request.configuration)
         case .hotspotRepair:
-            return hotspotRepair(input)
+            return hotspotRepair(input, configuration: request.configuration)
         }
     }
 
@@ -888,6 +888,22 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
             output.blockages.append(geometry)
         }
+        if let verificationDiagnostic = verifyAndRecordRepair(
+            input: input,
+            output: &output,
+            configuration: configuration,
+            stage: stage.rawValue,
+            strategy: configuration.ecoAction.rawValue,
+            targetIDs: [configuration.ecoTargetCellID, configuration.ecoTargetNetID].compactMap { $0 },
+            details: ["rechecked_native_geometry_and_connectivity"]
+        ) {
+            return Outcome(
+                snapshot: nil,
+                status: .blocked,
+                diagnostics: [verificationDiagnostic],
+                candidateActions: ["repair_the_eco_candidate", "rerun_the_relevant_oracle"]
+            )
+        }
         output.metadata[stage == .drcRepair ? "drcRepairStatus" : "timingECOStatus"] = "applied"
         return completed(
             output,
@@ -904,8 +920,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             return blocked(code: "routes_missing", message: "Antenna repair requires routed nets.", actions: ["run_detailed_routing"])
         }
         var output = input
+        let repairConstraints = configuration.repairConstraints ?? .default
         let routeNetIDs = Set(output.routes.map(\.netID))
         var repaired = 0
+        var strategies: [String] = []
         for index in output.nets.indices {
             guard let ratio = output.nets[index].antennaRatio,
                   ratio > (output.nets[index].maximumAntennaRatio ?? configuration.maximumAntennaRatio) else { continue }
@@ -914,29 +932,79 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             let limit = output.nets[index].maximumAntennaRatio ?? configuration.maximumAntennaRatio
             let resultingRatio = min(ratio, limit * 0.5)
             output.nets[index].antennaRatio = resultingRatio
+            let strategy = repairConstraints.antennaStrategy.rawValue
             output.antennaRepairs.append(
                 PhysicalDesignSnapshot.AntennaRepair(
                     id: "antenna_repair_\(netID)",
                     netID: netID,
-                    strategy: "jumper",
+                    strategy: strategy,
                     previousRatio: ratio,
                     resultingRatio: resultingRatio
                 )
             )
             if let routeIndex = output.routes.firstIndex(where: { $0.netID == netID }),
                let last = output.routes[routeIndex].segments.last {
-                output.routes[routeIndex].segments.append(
-                    PhysicalDesignSnapshot.RouteSegment(
-                        id: "antenna_jumper_\(netID)",
-                        layer: min(configuration.maximumRoutingLayer, last.layer + 1),
-                        x1: last.x2,
-                        y1: last.y2,
-                        x2: last.x2 + configuration.siteWidth,
-                        y2: last.y2,
-                        isJumper: true
+                switch repairConstraints.antennaStrategy {
+                case .jumper:
+                    output.routes[routeIndex].segments.append(
+                        PhysicalDesignSnapshot.RouteSegment(
+                            id: "antenna_jumper_\(netID)",
+                            layer: min(configuration.maximumRoutingLayer, last.layer + 1),
+                            x1: last.x2,
+                            y1: last.y2,
+                            x2: last.x2 + configuration.siteWidth,
+                            y2: last.y2,
+                            isJumper: true
+                        )
                     )
-                )
+                case .reroute:
+                    output.routes[routeIndex].segments.append(
+                        PhysicalDesignSnapshot.RouteSegment(
+                            id: "antenna_reroute_\(netID)",
+                            layer: min(configuration.maximumRoutingLayer, last.layer + 1),
+                            x1: last.x2,
+                            y1: last.y2,
+                            x2: last.x2,
+                            y2: last.y2 + configuration.siteWidth
+                        )
+                    )
+                case .protectionDevice:
+                    let protectionID = "antenna_protect_\(netID)"
+                    if !output.cells.contains(where: { $0.id == protectionID }), let core = output.core {
+                        let width = max(configuration.siteWidth, configuration.siteWidth * 2)
+                        let geometry = PhysicalDesignSnapshot.Rect(x: core.x, y: core.y, width: width, height: configuration.rowHeight)
+                        guard !output.blockages.contains(where: { $0.intersects(geometry) }) else {
+                            return blocked(
+                                code: "antenna_protection_location_blocked",
+                                message: "Protection device location for net \(netID) intersects a blockage.",
+                                entity: netID,
+                                actions: ["move_the_blockage", "select_the_jumper_strategy"]
+                            )
+                        }
+                        output.cells.append(PhysicalDesignSnapshot.Cell(
+                            id: protectionID,
+                            master: "ANTENNA_DIODE",
+                            x: geometry.x,
+                            y: geometry.y,
+                            width: geometry.width,
+                            height: geometry.height,
+                            placed: true
+                        ))
+                        let pinID = "pin_\(protectionID)_A"
+                        output.pins.append(PhysicalDesignSnapshot.Pin(
+                            id: pinID,
+                            cellID: protectionID,
+                            name: "A",
+                            x: geometry.x,
+                            y: geometry.y,
+                            netID: netID,
+                            direction: "input"
+                        ))
+                        output.nets[index].pinIDs.append(pinID)
+                    }
+                }
             }
+            strategies.append(strategy)
             repaired += 1
         }
         guard repaired > 0 else {
@@ -944,6 +1012,21 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 code: "antenna_target_missing",
                 message: "No routed net exceeds its declared antenna ratio limit.",
                 actions: ["run_drc_antenna_analysis", "provide_antenna_ratios"]
+            )
+        }
+        guard verifyAndRecordRepair(
+            input: input,
+            output: &output,
+            configuration: configuration,
+            stage: PhysicalDesignStage.antennaRepair.rawValue,
+            strategy: uniqueStrings(strategies).joined(separator: "+"),
+            targetIDs: output.antennaRepairs.suffix(repaired).map(\.netID),
+            details: ["rechecked_antenna_ratio_and_native_geometry"]
+        ) == nil else {
+            return blocked(
+                code: "antenna_repair_verification_failed",
+                message: "Antenna repair candidates did not pass native post-repair verification.",
+                actions: ["review_antenna_repair_strategy", "rerun_drc_antenna_analysis"]
             )
         }
         output.metadata["antennaRepairStatus"] = "candidate_repairs_applied"
@@ -963,28 +1046,39 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             return blocked(code: "core_geometry_missing", message: "Fill insertion requires a core rectangle.", actions: ["run_floorplan"])
         }
         var output = input
+        let repairConstraints = configuration.repairConstraints ?? .default
         guard output.fills.isEmpty else {
             return completed(output, actions: ["run_density_drc"], metrics: metrics(for: output))
         }
-        let step = configuration.fillWindowSize + configuration.fillSpacing
+        let step = configuration.fillWindowSize + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
         guard step > 0 else {
             return blocked(code: "invalid_fill_grid", message: "Fill grid step must be positive.", actions: ["correct_fill_configuration"])
         }
         let fillWidth = max(configuration.siteWidth, configuration.fillWindowSize / 4)
         let fillHeight = max(configuration.rowHeight, configuration.fillWindowSize / 4)
         var id = 0
-        var y = core.y + configuration.fillSpacing
+        var y = core.y + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
+        let maximumFillArea = Double(core.width) * Double(core.height) * repairConstraints.maximumFillDensity
         while y + fillHeight <= core.maxY {
-            var x = core.x + configuration.fillSpacing
+            var x = core.x + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
             while x + fillWidth <= core.maxX {
+                let geometry = PhysicalDesignSnapshot.Rect(x: x, y: y, width: fillWidth, height: fillHeight)
+                let currentFillArea = output.fills.reduce(0.0) { $0 + Double($1.geometry.width) * Double($1.geometry.height) }
+                let conflicts = output.cells.contains { cell in
+                    cell.placed && PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height).intersects(geometry)
+                }
+                    || output.blockages.contains { $0.intersects(geometry) }
+                    || output.powerStructures.contains { $0.geometry.expanded(by: repairConstraints.minimumFillSpacing).intersects(geometry) }
+                if !conflicts, currentFillArea + Double(fillWidth) * Double(fillHeight) <= maximumFillArea {
                 output.fills.append(
                     PhysicalDesignSnapshot.Fill(
                         id: "fill_\(id)",
                         layer: configuration.preferredRoutingLayers[0],
-                        geometry: PhysicalDesignSnapshot.Rect(x: x, y: y, width: fillWidth, height: fillHeight)
+                        geometry: geometry
                     )
                 )
                 id += 1
+                }
                 x += step
             }
             y += step
@@ -992,49 +1086,124 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         guard !output.fills.isEmpty else {
             return blocked(code: "fill_area_unavailable", message: "The core is too small for the configured fill grid.", actions: ["reduce_fill_window_size"])
         }
+        if let verificationDiagnostic = verifyAndRecordRepair(
+            input: input,
+            output: &output,
+            configuration: configuration,
+            stage: PhysicalDesignStage.fillInsertion.rawValue,
+            strategy: "windowed_fill",
+            targetIDs: output.fills.map(\.id),
+            details: ["rechecked_fill_density_spacing_and_blockages"]
+        ) {
+            return Outcome(snapshot: nil, status: .blocked, diagnostics: [verificationDiagnostic], candidateActions: ["reduce_fill_density", "adjust_fill_spacing"])
+        }
         output.metadata["fillStatus"] = "inserted"
         return completed(output, actions: ["run_density_drc", "run_lvs"], metrics: metrics(for: output))
     }
 
-    private func redundantViaInsertion(_ input: PhysicalDesignSnapshot) -> Outcome {
+    private func redundantViaInsertion(
+        _ input: PhysicalDesignSnapshot,
+        configuration: PhysicalDesignConfiguration
+    ) -> Outcome {
         guard !input.vias.isEmpty else {
             return blocked(code: "vias_missing", message: "Redundant-via insertion requires existing vias.", actions: ["run_detailed_routing"])
         }
         var output = input
+        let repairConstraints = configuration.repairConstraints ?? .default
         let existingIDs = Set(output.vias.map(\.id))
         let candidates = output.vias.filter { !$0.isRedundant }
+        var inserted = 0
         for via in candidates {
             let id = "\(via.id)_redundant"
             guard !existingIDs.contains(id) else { continue }
+            let offsets: [(Int64, Int64)] = [
+                (repairConstraints.minimumViaSpacing, repairConstraints.minimumViaSpacing),
+                (repairConstraints.minimumViaSpacing, -repairConstraints.minimumViaSpacing),
+                (-repairConstraints.minimumViaSpacing, repairConstraints.minimumViaSpacing),
+                (-repairConstraints.minimumViaSpacing, -repairConstraints.minimumViaSpacing)
+            ]
+            guard let offset = offsets.first(where: { deltaX, deltaY in
+                let x = via.x + deltaX
+                let y = via.y + deltaY
+                return output.vias.allSatisfy { existing in
+                    existing.id == via.id || manhattan(x, y, existing.x, existing.y) >= repairConstraints.minimumViaSpacing
+                }
+            }) else { continue }
             output.vias.append(
                 PhysicalDesignSnapshot.Via(
                     id: id,
                     netID: via.netID,
-                    x: via.x + 1,
-                    y: via.y + 1,
+                    x: via.x + offset.0,
+                    y: via.y + offset.1,
                     lowerLayer: via.lowerLayer,
                     upperLayer: via.upperLayer,
                     isRedundant: true
                 )
             )
+            inserted += 1
         }
-        guard output.vias.count > input.vias.count else {
+        guard inserted > 0 else {
             return completed(output, actions: ["run_via_drc"], metrics: metrics(for: output))
+        }
+        if let verificationDiagnostic = verifyAndRecordRepair(
+            input: input,
+            output: &output,
+            configuration: configuration,
+            stage: PhysicalDesignStage.redundantViaInsertion.rawValue,
+            strategy: "spaced_redundant_via",
+            targetIDs: output.vias.suffix(inserted).map(\.id),
+            details: ["rechecked_via_spacing_and_layer_pairs"]
+        ) {
+            return Outcome(snapshot: nil, status: .blocked, diagnostics: [verificationDiagnostic], candidateActions: ["increase_via_spacing", "rerun_detailed_routing"])
         }
         output.metadata["redundantViaStatus"] = "inserted"
         return completed(output, actions: ["run_via_drc", "run_lvs"], metrics: metrics(for: output))
     }
 
-    private func hotspotRepair(_ input: PhysicalDesignSnapshot) -> Outcome {
+    private func hotspotRepair(
+        _ input: PhysicalDesignSnapshot,
+        configuration: PhysicalDesignConfiguration
+    ) -> Outcome {
         var output = input
+        let repairConstraints = configuration.repairConstraints ?? .default
         let unresolved = output.hotspots.filter { !$0.resolved }
         guard !unresolved.isEmpty else {
             return blocked(code: "hotspot_target_missing", message: "No unresolved physical hotspots are present.", actions: ["provide_hotspot_analysis"])
         }
         for index in output.hotspots.indices where !output.hotspots[index].resolved {
+            let candidate = output.hotspots[index].geometry.expanded(by: repairConstraints.hotspotRepairMargin)
+            if let core = output.core, !core.contains(candidate) {
+                return blocked(
+                    code: "hotspot_repair_outside_core",
+                    message: "Hotspot repair candidate \(output.hotspots[index].id) would extend outside the core.",
+                    entity: output.hotspots[index].id,
+                    actions: ["reduce_hotspot_repair_margin", "increase_core_area"]
+                )
+            }
+            if output.cells.contains(where: { cell in
+                cell.placed && PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height).intersects(candidate)
+            }) {
+                return blocked(
+                    code: "hotspot_repair_cell_conflict",
+                    message: "Hotspot repair candidate \(output.hotspots[index].id) intersects a placed cell.",
+                    entity: output.hotspots[index].id,
+                    actions: ["move_the_cell", "reduce_hotspot_repair_margin"]
+                )
+            }
             output.hotspots[index].resolved = true
-            output.hotspots[index].resolution = "native_geometry_repair"
-            output.blockages.append(output.hotspots[index].geometry)
+            output.hotspots[index].resolution = "native_windowed_geometry_repair"
+            output.blockages.append(candidate)
+        }
+        if let verificationDiagnostic = verifyAndRecordRepair(
+            input: input,
+            output: &output,
+            configuration: configuration,
+            stage: PhysicalDesignStage.hotspotRepair.rawValue,
+            strategy: "windowed_hotspot_repair",
+            targetIDs: unresolved.map(\.id),
+            details: ["rechecked_core_bounds_cell_conflicts_and_blockage_candidate"]
+        ) {
+            return Outcome(snapshot: nil, status: .blocked, diagnostics: [verificationDiagnostic], candidateActions: ["review_hotspot_window", "rerun_drc_hotspot_analysis"])
         }
         output.metadata["hotspotRepairStatus"] = "candidate_repairs_applied"
         return completed(
@@ -1043,6 +1212,146 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             metrics: metrics(for: output) + [PhysicalDesignMetric(name: "hotspotsRepaired", value: Double(unresolved.count), unit: "hotspots")],
             note: "Hotspot repair candidates were applied; the external DRC oracle remains authoritative."
         )
+    }
+
+    private func verifyAndRecordRepair(
+        input: PhysicalDesignSnapshot,
+        output: inout PhysicalDesignSnapshot,
+        configuration: PhysicalDesignConfiguration,
+        stage: String,
+        strategy: String,
+        targetIDs: [String],
+        details: [String]
+    ) -> XcircuiteEngineDiagnostic? {
+        let before = repairViolationCount(
+            input,
+            configuration: configuration,
+            stage: stage
+        )
+        let after = repairViolationCount(
+            output,
+            configuration: configuration,
+            stage: stage
+        )
+        var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
+        implementationState.repairProofs.append(
+            PhysicalDesignImplementationState.RepairProof(
+                stage: stage,
+                strategy: strategy,
+                targetIDs: uniqueStrings(targetIDs),
+                violationsBefore: before,
+                violationsAfter: after,
+                verified: after == 0,
+                details: details
+            )
+        )
+        output.implementationState = implementationState
+
+        guard configuration.repairConstraints?.requireRepairVerification ?? true else {
+            return nil
+        }
+        guard after == 0 else {
+            return diagnostic(
+                severity: .error,
+                code: "native_repair_verification_failed",
+                message: "Native post-repair verification found \(after) remaining violation(s) after \(stage).",
+                actions: ["inspect_repair_proof", "rerun_the_relevant_oracle"]
+            )
+        }
+        return nil
+    }
+
+    private func repairViolationCount(
+        _ snapshot: PhysicalDesignSnapshot,
+        configuration: PhysicalDesignConfiguration,
+        stage: String
+    ) -> Int {
+        var count = snapshot.validationDiagnostics().count
+        let repairConstraints = configuration.repairConstraints ?? .default
+        switch stage {
+        case PhysicalDesignStage.antennaRepair.rawValue:
+            count += snapshot.nets.reduce(into: 0) { result, net in
+                if let ratio = net.antennaRatio,
+                   ratio > (net.maximumAntennaRatio ?? configuration.maximumAntennaRatio) {
+                    result += 1
+                }
+            }
+        case PhysicalDesignStage.fillInsertion.rawValue:
+            count += fillViolationCount(snapshot, repairConstraints: repairConstraints)
+        case PhysicalDesignStage.redundantViaInsertion.rawValue:
+            count += viaViolationCount(snapshot, minimumSpacing: repairConstraints.minimumViaSpacing)
+        case PhysicalDesignStage.hotspotRepair.rawValue:
+            count += snapshot.hotspots.filter { !$0.resolved }.count
+        default:
+            break
+        }
+        return count
+    }
+
+    private func fillViolationCount(
+        _ snapshot: PhysicalDesignSnapshot,
+        repairConstraints: PhysicalDesignRepairConstraints
+    ) -> Int {
+        guard let core = snapshot.core else {
+            return snapshot.fills.isEmpty ? 0 : 1
+        }
+        var count = 0
+        let fillArea = snapshot.fills.reduce(0.0) { partial, fill in
+            partial + Double(fill.geometry.width) * Double(fill.geometry.height)
+        }
+        let coreArea = Double(core.width) * Double(core.height)
+        if coreArea <= 0 || fillArea > coreArea * repairConstraints.maximumFillDensity {
+            count += 1
+        }
+        for fill in snapshot.fills {
+            if !core.contains(fill.geometry) {
+                count += 1
+            }
+            if snapshot.cells.contains(where: { cell in
+                cell.placed && PhysicalDesignSnapshot.Rect(
+                    x: cell.x,
+                    y: cell.y,
+                    width: cell.width,
+                    height: cell.height
+                ).intersects(fill.geometry)
+            }) {
+                count += 1
+            }
+            if snapshot.blockages.contains(where: { $0.intersects(fill.geometry) }) {
+                count += 1
+            }
+            if snapshot.powerStructures.contains(where: {
+                $0.geometry.expanded(by: repairConstraints.minimumFillSpacing).intersects(fill.geometry)
+            }) {
+                count += 1
+            }
+        }
+        return count
+    }
+
+    private func viaViolationCount(
+        _ snapshot: PhysicalDesignSnapshot,
+        minimumSpacing: Int64
+    ) -> Int {
+        guard snapshot.vias.count > 1 else {
+            return 0
+        }
+        var count = 0
+        for leftIndex in snapshot.vias.indices {
+            for rightIndex in snapshot.vias.indices where rightIndex > leftIndex {
+                let left = snapshot.vias[leftIndex]
+                let right = snapshot.vias[rightIndex]
+                if manhattan(left.x, left.y, right.x, right.y) < minimumSpacing {
+                    count += 1
+                }
+            }
+        }
+        return count
+    }
+
+    private func uniqueStrings(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
     }
 
     private func padSide(for pin: PhysicalDesignSnapshot.Pin, die: PhysicalDesignSnapshot.Rect) -> String {
