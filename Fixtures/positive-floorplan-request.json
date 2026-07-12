@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "runID": "fixture-floorplan-001",
+  "inputs": [],
+  "design": {
+    "artifact": { "path": "inputs/mapped-design.json", "kind": "netlist", "format": "JSON" },
+    "topDesignName": "fixture_top",
+    "designDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "constraints": {
+    "artifact": { "path": "inputs/constraints.sdc", "kind": "constraint", "format": "SDC" },
+    "modeIDs": ["func"]
+  },
+  "pdk": {
+    "manifest": { "path": "inputs/pdk.json", "kind": "technology", "format": "JSON" },
+    "processID": "fixture-130nm",
+    "version": "1",
+    "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "stage": "floorplan",
+  "configuration": {
+    "dieWidth": 100000,
+    "dieHeight": 100000,
+    "coreMargin": 10000,
+    "rowHeight": 1000,
+    "siteWidth": 100,
+    "placementSpacing": 20,
+    "preferredRoutingLayers": [2, 3, 4],
+    "maximumRoutingLayer": 5,
+    "targetUtilization": 0.7,
+    "powerNetNames": ["VDD", "VSS"],
+    "maximumAntennaRatio": 300,
+    "fillWindowSize": 5000,
+    "fillSpacing": 500,
+    "ecoAction": "resize_cell",
+    "ecoDeltaX": 0,
+    "ecoDeltaY": 0,
+    "deterministicSeed": 7
+  },
+  "initialSnapshot": {
+    "schemaVersion": 1,
+    "topCell": "fixture_top",
+    "unitsPerMicron": 1000,
+    "die": null,
+    "core": null,
+    "rows": [],
+    "cells": [
+      { "id": "U1", "master": "NAND2_X1", "x": 0, "y": 0, "width": 1000, "height": 1000, "placed": false, "locked": false, "isClockBuffer": false, "isFiller": false },
+      { "id": "U2", "master": "BUF_X1", "x": 0, "y": 0, "width": 1000, "height": 1000, "placed": false, "locked": false, "isClockBuffer": false, "isFiller": false }
+    ],
+    "pins": [],
+    "nets": [],
+    "blockages": [],
+    "powerStructures": [],
+    "clockTrees": [],
+    "routes": [],
+    "vias": [],
+    "fills": [],
+    "hotspots": [],
+    "antennaRepairs": [],
+    "metadata": { "fixture": "positive" }
+  }
+}

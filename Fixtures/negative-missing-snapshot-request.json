@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "runID": "fixture-negative-001",
+  "inputs": [],
+  "design": {
+    "artifact": { "path": "inputs/mapped-design.json", "kind": "netlist", "format": "JSON" },
+    "topDesignName": "fixture_top",
+    "designDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "constraints": {
+    "artifact": { "path": "inputs/constraints.sdc", "kind": "constraint", "format": "SDC" },
+    "modeIDs": ["func"]
+  },
+  "pdk": {
+    "manifest": { "path": "inputs/pdk.json", "kind": "technology", "format": "JSON" },
+    "processID": "fixture-130nm",
+    "version": "1",
+    "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "stage": "placement",
+  "configuration": {
+    "dieWidth": 100000,
+    "dieHeight": 100000,
+    "coreMargin": 10000,
+    "rowHeight": 1000,
+    "siteWidth": 100,
+    "placementSpacing": 20,
+    "preferredRoutingLayers": [2, 3, 4],
+    "maximumRoutingLayer": 5,
+    "targetUtilization": 0.7,
+    "powerNetNames": ["VDD", "VSS"],
+    "maximumAntennaRatio": 300,
+    "fillWindowSize": 5000,
+    "fillSpacing": 500,
+    "ecoAction": "resize_cell",
+    "ecoDeltaX": 0,
+    "ecoDeltaY": 0,
+    "deterministicSeed": 7
+  }
+}
