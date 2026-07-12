@@ -10,7 +10,8 @@
 6. Global/detailed routing with rule-aware diagnostics
 7. ECO and antenna repair closure
 8. DFM mutation and density evidence
-9. Retained corpus, oracle correlation and process qualification
+9. Human approval and resume identity for immutable revisions
+10. Retained corpus, oracle correlation and process qualification
 
 ## First implementation slice
 
@@ -36,4 +37,6 @@ The native backend now covers floorplan, power planning, placement, CTS, global 
 
 Remaining release gates are process-specific corpus retention, reference-oracle correlation, qualification evidence, and a qualified GDSII/OASIS stream-out adapter.
 
-The next implementation slice is M5 in `MILESTONES.md`: bind human approval, rejection, stale-base detection and resume identity to immutable run manifests and Xcircuite flow results.
+M5 is delivered in `PhysicalDesignReviewGating`: human approval, rejection, stale-base detection and resume identity are bound to immutable run manifests and artifact digests. Xcircuite remains responsible for persisting the packet/approval ledger and invoking the native gate during flow resume.
+
+The next implementation slice is M6 in `MILESTONES.md`: retain a corpus of positive, negative and boundary cases, then correlate native results with declared reference oracles.

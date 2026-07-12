@@ -65,6 +65,22 @@ Each output reference records format, digest, byte count and producer run ID.
 
 M4 repair requests use `PhysicalDesignConfiguration.repairConstraints`. A completed repair appends `PhysicalDesignImplementationState.RepairProof`; when verification is required and native post-repair checks find a violation, the executor returns `blocked` and writes no immutable revision.
 
+### Review and resume boundary
+
+`PhysicalDesignReviewGating` is the protocol-first approval boundary for immutable native results:
+
+```mermaid
+flowchart LR
+  Manifest["Completed run manifest"] --> Packet["Review packet"]
+  Packet --> Decision["Approval or rejection decision"]
+  Decision -->|approved| Resume["Resume validation"]
+  Decision -->|rejected| Blocked["Rejected / blocked"]
+  Resume -->|same identities and digests| Ready["Ready to resume"]
+  Resume -->|stale or mismatched| Blocked
+```
+
+`PhysicalDesignReviewGate.prepareReview` reads the manifest and all manifest artifacts through the injected `PhysicalDesignArtifactStore`. It verifies artifact bytes, SHA-256 digests, byte counts, the proposed layout digest and the design-diff binding before returning `PhysicalDesignReviewPacket`. `evaluate` returns `approved`, `rejected` or `blocked`. `validateResume` returns `readyToResume` only when the approval is bound to the same run ID, stage, manifest digest, proposed layout digest, optional base layout digest and complete decision scope. The packet and decision are Codable artifacts; Xcircuite persists them and records the ledger action.
+
 
 ## Error contract
 
@@ -85,4 +101,6 @@ The adapter must:
 5. persist every returned artifact;
 6. map diagnostics and status to FlowStageResult;
 7. attach design, PDK and tool provenance;
-8. leave approval and resume handling to DesignFlowKernel.
+8. persist the review packet and approval in the run ledger;
+9. invoke `PhysicalDesignReviewGate.validateResume` before resuming a physical stage;
+10. leave flow scheduling and stage ordering to DesignFlowKernel.

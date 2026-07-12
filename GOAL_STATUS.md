@@ -4,7 +4,7 @@
 
 **Canonical native backend implemented. Process qualification and foundry-facing external adapters remain intentionally unclaimed.**
 
-Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 approval/resume is next.
+Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 native approval/resume boundary complete, M6 corpus and oracle correlation next.
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -19,7 +19,7 @@ Milestone status: M0 complete, M1 immutable run transaction complete, M2 support
 | Oracle correlation | Not started | No retained comparison evidence |
 | Process qualification | Not started | No PDK-scoped qualification record |
 | Xcircuite stage adapter | Smoke-checked | `PhysicalDesignFlowStageExecutor` and headless tests |
-| End-to-end flow evidence | Smoke-checked | Native floorplan adapter persists and verifies immutable artifacts |
+| End-to-end flow evidence | Smoke-checked | Native floorplan adapter persists and verifies immutable artifacts; review gate verifies immutable manifest identity before resume |
 | Release readiness | Blocked | Implementation and qualification are absent |
 
 ## Function status
@@ -38,6 +38,7 @@ Milestone status: M0 complete, M1 immutable run transaction complete, M2 support
 | Repair/DFM closure | Contract defined | Rule-aware ECO, antenna, fill, via and hotspot candidates with repair proofs | Strategy and DFM proof regression | Complete for native scope |
 | DEF interchange | Contract defined | Native parser/writer with structured diagnostics and source provenance | Round-trip, retained fixture and DEF input tests | Complete for supported subset |
 | GDSII/OASIS adapter boundary | Protocol defined | Qualification-gated external adapter protocol | Gate contract pending external implementation | Blocked until qualified |
+| Approval and resume identity | Contract defined | Immutable review packet, decision and stale-base gate | 24-test native regression suite | Native boundary complete; ledger persistence owned by Xcircuite |
 
 ## Goal progression
 
@@ -75,5 +76,6 @@ The package goal is complete only when every P0 function has a concrete backend,
 - No PDK-scoped process qualification record exists.
 - GDSII and OASIS stream-out require a qualified external adapter.
 - Native repair candidates still require independent DRC/LVS/PEX/Timing verification.
+- Xcircuite must persist the native review packet and approval decision in its run ledger and call the native resume gate before continuing a physical stage.
 
 This file must be updated by implementation agents whenever a maturity gate changes. A source file or type name alone is never evidence of implementation or qualification.

@@ -86,6 +86,172 @@ struct NativeExecutionTests {
         #expect(manifest.artifacts.count == 3)
     }
 
+    @Test("approval packet enables resume only for the reviewed immutable revision")
+    func approvalPacketEnablesResume() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .floorplan,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+            )
+        )
+        let manifestReference = try #require(result.payload.runManifest)
+        let gate = PhysicalDesignReviewGate(artifactStore: store)
+        let packet = try await gate.prepareReview(manifestReference: manifestReference)
+        let codec = PhysicalDesignJSONCodec()
+        do {
+            let decodedPacket = try codec.decode(PhysicalDesignReviewPacket.self, from: codec.encode(packet))
+            #expect(decodedPacket.runID == packet.runID)
+            #expect(decodedPacket.stage == packet.stage)
+            #expect(decodedPacket.manifestDigest == packet.manifestDigest)
+            #expect(decodedPacket.proposedLayout == packet.proposedLayout)
+            #expect(decodedPacket.artifactDigests == packet.artifactDigests)
+            #expect(decodedPacket.decisionScope == packet.decisionScope)
+        } catch {
+            Issue.record("Review packet round trip failed: \(error)")
+        }
+
+        let decision = PhysicalDesignReviewDecision(
+            decisionID: "decision-1",
+            runID: packet.runID,
+            stage: packet.stage,
+            verdict: .approved,
+            reviewer: "human-reviewer",
+            manifestDigest: packet.manifestDigest,
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decisionScope: packet.decisionScope
+        )
+        do {
+            let decodedDecision = try codec.decode(PhysicalDesignReviewDecision.self, from: codec.encode(decision))
+            #expect(decodedDecision.decisionID == decision.decisionID)
+            #expect(decodedDecision.runID == decision.runID)
+            #expect(decodedDecision.stage == decision.stage)
+            #expect(decodedDecision.verdict == decision.verdict)
+            #expect(decodedDecision.reviewer == decision.reviewer)
+            #expect(decodedDecision.manifestDigest == decision.manifestDigest)
+            #expect(decodedDecision.proposedLayoutDigest == decision.proposedLayoutDigest)
+            #expect(decodedDecision.decisionScope == decision.decisionScope)
+        } catch {
+            Issue.record("Review decision round trip failed: \(error)")
+        }
+        let review = gate.evaluate(decision, for: packet)
+        #expect(review.status == .approved)
+
+        let resume = gate.validateResume(
+            PhysicalDesignResumeRequest(
+                runID: packet.runID,
+                stage: packet.stage,
+                manifestDigest: packet.manifestDigest,
+                expectedBaseLayoutDigest: packet.baseLayout?.layoutDigest,
+                proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+                decision: decision
+            ),
+            packet: packet
+        )
+        #expect(resume.status == .readyToResume)
+    }
+
+    @Test("review rejection and stale resume requests fail closed")
+    func reviewRejectionAndStaleResumeFailClosed() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .floorplan,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+            )
+        )
+        let manifestReference = try #require(result.payload.runManifest)
+        let packet = try await PhysicalDesignReviewGate(artifactStore: store).prepareReview(manifestReference: manifestReference)
+        let gate = PhysicalDesignReviewGate(artifactStore: store)
+
+        let rejectedDecision = PhysicalDesignReviewDecision(
+            decisionID: "decision-rejected",
+            runID: packet.runID,
+            stage: packet.stage,
+            verdict: .rejected,
+            reviewer: "human-reviewer",
+            manifestDigest: packet.manifestDigest,
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decisionScope: packet.decisionScope
+        )
+        let rejected = gate.evaluate(rejectedDecision, for: packet)
+        #expect(rejected.status == .rejected)
+        #expect(rejected.diagnostics.contains { $0.code == "physical_design_review_rejected" })
+
+        let staleDecision = PhysicalDesignReviewDecision(
+            decisionID: "decision-stale",
+            runID: packet.runID,
+            stage: packet.stage,
+            verdict: .approved,
+            reviewer: "human-reviewer",
+            manifestDigest: "stale-manifest",
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decisionScope: packet.decisionScope
+        )
+        let stale = gate.validateResume(
+            PhysicalDesignResumeRequest(
+                runID: packet.runID,
+                stage: packet.stage,
+                manifestDigest: "stale-manifest",
+                expectedBaseLayoutDigest: packet.baseLayout?.layoutDigest,
+                proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+                decision: staleDecision
+            ),
+            packet: packet
+        )
+        #expect(stale.status == .blocked)
+        #expect(stale.diagnostics.contains { $0.code == "physical_design_review_manifest_stale" })
+        #expect(stale.diagnostics.contains { $0.code == "physical_design_resume_manifest_stale" })
+
+        let mismatchedScopeDecision = PhysicalDesignReviewDecision(
+            decisionID: "decision-scope",
+            runID: packet.runID,
+            stage: packet.stage,
+            verdict: .approved,
+            reviewer: "human-reviewer",
+            manifestDigest: packet.manifestDigest,
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decisionScope: ["proposed_layout"]
+        )
+        let mismatchedScope = gate.evaluate(mismatchedScopeDecision, for: packet)
+        #expect(mismatchedScope.status == .blocked)
+        #expect(mismatchedScope.diagnostics.contains { $0.code == "physical_design_review_decision_scope_mismatch" })
+    }
+
+    @Test("review preparation rejects tampered immutable artifacts")
+    func reviewPreparationRejectsTamperedArtifact() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .floorplan,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+            )
+        )
+        let manifestReference = try #require(result.payload.runManifest)
+        let layoutReference = try #require(result.payload.physicalDesign?.layoutArtifact)
+        _ = try await store.write(
+            Data("tampered revision".utf8),
+            relativePath: layoutReference.path,
+            kind: .layout,
+            format: .json,
+            runID: result.payload.runManifest?.producedByRunID ?? "tamper-test"
+        )
+
+        do {
+            _ = try await PhysicalDesignReviewGate(artifactStore: store).prepareReview(
+                manifestReference: manifestReference
+            )
+            Issue.record("Tampered artifact unexpectedly produced a review packet")
+        } catch let error as PhysicalDesignReviewGateError {
+            guard case .artifactReadFailed = error else {
+                Issue.record("Unexpected review gate error: \(error)")
+                return
+            }
+        } catch {
+            Issue.record("Unexpected review gate error: \(error)")
+        }
+    }
+
     @Test("supported DEF round trip preserves interchange structures")
     func defRoundTrip() throws {
         let snapshot = PhysicalDesignSnapshot(

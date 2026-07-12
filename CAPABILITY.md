@@ -21,6 +21,16 @@ Every completed stage emits a new canonical JSON revision, DEF handoff, and `Xci
 
 Every completed stage also emits a run manifest binding the design digest, timing constraints, PDK identity, base revision, proposed revision, design diff, implementation configuration, deterministic seed and implementation identity.
 
+The M5 review boundary exposes a typed human-in-the-loop contract:
+
+| Review operation | Native behavior | Evidence |
+|---|---|---|
+| Prepare review | Loads a completed manifest, revalidates all referenced artifact bytes/digests, and creates a Codable decision packet | `PhysicalDesignReviewPacket` |
+| Evaluate decision | Accepts only a decision bound to the packet's run, stage, manifest digest, proposed revision and complete scope | `PhysicalDesignReviewResult` |
+| Validate resume | Requires approval and rechecks run/stage, manifest, base revision, proposed revision and decision scope | `PhysicalDesignResumeRequest` and structured stale diagnostics |
+
+The packet and decision are immutable value types suitable for Xcircuite artifact persistence. The native gate does not overwrite layouts or approvals; the sibling Xcircuite runtime owns the run ledger and resume orchestration.
+
 M3 also persists `implementationState` in the canonical snapshot:
 
 | Evidence | Native behavior |

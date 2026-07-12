@@ -78,13 +78,15 @@ Evidence: `PhysicalDesignRepairConstraints`, `PhysicalDesignAntennaRepairStrateg
 
 ## M5 — Xcircuite approval and resume flow
 
-Status: next; partially smoke-checked.
+Status: complete for the native immutable-manifest review boundary; Xcircuite ledger persistence remains owned by the sibling runtime.
 
 Acceptance criteria:
 
 - A run can pause at a human approval boundary with immutable artifacts and a decision packet.
 - Resume verifies the same base revision, manifest and approval scope before continuing.
 - Rejected or stale revisions fail closed and leave the prior immutable revision untouched.
+
+Evidence: `PhysicalDesignReviewGating`, `PhysicalDesignReviewPacket`, `PhysicalDesignReviewDecision`, `PhysicalDesignResumeRequest`, artifact revalidation in `PhysicalDesignReviewGate`, and approval/rejection/stale-resume regression tests.
 
 ## M6 — Retained corpus and reference-oracle correlation
 

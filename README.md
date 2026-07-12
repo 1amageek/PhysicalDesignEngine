@@ -41,11 +41,13 @@ The native backend supports canonical JSON and DEF input and emits canonical JSO
 
 Native M3 execution records tracks, power domains, IO pads, placement legalization proof, CTS branch connectivity and routing evidence in `PhysicalDesignSnapshot.implementationState`. M4 repair stages additionally persist verified repair proofs. Placement, routing and repair verification fail closed on physical conflicts; timing objectives and antenna risk remain review metrics for independent signoff oracles.
 
+M5 provides `PhysicalDesignReviewGating` for human-in-the-loop control. It builds a Codable review packet from a completed immutable run manifest, rechecks every referenced artifact digest, evaluates an approval or rejection decision, and validates resume identity against the same run, stage, manifest, proposed revision, base revision and decision scope. Rejected, stale or tampered revisions return structured blocked diagnostics; the native backend never mutates an existing immutable revision during review.
+
 GDSII/OASIS integration is protocol-first through `PhysicalDesignMaskDataAdapter`. `PhysicalDesignMaskDataAdapterGate` rejects adapters without process qualification, so an external implementation remains blocked until its qualification evidence is supplied.
 
 ## Xcircuite integration
 
-Xcircuite owns the closure loop. Physical products emit immutable layout revisions; Xcircuite sends them to DRC, LVS, PEX and Timing, then constructs typed repair requests.
+Xcircuite owns the closure loop. Physical products emit immutable layout revisions; Xcircuite sends them to DRC, LVS, PEX and Timing, then constructs typed repair requests. Xcircuite persists the review packet and approval record in its run ledger, while `PhysicalDesignReviewGate` remains the native identity and artifact-integrity gate used before resume.
 
 The library does not depend on the Xcircuite runtime. Xcircuite owns the adapter to `DesignFlowKernel.FlowStageExecutor`, artifact persistence, qualification gates, repair loops and human approval.
 
@@ -70,7 +72,7 @@ The command emits one JSON result envelope. Successful runs write `revision.json
 perl -e 'alarm 30; exec @ARGV' swift test
 ```
 
-The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, artifact provenance and CLI error output. The positive fixture completes with four immutable artifacts; the negative fixture is blocked with `physical_snapshot_missing`.
+The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, artifact provenance, approval/resume identity and CLI error output. The positive fixture completes with four immutable artifacts; the negative fixture is blocked with `physical_snapshot_missing`.
 
 The Xcircuite adapter is verified from the sibling repository with:
 
@@ -78,6 +80,6 @@ The Xcircuite adapter is verified from the sibling repository with:
 swift test --scratch-path /tmp/lsi-xcircuite-physical-design --filter PhysicalDesignFlowStageExecutorTests
 ```
 
-See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1 through the native M4 repair/DFM slice are complete; M5, approval and resume flow, is next.
+See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1 through the native M5 approval/resume slice are complete; M6, retained corpus and oracle correlation, is next.
 
 See `DESIGN.md`, `INTERFACES.md`, `IMPLEMENTATION_PLAN.md`, and `CAPABILITY.md` for the boundary and qualification status.
