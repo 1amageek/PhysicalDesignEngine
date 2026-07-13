@@ -220,7 +220,8 @@ struct NativeExecutionTests {
 
     @Test("review preparation rejects tampered immutable artifacts")
     func reviewPreparationRejectsTamperedArtifact() async throws {
-        let store = InMemoryPhysicalDesignArtifactStore()
+        let baseStore = InMemoryPhysicalDesignArtifactStore()
+        let store = TamperingPhysicalDesignArtifactStore(base: baseStore)
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(
             PhysicalDesignFixtureFactory.request(
                 stage: .floorplan,
@@ -229,13 +230,7 @@ struct NativeExecutionTests {
         )
         let manifestReference = try #require(result.payload.runManifest)
         let layoutReference = try #require(result.payload.physicalDesign?.layoutArtifact)
-        _ = try await store.write(
-            Data("tampered revision".utf8),
-            relativePath: layoutReference.path,
-            kind: .layout,
-            format: .json,
-            runID: result.payload.runManifest?.producedByRunID ?? "tamper-test"
-        )
+        await store.setTamperedPath(layoutReference.path)
 
         do {
             _ = try await PhysicalDesignReviewGate(artifactStore: store).prepareReview(
@@ -250,6 +245,87 @@ struct NativeExecutionTests {
         } catch {
             Issue.record("Unexpected review gate error: \(error)")
         }
+    }
+
+    @Test("resume revalidates current artifact bytes after approval")
+    func resumeRevalidatesCurrentArtifacts() async throws {
+        let baseStore = InMemoryPhysicalDesignArtifactStore()
+        let store = TamperingPhysicalDesignArtifactStore(base: baseStore)
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .floorplan,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+            )
+        )
+        let manifestReference = try #require(result.payload.runManifest)
+        let gate = PhysicalDesignReviewGate(artifactStore: store)
+        let packet = try await gate.prepareReview(manifestReference: manifestReference)
+        let decision = PhysicalDesignReviewDecision(
+            decisionID: "foundation-resume",
+            runID: packet.runID,
+            stage: packet.stage,
+            verdict: .approved,
+            reviewer: "human-reviewer",
+            manifestDigest: packet.manifestDigest,
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decisionScope: packet.decisionScope
+        )
+        let resumeRequest = PhysicalDesignResumeRequest(
+            runID: packet.runID,
+            stage: packet.stage,
+            manifestDigest: packet.manifestDigest,
+            expectedBaseLayoutDigest: packet.baseLayout?.layoutDigest,
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decision: decision
+        )
+        await store.setTamperedPath(packet.proposedLayout.layoutArtifact.path)
+
+        let resume = await gate.validateResumeAgainstCurrentArtifacts(resumeRequest, packet: packet)
+
+        #expect(resume.status == .blocked)
+        #expect(resume.diagnostics.contains { $0.code == "physical_design_resume_artifacts_unavailable" })
+    }
+
+    @Test("resume rejects a packet whose embedded manifest was altered")
+    func resumeRejectsAlteredEmbeddedManifest() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .floorplan,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+            )
+        )
+        let manifestReference = try #require(result.payload.runManifest)
+        let gate = PhysicalDesignReviewGate(artifactStore: store)
+        let packet = try await gate.prepareReview(manifestReference: manifestReference)
+        let decision = PhysicalDesignReviewDecision(
+            decisionID: "altered-manifest",
+            runID: packet.runID,
+            stage: packet.stage,
+            verdict: .approved,
+            reviewer: "human-reviewer",
+            manifestDigest: packet.manifestDigest,
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decisionScope: packet.decisionScope
+        )
+        let resumeRequest = PhysicalDesignResumeRequest(
+            runID: packet.runID,
+            stage: packet.stage,
+            manifestDigest: packet.manifestDigest,
+            expectedBaseLayoutDigest: packet.baseLayout?.layoutDigest,
+            proposedLayoutDigest: packet.proposedLayout.layoutDigest,
+            decision: decision
+        )
+        var alteredPacket = packet
+        alteredPacket.manifest.implementationVersion = "tampered"
+
+        let resume = await gate.validateResumeAgainstCurrentArtifacts(
+            resumeRequest,
+            packet: alteredPacket
+        )
+
+        #expect(resume.status == .blocked)
+        #expect(resume.diagnostics.contains { $0.code == "physical_design_resume_artifacts_stale" })
     }
 
     @Test("supported DEF round trip preserves interchange structures")

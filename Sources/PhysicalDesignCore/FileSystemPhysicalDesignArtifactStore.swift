@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 import XcircuitePackage
 
 public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
@@ -11,10 +12,11 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
     }
 
     public func read(_ reference: XcircuiteFileReference) async throws -> Data {
-        let package = XcircuitePackage(projectRoot: projectRoot)
+        let location: ArtifactLocation
         let url: URL
         do {
-            url = try package.url(forProjectRelativePath: reference.path)
+            location = try ArtifactLocation(workspaceRelativePath: reference.path)
+            url = try location.resolvedFileURL(relativeTo: projectRoot)
         } catch {
             throw PhysicalDesignStoreError.invalidPath(reference.path)
         }
@@ -28,6 +30,8 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
                 throw PhysicalDesignStoreError.readFailed("\(reference.path): SHA-256 digest does not match the reference")
             }
             return data
+        } catch let error as PhysicalDesignStoreError {
+            throw error
         } catch {
             throw PhysicalDesignStoreError.readFailed("\(reference.path): \(error.localizedDescription)")
         }
@@ -40,23 +44,38 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
         format: XcircuiteFileFormat,
         runID: String
     ) async throws -> XcircuiteFileReference {
-        let package = XcircuitePackage(projectRoot: projectRoot)
+        let location: ArtifactLocation
         let url: URL
         do {
-            url = try package.url(forProjectRelativePath: relativePath)
+            location = try ArtifactLocation(workspaceRelativePath: relativePath)
+            url = try location.resolvedFileURL(relativeTo: projectRoot)
         } catch {
             throw PhysicalDesignStoreError.invalidPath(relativePath)
         }
 
+        let temporaryURL = url
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
         do {
+            guard !FileManager.default.fileExists(atPath: url.path) else {
+                throw PhysicalDesignStoreError.pathAlreadyExists(relativePath)
+            }
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            try data.write(to: url, options: .atomic)
+            try data.write(to: temporaryURL, options: .atomic)
+            do {
+                try FileManager.default.moveItem(at: temporaryURL, to: url)
+            } catch {
+                if FileManager.default.fileExists(atPath: url.path) {
+                    throw PhysicalDesignStoreError.pathAlreadyExists(relativePath)
+                }
+                throw error
+            }
             let digest = hasher.sha256(data: data)
             return XcircuiteFileReference(
-                artifactID: relativePath,
+                artifactID: artifactID(for: relativePath, kind: kind, format: format, digest: digest),
                 path: relativePath,
                 kind: kind,
                 format: format,
@@ -65,9 +84,39 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
                 producedByRunID: runID
             )
         } catch let error as PhysicalDesignStoreError {
+            do {
+                try cleanupTemporaryFile(at: temporaryURL)
+            } catch {
+                throw PhysicalDesignStoreError.writeFailed(
+                    "\(relativePath): \(error.localizedDescription); temporary cleanup also failed"
+                )
+            }
             throw error
         } catch {
-            throw PhysicalDesignStoreError.writeFailed("\(relativePath): \(error.localizedDescription)")
+            let primaryMessage = error.localizedDescription
+            do {
+                try cleanupTemporaryFile(at: temporaryURL)
+            } catch {
+                throw PhysicalDesignStoreError.writeFailed(
+                    "\(relativePath): \(primaryMessage); temporary cleanup also failed: \(error.localizedDescription)"
+                )
+            }
+            throw PhysicalDesignStoreError.writeFailed("\(relativePath): \(primaryMessage)")
         }
+    }
+
+    private func cleanupTemporaryFile(at url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
+
+    private func artifactID(
+        for relativePath: String,
+        kind: XcircuiteFileKind,
+        format: XcircuiteFileFormat,
+        digest: String
+    ) -> String {
+        let identity = hasher.sha256(data: Data("\(relativePath):\(digest)".utf8))
+        return "physical-design-\(kind.rawValue)-\(format.rawValue.lowercased())-\(identity.prefix(16))"
     }
 }

@@ -131,8 +131,20 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         if rowHeight <= 0 || siteWidth <= 0 || placementSpacing < 0 {
             diagnostics.append("placement grid dimensions are invalid")
         }
+        if maximumRoutingLayer <= 0 {
+            diagnostics.append("maximum routing layer must be positive")
+        }
         if preferredRoutingLayers.isEmpty || preferredRoutingLayers.contains(where: { $0 <= 0 || $0 > maximumRoutingLayer }) {
             diagnostics.append("routing layers must be non-empty and within the maximum layer")
+        }
+        if Set(preferredRoutingLayers).count != preferredRoutingLayers.count {
+            diagnostics.append("routing layers must be unique")
+        }
+        if !preferredRoutingLayers.contains(where: { !$0.isMultiple(of: 2) }) {
+            diagnostics.append("at least one odd routing layer is required for horizontal segments")
+        }
+        if !preferredRoutingLayers.contains(where: { $0.isMultiple(of: 2) }) {
+            diagnostics.append("at least one even routing layer is required for vertical segments")
         }
         if targetUtilization <= 0 || targetUtilization > 1 {
             diagnostics.append("target utilization must be in the interval (0, 1]")

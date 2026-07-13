@@ -16,4 +16,9 @@ public protocol PhysicalDesignReviewGating: Sendable {
         _ request: PhysicalDesignResumeRequest,
         packet: PhysicalDesignReviewPacket
     ) -> PhysicalDesignReviewResult
+
+    func validateResumeAgainstCurrentArtifacts(
+        _ request: PhysicalDesignResumeRequest,
+        packet: PhysicalDesignReviewPacket
+    ) async -> PhysicalDesignReviewResult
 }

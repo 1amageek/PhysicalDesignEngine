@@ -23,13 +23,21 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
         } catch {
             throw PhysicalDesignReviewGateError.artifactReadFailed(error.localizedDescription)
         }
+        guard let expectedManifestDigest = manifestReference.sha256,
+              !expectedManifestDigest.isEmpty,
+              let expectedManifestByteCount = manifestReference.byteCount,
+              expectedManifestByteCount >= 0 else {
+            throw PhysicalDesignReviewGateError.artifactReadFailed(
+                "\(manifestReference.path): manifest reference lacks complete integrity metadata"
+            )
+        }
         let actualManifestDigest = hasher.sha256(data: data)
-        if let expectedDigest = manifestReference.sha256, expectedDigest != actualManifestDigest {
+        if expectedManifestDigest != actualManifestDigest {
             throw PhysicalDesignReviewGateError.artifactReadFailed(
                 "\(manifestReference.path): SHA-256 digest does not match the manifest reference"
             )
         }
-        if let expectedByteCount = manifestReference.byteCount, Int64(data.count) != expectedByteCount {
+        if Int64(data.count) != expectedManifestByteCount {
             throw PhysicalDesignReviewGateError.artifactReadFailed(
                 "\(manifestReference.path): byte count does not match the manifest reference"
             )
@@ -63,13 +71,21 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             } catch {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(error.localizedDescription)
             }
+            guard let expectedDigest = artifact.sha256,
+                  !expectedDigest.isEmpty,
+                  let expectedByteCount = artifact.byteCount,
+                  expectedByteCount >= 0 else {
+                throw PhysicalDesignReviewGateError.artifactReadFailed(
+                    "\(artifact.path): artifact reference lacks complete integrity metadata"
+                )
+            }
             let digest = hasher.sha256(data: artifactData)
-            if let expectedDigest = artifact.sha256, expectedDigest != digest {
+            if expectedDigest != digest {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(
                     "\(artifact.path): SHA-256 digest does not match the manifest reference"
                 )
             }
-            if let expectedByteCount = artifact.byteCount, Int64(artifactData.count) != expectedByteCount {
+            if Int64(artifactData.count) != expectedByteCount {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(
                     "\(artifact.path): byte count does not match the manifest reference"
                 )
@@ -173,11 +189,71 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
         return PhysicalDesignReviewResult(status: .readyToResume, packet: packet, decision: request.decision)
     }
 
+    public func validateResumeAgainstCurrentArtifacts(
+        _ request: PhysicalDesignResumeRequest,
+        packet: PhysicalDesignReviewPacket
+    ) async -> PhysicalDesignReviewResult {
+        let initial = validateResume(request, packet: packet)
+        guard initial.status == .readyToResume else {
+            return initial
+        }
+
+        do {
+            let currentPacket = try await prepareReview(
+                manifestReference: packet.manifestReference,
+                decisionScope: packet.decisionScope
+            )
+            guard currentPacket.manifestReference == packet.manifestReference,
+                  currentPacket.manifest == packet.manifest,
+                  currentPacket.runID == packet.runID,
+                  currentPacket.stage == packet.stage,
+                  currentPacket.manifestDigest == packet.manifestDigest,
+                  currentPacket.proposedLayout == packet.proposedLayout,
+                  currentPacket.baseLayout == packet.baseLayout,
+                  currentPacket.designDiff == packet.designDiff,
+                  currentPacket.artifactDigests == packet.artifactDigests,
+                  currentPacket.decisionScope == packet.decisionScope else {
+                return PhysicalDesignReviewResult(
+                    status: .blocked,
+                    diagnostics: [XcircuiteEngineDiagnostic(
+                        severity: .error,
+                        code: "physical_design_resume_artifacts_stale",
+                        message: "Reviewed physical-design artifacts changed after approval and must be reviewed again.",
+                        suggestedActions: ["prepare_a_new_review_packet_from_the_current_manifest"]
+                    )],
+                    packet: packet,
+                    decision: request.decision
+                )
+            }
+            return initial
+        } catch {
+            return PhysicalDesignReviewResult(
+                status: .blocked,
+                diagnostics: [XcircuiteEngineDiagnostic(
+                    severity: .error,
+                    code: "physical_design_resume_artifacts_unavailable",
+                    message: "Current physical-design artifacts could not be revalidated before resume: \(error.localizedDescription)",
+                    suggestedActions: ["restore_review_artifacts", "prepare_a_new_review_packet"]
+                )],
+                packet: packet,
+                decision: request.decision
+            )
+        }
+    }
+
     private func validate(
         decision: PhysicalDesignReviewDecision,
         packet: PhysicalDesignReviewPacket
     ) -> [XcircuiteEngineDiagnostic] {
         var diagnostics: [XcircuiteEngineDiagnostic] = []
+        diagnostics.append(contentsOf: packet.validationDiagnostics().map {
+            XcircuiteEngineDiagnostic(
+                severity: .error,
+                code: "physical_design_review_packet_invalid",
+                message: $0,
+                suggestedActions: ["prepare_a_new_review_packet"]
+            )
+        })
         if decision.decisionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || decision.reviewer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(XcircuiteEngineDiagnostic(
                 severity: .error,

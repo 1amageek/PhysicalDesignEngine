@@ -403,6 +403,25 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         diagnostics.append(contentsOf: duplicateDiagnostics(ids: cells.map(\.id), kind: "cell"))
         diagnostics.append(contentsOf: duplicateDiagnostics(ids: pins.map(\.id), kind: "pin"))
         diagnostics.append(contentsOf: duplicateDiagnostics(ids: nets.map(\.id), kind: "net"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: rows.map(\.id), kind: "row"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: routes.map(\.id), kind: "route"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: vias.map(\.id), kind: "via"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: fills.map(\.id), kind: "fill"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: hotspots.map(\.id), kind: "hotspot"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: powerStructures.map(\.id), kind: "power structure"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: clockTrees.map(\.id), kind: "clock tree"))
+        diagnostics.append(contentsOf: duplicateDiagnostics(ids: antennaRepairs.map(\.id), kind: "antenna repair"))
+        for row in rows where row.siteWidth <= 0 || row.height <= 0 || row.siteCount <= 0 {
+            diagnostics.append("row \(row.id) has invalid geometry")
+        }
+        for cell in cells {
+            if cell.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || cell.master.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                diagnostics.append("cell \(cell.id) has incomplete identity")
+            }
+            if cell.width <= 0 || cell.height <= 0 {
+                diagnostics.append("cell \(cell.id) has invalid geometry")
+            }
+        }
         let cellIDs = Set(cells.map(\.id))
         for pin in pins {
             if let cellID = pin.cellID, !cellIDs.contains(cellID) {
@@ -414,6 +433,41 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             let missingPins = net.pinIDs.filter { !pinIDs.contains($0) }
             if !missingPins.isEmpty {
                 diagnostics.append("net \(net.id) refers to missing pins \(missingPins.sorted().joined(separator: ","))")
+            }
+        }
+        let netIDs = Set(nets.map(\.id))
+        for route in routes {
+            if !netIDs.contains(route.netID) {
+                diagnostics.append("route \(route.id) refers to missing net \(route.netID)")
+            }
+            for segment in route.segments {
+                if segment.layer <= 0 || (segment.x1 == segment.x2 && segment.y1 == segment.y2) || (segment.x1 != segment.x2 && segment.y1 != segment.y2) {
+                    diagnostics.append("route segment \(segment.id) has invalid orthogonal geometry")
+                }
+            }
+        }
+        for via in vias {
+            if via.lowerLayer <= 0 || via.upperLayer <= via.lowerLayer {
+                diagnostics.append("via \(via.id) has invalid layer ordering")
+            }
+            if !netIDs.contains(via.netID) {
+                diagnostics.append("via \(via.id) refers to missing net \(via.netID)")
+            }
+        }
+        for fill in fills where !isValid(fill.geometry) {
+            diagnostics.append("fill \(fill.id) has invalid geometry")
+        }
+        for hotspot in hotspots where !isValid(hotspot.geometry) {
+            diagnostics.append("hotspot \(hotspot.id) has invalid geometry")
+        }
+        for blockage in blockages where !isValid(blockage) {
+            diagnostics.append("placement blockage has invalid geometry")
+        }
+        for structure in powerStructures {
+            if structure.netID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || structure.layer <= 0
+                || !isValid(structure.geometry) {
+                diagnostics.append("power structure \(structure.id) is invalid")
             }
         }
         if let implementationState {

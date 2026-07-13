@@ -346,6 +346,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             guard let core else { return false }
             return !core.contains(PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height))
         }.count
+        let blockedCellCount = output.cells.filter { cell in
+            let geometry = PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)
+            return output.blockages.contains(where: { $0.intersects(geometry) })
+        }.count
         let utilization: Double
         if let core, core.width > 0, core.height > 0 {
             let cellArea = output.cells.reduce(0.0) { partial, cell in
@@ -364,12 +368,19 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             overlapCount: overlapCount,
             outsideCoreCount: outsideCoreCount,
             blockageConflictCount: blockageConflictCount,
-            blockedCellCount: 0,
+            blockedCellCount: blockedCellCount,
             utilization: utilization,
             timingObjective: timingObjective,
             congestionObjective: congestionObjective
         )
         output.implementationState = implementationState
+        if overlapCount > 0 || outsideCoreCount > 0 || blockedCellCount > 0 {
+            return blocked(
+                code: "placement_legality_failed",
+                message: "Placement produced overlap, core-boundary or blockage conflicts.",
+                actions: ["repair_placement_conflicts", "increase_core_area", "adjust_placement_blockages"]
+            )
+        }
         var placementDiagnostics: [XcircuiteEngineDiagnostic] = []
         if utilization > configuration.targetUtilization {
             placementDiagnostics.append(diagnostic(
@@ -565,7 +576,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
     private func routing(
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration,
-        mode: String
+        mode: String,
+        onlyNetID: String? = nil
     ) -> Outcome {
         guard !input.cells.isEmpty, input.cells.allSatisfy(\.placed) else {
             return blocked(
@@ -596,8 +608,27 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         var spacingConflicts = 0
         var antennaRiskNetIDs: [String] = []
         var routeGeometries: [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)] = []
+        if let onlyNetID {
+            routeGeometries = output.routes
+                .filter { $0.netID != onlyNetID }
+                .flatMap { route in
+                    route.segments.map {
+                        (
+                            netID: route.netID,
+                            layer: $0.layer,
+                            geometry: segmentGeometry($0, width: implementationConstraints.routeWidth)
+                        )
+                    }
+                }
+        }
         var generatedVias: [PhysicalDesignSnapshot.Via] = []
-        for (netOrdinal, net) in output.nets.sorted(by: { $0.id < $1.id }).enumerated() {
+        let routableNets = output.nets
+            .sorted(by: { $0.id < $1.id })
+            .filter { onlyNetID == nil || $0.id == onlyNetID }
+        for (netOrdinal, net) in routableNets.enumerated() {
+            if Task.isCancelled {
+                return cancelled(actions: ["resume_from_the_last_immutable_revision"])
+            }
             let pins = net.pinIDs.compactMap { pinByID[$0] }
             let locations = pins.map { pinLocation($0, cells: cellByID) }
             guard locations.count == net.pinIDs.count, locations.count >= 2 else {
@@ -718,6 +749,21 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 candidateActions: ["repair_routing_constraints", "use_a_qualified_external_router"]
             )
         }
+        guard skippedNetIDs.isEmpty else {
+            let skipped = skippedNetIDs.sorted().joined(separator: ", ")
+            return Outcome(
+                snapshot: nil,
+                status: .blocked,
+                diagnostics: warnings + [diagnostic(
+                    severity: .error,
+                    code: "routing_incomplete",
+                    message: "Routing could not establish connectivity for net(s): \(skipped).",
+                    entity: skipped,
+                    actions: ["repair_net_connectivity", "use_a_qualified_external_router"]
+                )],
+                candidateActions: ["repair_net_connectivity", "use_a_qualified_external_router"]
+            )
+        }
         guard !routes.isEmpty else {
             return blocked(
                 code: "no_net_could_be_routed",
@@ -770,7 +816,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         if !fallback.isEmpty {
             return fallback[offset % fallback.count]
         }
-        return preferredLayers.first
+        return nil
     }
 
     private func segmentGeometry(
@@ -810,6 +856,14 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     code: "eco_target_cell_missing",
                     message: "ECO resize requires an existing target cell.",
                     actions: ["set_eco_target_cell_id"]
+                )
+            }
+            guard !output.cells[index].locked else {
+                return blocked(
+                    code: "eco_locked_cell",
+                    message: "ECO resize cannot mutate locked cell \(target).",
+                    entity: target,
+                    actions: ["unlock_the_cell_or_choose_another_target"]
                 )
             }
             output.cells[index].width += configuration.siteWidth
@@ -853,15 +907,38 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["set_eco_target_net_id"]
                 )
             }
+            guard let core = output.core, !output.rows.isEmpty else {
+                return blocked(
+                    code: "eco_buffer_placement_context_missing",
+                    message: "Buffer insertion requires core geometry and placement rows.",
+                    actions: ["run_floorplan_before_buffer_insertion"]
+                )
+            }
             let bufferID = "eco_buf_\(netID)"
             guard !output.cells.contains(where: { $0.id == bufferID }) else { return completed(output, actions: ["run_timing_analysis"], metrics: metrics(for: output)) }
             let location = output.pins.first(where: { $0.netID == netID })
+            guard let placement = legalBufferPlacement(
+                near: location,
+                core: core,
+                rows: output.rows,
+                cells: output.cells,
+                blockages: output.blockages,
+                width: configuration.siteWidth * 2,
+                height: configuration.rowHeight
+            ) else {
+                return blocked(
+                    code: "eco_buffer_placement_unavailable",
+                    message: "No legal row location is available for the ECO buffer on net \(netID).",
+                    entity: netID,
+                    actions: ["increase_core_area", "move_blockages", "reduce_buffer_width"]
+                )
+            }
             output.cells.append(
                 PhysicalDesignSnapshot.Cell(
                     id: bufferID,
                     master: "BUF_ECO",
-                    x: location?.x ?? 0,
-                    y: location?.y ?? 0,
+                    x: placement.x,
+                    y: placement.y,
                     width: configuration.siteWidth * 2,
                     height: configuration.rowHeight,
                     placed: true,
@@ -873,7 +950,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                   output.nets.contains(where: { $0.id == netID }) else {
                 return blocked(code: "eco_target_net_missing", message: "Reroute requires an existing target net.", actions: ["set_eco_target_net_id"])
             }
-            let routingOutcome = routing(output, configuration: configuration, mode: "eco")
+            let routingOutcome = routing(output, configuration: configuration, mode: "eco", onlyNetID: netID)
             guard let routed = routingOutcome.snapshot else { return routingOutcome }
             output = routed
         case .addBlockage:
@@ -1060,8 +1137,14 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         var y = core.y + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
         let maximumFillArea = Double(core.width) * Double(core.height) * repairConstraints.maximumFillDensity
         while y + fillHeight <= core.maxY {
+            if Task.isCancelled {
+                return cancelled(actions: ["resume_from_the_last_immutable_revision"])
+            }
             var x = core.x + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
             while x + fillWidth <= core.maxX {
+                if Task.isCancelled {
+                    return cancelled(actions: ["resume_from_the_last_immutable_revision"])
+                }
                 let geometry = PhysicalDesignSnapshot.Rect(x: x, y: y, width: fillWidth, height: fillHeight)
                 let currentFillArea = output.fills.reduce(0.0) { $0 + Double($1.geometry.width) * Double($1.geometry.height) }
                 let conflicts = output.cells.contains { cell in
@@ -1267,6 +1350,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         stage: String
     ) -> Int {
         var count = snapshot.validationDiagnostics().count
+        count += commonPhysicalViolationCount(snapshot)
         let repairConstraints = configuration.repairConstraints ?? .default
         switch stage {
         case PhysicalDesignStage.antennaRepair.rawValue:
@@ -1284,6 +1368,36 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             count += snapshot.hotspots.filter { !$0.resolved }.count
         default:
             break
+        }
+        return count
+    }
+
+    private func commonPhysicalViolationCount(_ snapshot: PhysicalDesignSnapshot) -> Int {
+        var count = 0
+        let placedCells = snapshot.cells.filter(\.placed)
+        let geometries = placedCells.map {
+            PhysicalDesignSnapshot.Rect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)
+        }
+        for leftIndex in geometries.indices {
+            for rightIndex in geometries.indices where rightIndex > leftIndex {
+                if geometries[leftIndex].intersects(geometries[rightIndex]) {
+                    count += 1
+                }
+            }
+        }
+        if let core = snapshot.core {
+            count += placedCells.reduce(into: 0) { result, cell in
+                let geometry = PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)
+                if !core.contains(geometry) {
+                    result += 1
+                }
+            }
+        }
+        count += placedCells.reduce(into: 0) { result, cell in
+            let geometry = PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)
+            if snapshot.blockages.contains(where: { $0.intersects(geometry) }) {
+                result += 1
+            }
         }
         return count
     }
@@ -1354,6 +1468,51 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         return values.filter { seen.insert($0).inserted }
     }
 
+    private func legalBufferPlacement(
+        near pin: PhysicalDesignSnapshot.Pin?,
+        core: PhysicalDesignSnapshot.Rect,
+        rows: [PhysicalDesignSnapshot.Row],
+        cells: [PhysicalDesignSnapshot.Cell],
+        blockages: [PhysicalDesignSnapshot.Rect],
+        width: Int64,
+        height: Int64
+    ) -> (x: Int64, y: Int64)? {
+        guard width > 0, height > 0 else { return nil }
+        let targetX = pin?.x ?? core.x
+        for row in rows.sorted(by: { $0.id < $1.id }) where height <= row.height {
+            let rowEnd = min(row.originX + row.siteCount * row.siteWidth, core.maxX)
+            let maximumX = rowEnd - width
+            guard maximumX >= row.originX else { continue }
+            let rawStart = max(row.originX, min(maximumX, targetX))
+            let alignedStart = row.originX + max(0, rawStart - row.originX + row.siteWidth - 1) / row.siteWidth * row.siteWidth
+            let candidates = [
+                alignedStart,
+                row.originX,
+                maximumX
+            ] + stride(
+                from: row.originX,
+                through: maximumX,
+                by: Int(exactly: max(Int64(1), row.siteWidth)) ?? 1
+            ).filter {
+                abs($0 - targetX) <= max(core.width, core.height)
+            }
+            for x in candidates where x >= row.originX && x <= maximumX {
+                let geometry = PhysicalDesignSnapshot.Rect(x: x, y: row.originY, width: width, height: height)
+                guard core.contains(geometry), !blockages.contains(where: { $0.intersects(geometry) }) else { continue }
+                guard !cells.contains(where: { cell in
+                    cell.placed && PhysicalDesignSnapshot.Rect(
+                        x: cell.x,
+                        y: cell.y,
+                        width: cell.width,
+                        height: cell.height
+                    ).intersects(geometry)
+                }) else { continue }
+                return (x, row.originY)
+            }
+        }
+        return nil
+    }
+
     private func padSide(for pin: PhysicalDesignSnapshot.Pin, die: PhysicalDesignSnapshot.Rect) -> String {
         let distances: [(String, Int64)] = [
             ("left", abs(pin.x - die.x)),
@@ -1416,6 +1575,20 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             allDiagnostics.append(diagnostic(severity: .info, code: "execution_note", message: note, actions: []))
         }
         return Outcome(snapshot: snapshot, status: .completed, diagnostics: allDiagnostics, candidateActions: actions, metrics: metrics)
+    }
+
+    private func cancelled(actions: [String]) -> Outcome {
+        Outcome(
+            snapshot: nil,
+            status: .cancelled,
+            diagnostics: [diagnostic(
+                severity: .warning,
+                code: "execution_cancelled",
+                message: "Physical design mutation was cancelled before an immutable revision was committed.",
+                actions: actions
+            )],
+            candidateActions: actions
+        )
     }
 
     private func blocked(

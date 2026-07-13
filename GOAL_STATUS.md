@@ -4,15 +4,16 @@
 
 **Canonical native backend implemented. Process qualification and foundry-facing external adapters remain intentionally unclaimed.**
 
-Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 native approval/resume boundary complete, M6 corpus and oracle correlation next.
+Milestone status: M0 complete, M0.5 CircuiteFoundation boundary complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 native approval/resume boundary complete, M6 corpus and oracle correlation next.
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
 | Responsibility boundary | Complete | README.md and DESIGN.md |
+| CircuiteFoundation dependency and evidence boundary | Complete for the migration slice | `PhysicalDesignFoundationExecuting`, `PhysicalDesignFoundationResult`, `PhysicalDesignFoundationEvidence`, conversion and integration tests |
 | Public package products | Implemented for native scope | Package.swift and native products |
 | Shared Xcircuite request/result contract | Implemented for native scope | Public Swift protocols and payloads |
 | Contract build | Passed | swift build |
-| Contract test | Passed | timeout-bounded `swift test` |
+| Contract test | Passed | timeout-bounded `swift test` (32 tests) |
 | Domain implementation | Smoke-checked | `NativePhysicalDesignExecutor` and stage regression tests |
 | CLI implementation | Complete | `physical-design` executable and JSON fixtures |
 | Fixture corpus | Smoke-checked | `Fixtures/` positive and negative requests |
@@ -20,7 +21,7 @@ Milestone status: M0 complete, M1 immutable run transaction complete, M2 support
 | Process qualification | Not started | No PDK-scoped qualification record |
 | Xcircuite stage adapter | Smoke-checked | `PhysicalDesignFlowStageExecutor` and headless tests |
 | End-to-end flow evidence | Smoke-checked | Native floorplan adapter persists and verifies immutable artifacts; review gate verifies immutable manifest identity before resume |
-| Release readiness | Blocked | Implementation and qualification are absent |
+| Release readiness | Blocked | Process qualification, retained corpus and oracle correlation are absent |
 
 ## Function status
 
@@ -38,12 +39,15 @@ Milestone status: M0 complete, M1 immutable run transaction complete, M2 support
 | Repair/DFM closure | Contract defined | Rule-aware ECO, antenna, fill, via and hotspot candidates with repair proofs | Strategy and DFM proof regression | Complete for native scope |
 | DEF interchange | Contract defined | Native parser/writer with structured diagnostics and source provenance | Round-trip, retained fixture and DEF input tests | Complete for supported subset |
 | GDSII/OASIS adapter boundary | Protocol defined | Qualification-gated external adapter protocol | Gate contract pending external implementation | Blocked until qualified |
-| Approval and resume identity | Contract defined | Immutable review packet, decision and stale-base gate | 24-test native regression suite | Native boundary complete; ledger persistence owned by Xcircuite |
+| Approval and resume identity | Contract defined | Immutable review packet, decision and current-byte revalidation gate | 32-test native regression suite | Native boundary complete; ledger persistence owned by Xcircuite |
+| CircuiteFoundation projection | Contract defined | Foundation engine/evidence adapter, verified artifact conversion and stable design identity | Foundation integration regression | Complete for the migration slice |
 
 ## Goal progression
 
 ```text
 contract recovery
+      ↓
+CircuiteFoundation engine/evidence boundary
       ↓
 immutable run transaction
       ↓

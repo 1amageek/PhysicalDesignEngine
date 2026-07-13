@@ -169,6 +169,15 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             guard reference.layoutArtifact.format == .json || reference.layoutArtifact.format == .def else {
                 throw PhysicalDesignStoreError.readFailed("native backend accepts canonical JSON or supported DEF layout artifacts only")
             }
+            guard let expectedArtifactDigest = reference.layoutArtifact.sha256,
+                  !expectedArtifactDigest.isEmpty,
+                  let expectedArtifactByteCount = reference.layoutArtifact.byteCount,
+                  expectedArtifactByteCount >= 0,
+                  !reference.layoutDigest.isEmpty else {
+                throw PhysicalDesignStoreError.readFailed(
+                    "input layout reference lacks complete integrity metadata"
+                )
+            }
             let data = try await artifactStore.read(reference.layoutArtifact)
             let sourceDigest = hasher.sha256(data: data)
             let snapshot: PhysicalDesignSnapshot
@@ -193,7 +202,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             guard snapshot.topCell == reference.topCell else {
                 throw PhysicalDesignStoreError.readFailed("layout top cell does not match the physical design reference")
             }
-            guard reference.layoutDigest.isEmpty || reference.layoutDigest == sourceDigest else {
+            guard expectedArtifactDigest == sourceDigest, reference.layoutDigest == sourceDigest else {
                 throw PhysicalDesignStoreError.readFailed("layout digest does not match the source layout artifact")
             }
             return LoadedSnapshot(

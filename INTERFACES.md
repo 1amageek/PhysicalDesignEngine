@@ -10,7 +10,26 @@ public protocol DomainExecuting: Sendable {
 }
 ```
 
-Requests carry a schema version, run ID and typed artifact references. Payloads contain domain metrics only. Diagnostics and artifacts belong to the shared envelope.
+Requests carry a schema version, run ID and typed artifact references. Payloads contain domain metrics only. Diagnostics and artifacts belong to the shared envelope during the compatibility migration. Cross-engine consumers use the Foundation seam below.
+
+## CircuiteFoundation seam
+
+```swift
+public protocol PhysicalDesignFoundationExecuting: Engine
+where Request == PhysicalDesignRequest,
+      Output == PhysicalDesignFoundationResult {}
+```
+
+`PhysicalDesignFoundationEngine` adapts the native Xcircuite-backed executor
+without introducing an `AgentHarness` or another orchestration wrapper. The
+adapter projects completed output references into Foundation
+`ArtifactReference` values only when digest and byte-count metadata are
+present, maps diagnostics to `DesignDiagnostic`, and records producer/time/
+seed data in `ExecutionProvenance` and `EvidenceManifest`.
+
+`PhysicalDesignFoundationEvidence` provides the same evidence and diagnostic
+surface independently of the execution result. `PhysicalDesignRequest` also
+exposes a stable root-cell `DesignObjectReference`.
 
 ## Products
 
@@ -102,5 +121,5 @@ The adapter must:
 6. map diagnostics and status to FlowStageResult;
 7. attach design, PDK and tool provenance;
 8. persist the review packet and approval in the run ledger;
-9. invoke `PhysicalDesignReviewGate.validateResume` before resuming a physical stage;
+9. revalidate current packet artifact bytes and the embedded manifest in the synchronous Xcircuite approval hook, then invoke `PhysicalDesignReviewGate.validateResume`; direct asynchronous integrations use `validateResumeAgainstCurrentArtifacts`;
 10. leave flow scheduling and stage ordering to DesignFlowKernel.

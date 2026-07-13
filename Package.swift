@@ -17,6 +17,7 @@ let package = Package(
         .executable(name: "physical-design", targets: ["PhysicalDesignCLI"]),
     ],
     dependencies: [
+        .package(path: "../CircuiteFoundation"),
         .package(path: "../XcircuitePackage"),
         .package(path: "../LogicDesign"),
         .package(path: "../TimingEngine"),
@@ -25,7 +26,13 @@ let package = Package(
     targets: [
         .target(
             name: "PhysicalDesignCore",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), .product(name: "LogicIR", package: "LogicDesign"), .product(name: "TimingCore", package: "TimingEngine"), .product(name: "PDKCore", package: "PDKKit")]
+            dependencies: [
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "XcircuitePackage", package: "XcircuitePackage"),
+                .product(name: "LogicIR", package: "LogicDesign"),
+                .product(name: "TimingCore", package: "TimingEngine"),
+                .product(name: "PDKCore", package: "PDKKit")
+            ]
         ),
         .target(
             name: "FloorplanEngine",
@@ -65,7 +72,18 @@ let package = Package(
         ),
         .testTarget(
             name: "PhysicalDesignEngineTests",
-            dependencies: ["PhysicalDesignCore", "FloorplanEngine", "PlacementEngine", "CTSEngine", "RoutingEngine", "PhysicalECO", "PhysicalDFM", "PhysicalDesignEngine", "PhysicalDesignCLISupport"]
+            dependencies: [
+                "PhysicalDesignCore",
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                "FloorplanEngine",
+                "PlacementEngine",
+                "CTSEngine",
+                "RoutingEngine",
+                "PhysicalECO",
+                "PhysicalDFM",
+                "PhysicalDesignEngine",
+                "PhysicalDesignCLISupport"
+            ]
         ),
     ]
 )

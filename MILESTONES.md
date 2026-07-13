@@ -4,7 +4,8 @@ The package goal is a trustworthy physical-design substrate, not a collection of
 
 ```mermaid
 flowchart LR
-  M0[Contract recovery] --> M1[Immutable run transaction]
+  M0[Contract recovery] --> M05[CircuiteFoundation boundary]
+  M05 --> M1[Immutable run transaction]
   M1 --> M2[Standard layout interchange]
   M2 --> M3[Physical implementation algorithms]
   M3 --> M4[Repair and DFM closure]
@@ -24,6 +25,24 @@ Acceptance criteria:
 - Preserve the boundary that DRC, LVS, PEX and Timing remain independent oracles.
 
 Evidence: `GOAL_STATUS.md`, `CAPABILITY.md`, package and Xcircuite contract tests.
+
+## M0.5 — CircuiteFoundation engine and evidence boundary
+
+Status: complete for the additive migration slice.
+
+Acceptance criteria:
+
+- Depend directly on `CircuiteFoundation` from `PhysicalDesignCore`.
+- Expose a Foundation `Engine` seam and a standalone evidence projection.
+- Convert only artifact references with verified digest and byte-count metadata.
+- Map native diagnostics and execution provenance to Foundation values without
+  creating a new orchestration wrapper.
+- Keep Xcircuite request/result/manifest types explicitly at the compatibility
+  boundary until the sibling runtime migrates its ledger contract.
+
+Evidence: `PhysicalDesignFoundationBoundary.swift`,
+`PhysicalDesignFoundationEngine.swift`,
+`PhysicalDesignFoundationEvidence.swift`, and the Foundation integration suite.
 
 ## M1 — Immutable physical-design run transaction
 
@@ -83,7 +102,8 @@ Status: complete for the native immutable-manifest review boundary; Xcircuite le
 Acceptance criteria:
 
 - A run can pause at a human approval boundary with immutable artifacts and a decision packet.
-- Resume verifies the same base revision, manifest and approval scope before continuing.
+- Resume verifies the same base revision, manifest, embedded manifest, every
+  referenced artifact's current bytes/digest and approval scope before continuing.
 - Rejected or stale revisions fail closed and leave the prior immutable revision untouched.
 
 Evidence: `PhysicalDesignReviewGating`, `PhysicalDesignReviewPacket`, `PhysicalDesignReviewDecision`, `PhysicalDesignResumeRequest`, artifact revalidation in `PhysicalDesignReviewGate`, and approval/rejection/stale-resume regression tests.

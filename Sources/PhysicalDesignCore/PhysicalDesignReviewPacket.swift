@@ -53,6 +53,31 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         if proposedLayout.layoutDigest.isEmpty { diagnostics.append("review packet proposed layout digest is empty") }
         if decisionScope.isEmpty { diagnostics.append("review packet decision scope is empty") }
         if Set(decisionScope).count != decisionScope.count { diagnostics.append("review packet decision scope is not unique") }
+        if manifestReference.sha256?.isEmpty != false || manifestReference.byteCount == nil || manifestReference.byteCount ?? -1 < 0 {
+            diagnostics.append("review packet manifest reference lacks complete integrity metadata")
+        }
+        let manifestArtifactPaths = Set(manifest.artifacts.map(\.path))
+        if Set(artifactDigests.keys) != manifestArtifactPaths {
+            diagnostics.append("review packet digest map does not exactly match the manifest artifact set")
+        }
+        for artifact in manifest.artifacts {
+            guard let digest = artifactDigests[artifact.path], !digest.isEmpty else {
+                diagnostics.append("review packet is missing the verified digest for \(artifact.path)")
+                continue
+            }
+            if let expectedDigest = artifact.sha256, expectedDigest != digest {
+                diagnostics.append("review packet digest does not match the manifest reference for \(artifact.path)")
+            }
+            if artifact.byteCount == nil || artifact.byteCount ?? -1 < 0 {
+                diagnostics.append("review packet artifact lacks complete integrity metadata for \(artifact.path)")
+            }
+        }
+        if artifactDigests[proposedLayout.layoutArtifact.path] != proposedLayout.layoutDigest {
+            diagnostics.append("review packet proposed layout is not bound to its verified artifact digest")
+        }
+        if artifactDigests[designDiff.path] == nil {
+            diagnostics.append("review packet design diff is not bound to a verified artifact")
+        }
         return diagnostics
     }
 

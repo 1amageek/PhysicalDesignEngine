@@ -37,11 +37,43 @@ Native execution additionally uses:
 - `PhysicalDesignDiffBuilder` for reviewable `XcircuiteDesignDiff` artifacts;
 - `PhysicalDesignConfiguration` for typed, deterministic stage controls.
 
+### CircuiteFoundation boundary
+
+`CircuiteFoundation` is the shared cross-engine vocabulary and is the direct
+dependency of `PhysicalDesignCore`. The migration is additive: the existing
+Xcircuite request/result and run-manifest models remain at the compatibility
+boundary until the sibling runtime changes its ledger contract.
+
+```mermaid
+flowchart LR
+  Foundation["CircuiteFoundation\nEngine / Artifact / Evidence"]
+  Boundary["PhysicalDesignFoundationExecuting\nPhysicalDesignFoundationResult"]
+  Native["NativePhysicalDesignExecutor"]
+  Legacy["Xcircuite compatibility\nrequest / envelope / manifest"]
+  Foundation --> Boundary
+  Boundary --> Native
+  Native --> Legacy
+```
+
+The public migration seam is `PhysicalDesignFoundationExecuting`. Its result
+projects only output artifacts that already have verified SHA-256 and byte
+count metadata into `ArtifactReference`, maps diagnostics into
+`DesignDiagnostic`, and records `ExecutionProvenance` in
+`EvidenceManifest`. `PhysicalDesignFoundationEvidence` is the standalone
+evidence view for coordinators and agents. Missing integrity metadata is a
+typed boundary error; it is never guessed or silently repaired.
+
+Artifact paths are immutable. Both artifact stores reject an existing path,
+and the filesystem store commits through a collision-safe temporary-file move.
+Approval resume uses `validateResumeAgainstCurrentArtifacts` to re-read the
+manifest and every referenced artifact immediately before resume, including
+the embedded manifest and digest map.
+
 The native backend supports canonical JSON and DEF input and emits canonical JSON plus deterministic DEF. The supported DEF subset covers design units, die area, rows, components, top-level pins, net connections, routed segments, placement blockages and power structures. Unsupported opaque layout formats return `blocked` with a structured diagnostic; no native result claims DRC, LVS, PEX, timing, GDSII, OASIS, or foundry qualification.
 
 Native M3 execution records tracks, power domains, IO pads, placement legalization proof, CTS branch connectivity and routing evidence in `PhysicalDesignSnapshot.implementationState`. M4 repair stages additionally persist verified repair proofs. Placement, routing and repair verification fail closed on physical conflicts; timing objectives and antenna risk remain review metrics for independent signoff oracles.
 
-M5 provides `PhysicalDesignReviewGating` for human-in-the-loop control. It builds a Codable review packet from a completed immutable run manifest, rechecks every referenced artifact digest, evaluates an approval or rejection decision, and validates resume identity against the same run, stage, manifest, proposed revision, base revision and decision scope. Rejected, stale or tampered revisions return structured blocked diagnostics; the native backend never mutates an existing immutable revision during review.
+M5 provides `PhysicalDesignReviewGating` for human-in-the-loop control. It builds a Codable review packet from a completed immutable run manifest, rechecks every referenced artifact digest, evaluates an approval or rejection decision, and validates resume identity against the same run, stage, manifest, proposed revision, base revision and decision scope. The async resume gate revalidates current artifact bytes and the embedded manifest after approval. Rejected, stale or tampered revisions return structured blocked diagnostics; the native backend never mutates an existing immutable revision during review.
 
 GDSII/OASIS integration is protocol-first through `PhysicalDesignMaskDataAdapter`. `PhysicalDesignMaskDataAdapterGate` rejects adapters without process qualification, so an external implementation remains blocked until its qualification evidence is supplied.
 
@@ -72,7 +104,7 @@ The command emits one JSON result envelope. Successful runs write `revision.json
 perl -e 'alarm 30; exec @ARGV' swift test
 ```
 
-The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, artifact provenance, approval/resume identity and CLI error output. The positive fixture completes with four immutable artifacts; the negative fixture is blocked with `physical_snapshot_missing`.
+The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, Foundation artifact/evidence conversion, artifact immutability, approval/resume identity, current-byte revalidation and CLI error output. The 32-test suite passes with a timeout; the positive fixture completes with four immutable artifacts and the negative fixture is blocked with `physical_snapshot_missing`.
 
 The Xcircuite adapter is verified from the sibling repository with:
 

@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 import XcircuitePackage
 
 public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
@@ -29,19 +30,35 @@ public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
         format: XcircuiteFileFormat,
         runID: String
     ) async throws -> XcircuiteFileReference {
-        guard !relativePath.hasPrefix("/"), !relativePath.contains("..") else {
+        do {
+            _ = try ArtifactLocation(workspaceRelativePath: relativePath)
+        } catch {
             throw PhysicalDesignStoreError.invalidPath(relativePath)
         }
+        guard dataByPath[relativePath] == nil else {
+            throw PhysicalDesignStoreError.pathAlreadyExists(relativePath)
+        }
+        let digest = hasher.sha256(data: data)
         dataByPath[relativePath] = data
         return XcircuiteFileReference(
-            artifactID: relativePath,
+            artifactID: artifactID(for: relativePath, kind: kind, format: format, digest: digest),
             path: relativePath,
             kind: kind,
             format: format,
-            sha256: hasher.sha256(data: data),
+            sha256: digest,
             byteCount: Int64(data.count),
             producedByRunID: runID
         )
+    }
+
+    private func artifactID(
+        for relativePath: String,
+        kind: XcircuiteFileKind,
+        format: XcircuiteFileFormat,
+        digest: String
+    ) -> String {
+        let identity = hasher.sha256(data: Data("\(relativePath):\(digest)".utf8))
+        return "physical-design-\(kind.rawValue)-\(format.rawValue.lowercased())-\(identity.prefix(16))"
     }
 
     public func data(at path: String) -> Data? {
