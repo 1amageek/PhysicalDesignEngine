@@ -1,8 +1,8 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public protocol PhysicalDesignMaskDataAdapter: Sendable {
-    var supportedFormat: XcircuiteFileFormat { get }
+    var supportedFormat: ArtifactFormat { get }
     var implementationID: String { get }
     var qualification: PhysicalDesignMaskDataAdapterQualification { get }
 

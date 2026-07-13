@@ -2,16 +2,16 @@
 
 ## Current state
 
-**Canonical native backend implemented. Process qualification and foundry-facing external adapters remain intentionally unclaimed.**
+**Canonical native backend implemented. Process qualification and foundry-facing external boundaries remain intentionally unclaimed.**
 
-Milestone status: M0 complete, M0.5 CircuiteFoundation boundary complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 native approval/resume boundary complete, M6 corpus and oracle correlation next.
+Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 native approval/resume boundary complete, M6 corpus and oracle correlation next.
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
 | Responsibility boundary | Complete | README.md and DESIGN.md |
-| CircuiteFoundation dependency and evidence boundary | Complete for the migration slice | `PhysicalDesignFoundationExecuting`, `PhysicalDesignFoundationResult`, `PhysicalDesignFoundationEvidence`, conversion and integration tests |
+| CircuiteFoundation dependency and evidence boundary | Complete | `PhysicalDesignStageExecuting`, `PhysicalDesignResult`, `PhysicalDesignFoundationEvidence` |
 | Public package products | Implemented for native scope | Package.swift and native products |
-| Shared Xcircuite request/result contract | Implemented for native scope | Public Swift protocols and payloads |
+| Shared Foundation request/result contract | Implemented for native scope | Public Swift protocols and payloads |
 | Contract build | Passed | swift build |
 | Contract test | Passed | timeout-bounded `swift test` (37 tests) |
 | Domain implementation | Smoke-checked | `NativePhysicalDesignExecutor` and stage regression tests |
@@ -19,8 +19,8 @@ Milestone status: M0 complete, M0.5 CircuiteFoundation boundary complete, M1 imm
 | Fixture corpus | Smoke-checked | `Fixtures/` positive and negative requests |
 | Oracle correlation | Not started | No retained comparison evidence |
 | Process qualification | Not started | No PDK-scoped qualification record |
-| Xcircuite stage adapter | Smoke-checked | `PhysicalDesignFlowStageExecutor` and headless tests |
-| End-to-end flow evidence | Smoke-checked | Native floorplan adapter persists and verifies immutable artifacts; review gate verifies immutable manifest identity before resume |
+| Host flow composition | Pending host integration | DesignFlowKernel/Xcircuite owns persistence and scheduling |
+| End-to-end flow evidence | Smoke-checked | Native floorplan persists and verifies immutable artifacts; review gate verifies immutable manifest identity before resume |
 | Release readiness | Blocked | Process qualification, retained corpus and oracle correlation are absent |
 
 ## Function status
@@ -40,7 +40,7 @@ Milestone status: M0 complete, M0.5 CircuiteFoundation boundary complete, M1 imm
 | DEF interchange | Contract defined | Native parser/writer with structured diagnostics and source provenance | Round-trip, retained fixture and DEF input tests | Complete for supported subset |
 | GDSII/OASIS adapter boundary | Protocol defined | Qualification-gated external adapter protocol | Gate contract pending external implementation | Blocked until qualified |
 | Approval and resume identity | Contract defined | Immutable review packet, decision and current-byte revalidation gate | 37-test native regression suite | Native boundary complete; ledger persistence owned by Xcircuite |
-| CircuiteFoundation projection | Contract defined | Foundation engine/evidence adapter, verified artifact conversion and stable design identity | Foundation integration regression | Complete for the migration slice |
+| CircuiteFoundation projection | Contract defined | Direct Foundation result/evidence types and stable design identity | Foundation integration regression | Complete for native scope |
 
 ## Goal progression
 

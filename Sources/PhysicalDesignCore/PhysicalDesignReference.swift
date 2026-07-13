@@ -1,13 +1,13 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignReference: Sendable, Hashable, Codable {
-    public var layoutArtifact: XcircuiteFileReference
+    public var layoutArtifact: ArtifactReference
     public var topCell: String
     public var layoutDigest: String
 
     public init(
-        layoutArtifact: XcircuiteFileReference,
+        layoutArtifact: ArtifactReference,
         topCell: String,
         layoutDigest: String
     ) {
@@ -30,10 +30,10 @@ public struct PhysicalDesignReference: Sendable, Hashable, Codable {
         if layoutArtifact.format != .json && layoutArtifact.format != .def {
             diagnostics.append("physical design reference format is unsupported by the native backend")
         }
-        if layoutArtifact.sha256?.isEmpty != false {
+        if layoutArtifact.sha256.isEmpty {
             diagnostics.append("physical design artifact SHA-256 digest is missing")
         }
-        if layoutArtifact.byteCount == nil || layoutArtifact.byteCount ?? -1 < 0 {
+        if layoutArtifact.byteCount == 0 {
             diagnostics.append("physical design artifact byte count is missing or invalid")
         }
         if layoutArtifact.path.hasPrefix("/") {

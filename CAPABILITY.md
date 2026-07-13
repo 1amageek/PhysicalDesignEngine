@@ -17,11 +17,14 @@ The native implementation accepts a `PhysicalDesignRequest` carrying a canonical
 | Redundant vias | Redundant via candidates from existing vias |
 | Hotspot repair | Reviewable hotspot resolution candidates |
 
-Every completed stage emits a new canonical JSON revision, DEF handoff, and `XcircuiteDesignDiff`. Every artifact has a SHA-256 digest, byte count and producer run ID.
+Every completed stage emits a new canonical JSON revision, DEF handoff, and `PhysicalDesignDesignDiff`. Every artifact has a SHA-256 digest, byte count and containing run manifest.
 
 Every completed stage also emits a run manifest binding the design digest, timing constraints, PDK identity, base revision, proposed revision, design diff, implementation configuration, deterministic seed and implementation identity.
 
-The package now exposes an additive `CircuiteFoundation` boundary. `PhysicalDesignFoundationEngine` adapts the native executor to the shared `Engine` vocabulary, `PhysicalDesignFoundationEvidence` exposes a stable evidence packet, and `PhysicalDesignFoundationArtifactConversion` rejects legacy references without verified SHA-256 and byte-count metadata. Xcircuite request/result/manifest types remain compatibility models for the current runtime ledger.
+The package uses `CircuiteFoundation` directly. `PhysicalDesignStageExecuting`
+returns `PhysicalDesignResult`, `PhysicalDesignFoundationEvidence` exposes a
+stable evidence packet, and all artifact references are canonical immutable
+Foundation values.
 
 The M5 review boundary exposes a typed human-in-the-loop contract:
 
@@ -31,7 +34,9 @@ The M5 review boundary exposes a typed human-in-the-loop contract:
 | Evaluate decision | Accepts only a decision bound to the packet's run, stage, manifest digest, proposed revision and complete scope | `PhysicalDesignReviewResult` |
 | Validate resume | Requires approval and rechecks run/stage, embedded manifest, current bytes/digests for every artifact, base revision, proposed revision and decision scope | `PhysicalDesignResumeRequest` and structured stale diagnostics |
 
-The packet and decision are immutable value types suitable for Xcircuite artifact persistence. The native gate does not overwrite layouts or approvals; the sibling Xcircuite runtime owns the run ledger and resume orchestration.
+The packet and decision are immutable value types suitable for workspace
+persistence. The native gate does not overwrite layouts or approvals; the host
+flow runtime owns the run ledger and resume orchestration.
 
 M3 also persists `implementationState` in the canonical snapshot:
 

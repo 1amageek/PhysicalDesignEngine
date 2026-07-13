@@ -2,7 +2,7 @@ import Foundation
 import LogicIR
 import PDKCore
 import TimingCore
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public static let currentSchemaVersion = 1
@@ -10,18 +10,18 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var schemaVersion: Int
     public var runID: String
     public var stage: PhysicalDesignStage
-    public var status: XcircuiteEngineExecutionStatus
+    public var status: PhysicalDesignExecutionStatus
     public var design: LogicDesignReference
     public var constraints: TimingConstraintReference
     public var pdk: PDKReference
     public var baseLayout: PhysicalDesignReference?
     public var proposedLayout: PhysicalDesignReference?
-    public var designDiff: XcircuiteFileReference?
-    public var artifacts: [XcircuiteFileReference]
+    public var designDiff: ArtifactReference?
+    public var artifacts: [ArtifactReference]
     public var implementationID: String
     public var implementationVersion: String
     public var deterministicSeed: UInt64?
-    public var sourceLayoutFormat: XcircuiteFileFormat?
+    public var sourceLayoutFormat: ArtifactFormat?
     public var sourceLayoutDigest: String?
     public var sourceParserID: String?
     public var sourceParserVersion: String?
@@ -56,20 +56,20 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public init(
         runID: String,
         stage: PhysicalDesignStage,
-        status: XcircuiteEngineExecutionStatus,
+        status: PhysicalDesignExecutionStatus,
         design: LogicDesignReference,
         constraints: TimingConstraintReference,
         pdk: PDKReference,
         baseLayout: PhysicalDesignReference?,
         proposedLayout: PhysicalDesignReference?,
-        designDiff: XcircuiteFileReference?,
-        artifacts: [XcircuiteFileReference],
+        designDiff: ArtifactReference?,
+        artifacts: [ArtifactReference],
         implementationID: String,
         implementationVersion: String,
         deterministicSeed: UInt64?,
         createdAt: Date,
         completedAt: Date,
-        sourceLayoutFormat: XcircuiteFileFormat? = nil,
+        sourceLayoutFormat: ArtifactFormat? = nil,
         sourceLayoutDigest: String? = nil,
         sourceParserID: String? = nil,
         sourceParserVersion: String? = nil,
@@ -103,18 +103,18 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         runID = try container.decode(String.self, forKey: .runID)
         stage = try container.decode(PhysicalDesignStage.self, forKey: .stage)
-        status = try container.decode(XcircuiteEngineExecutionStatus.self, forKey: .status)
+        status = try container.decode(PhysicalDesignExecutionStatus.self, forKey: .status)
         design = try container.decode(LogicDesignReference.self, forKey: .design)
         constraints = try container.decode(TimingConstraintReference.self, forKey: .constraints)
         pdk = try container.decode(PDKReference.self, forKey: .pdk)
         baseLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .baseLayout)
         proposedLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .proposedLayout)
-        designDiff = try container.decodeIfPresent(XcircuiteFileReference.self, forKey: .designDiff)
-        artifacts = try container.decode([XcircuiteFileReference].self, forKey: .artifacts)
+        designDiff = try container.decodeIfPresent(ArtifactReference.self, forKey: .designDiff)
+        artifacts = try container.decode([ArtifactReference].self, forKey: .artifacts)
         implementationID = try container.decode(String.self, forKey: .implementationID)
         implementationVersion = try container.decode(String.self, forKey: .implementationVersion)
         deterministicSeed = try container.decodeIfPresent(UInt64.self, forKey: .deterministicSeed)
-        sourceLayoutFormat = try container.decodeIfPresent(XcircuiteFileFormat.self, forKey: .sourceLayoutFormat)
+        sourceLayoutFormat = try container.decodeIfPresent(ArtifactFormat.self, forKey: .sourceLayoutFormat)
         sourceLayoutDigest = try container.decodeIfPresent(String.self, forKey: .sourceLayoutDigest)
         sourceParserID = try container.decodeIfPresent(String.self, forKey: .sourceParserID)
         sourceParserVersion = try container.decodeIfPresent(String.self, forKey: .sourceParserVersion)
@@ -180,21 +180,18 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if let designDiff, !artifactPaths.contains(designDiff.path) {
             diagnostics.append("design diff is not present in the artifact set")
         }
-        let artifactIDs = artifacts.compactMap(\.artifactID)
+        let artifactIDs = artifacts.map(\.artifactID)
         if Set(artifactIDs).count != artifactIDs.count {
             diagnostics.append("artifact IDs are not unique")
-        }
-        for artifact in artifacts where artifact.producedByRunID != runID {
-            diagnostics.append("artifact \(artifact.path) is not produced by run \(runID)")
         }
         for artifact in artifacts {
             if artifact.path.hasPrefix("/") {
                 diagnostics.append("artifact \(artifact.path) is not project-relative")
             }
-            if artifact.sha256?.isEmpty != false {
+            if artifact.sha256.isEmpty {
                 diagnostics.append("artifact \(artifact.path) has no SHA-256 digest")
             }
-            if artifact.byteCount == nil || artifact.byteCount ?? -1 < 0 {
+            if artifact.byteCount == 0 {
                 diagnostics.append("artifact \(artifact.path) has no valid byte count")
             }
         }

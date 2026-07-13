@@ -1,11 +1,11 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 import PhysicalDesignCore
 
 public enum PhysicalDesignEngineAPI {
     public static let contractVersion = 1
 
-    public static let nativeCapability = XcircuiteEngineCapability(
+    public static let nativeCapability = PhysicalDesignCapability(
         engineID: "physical-design.native",
         contractVersion: contractVersion,
         supportedInputFormats: [.json, .def],

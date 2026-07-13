@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import XcircuitePackage
+import CircuiteFoundation
 import LogicIR
 import PhysicalDesignCLISupport
 import FloorplanEngine
@@ -18,12 +18,12 @@ struct NativeExecutionTests {
         #expect(decoded == request)
         #expect(try codec.decode(PhysicalDesignSnapshot.self, from: codec.encode(request.initialSnapshot!)) == request.initialSnapshot!)
 
-        let legacyRequest = Data("""
-        {"schemaVersion":1,"runID":"legacy","inputs":[],"design":{"artifact":{"path":"design.json","kind":"netlist","format":"JSON"},"topDesignName":"top","designDigest":"\(String(repeating: "b", count: 64))"},"constraints":{"artifact":{"path":"constraints.sdc","kind":"constraint","format":"SDC"},"modeIDs":["func"]},"pdk":{"manifest":{"path":"pdk.json","kind":"technology","format":"JSON"},"processID":"p","version":"1","digest":"\(String(repeating: "c", count: 64))"}}
+        let canonicalRequest = Data("""
+        {"schemaVersion":1,"runID":"canonical","inputs":[],"design":{"artifact":{"location":{"storage":"workspaceRelative","value":"design.json"},"role":"legacy-unspecified","kind":"netlist","format":"json"},"topDesignName":"top","designDigest":"\(String(repeating: "b", count: 64))"},"constraints":{"artifact":{"path":"constraints.sdc","kind":"constraint","format":"SDC","sha256":"\(String(repeating: "a", count: 64))","byteCount":1},"modeIDs":["func"]},"pdk":{"manifest":{"path":"pdk.json","kind":"technology","format":"JSON","sha256":"\(String(repeating: "a", count: 64))","byteCount":1},"processID":"p","version":"1","digest":"\(String(repeating: "c", count: 64))"}}
         """.utf8)
-        let legacyDecoded = try codec.decode(PhysicalDesignRequest.self, from: legacyRequest)
-        #expect(legacyDecoded.stage == .floorplan)
-        #expect(legacyDecoded.configuration == .default)
+        let decodedRequest = try codec.decode(PhysicalDesignRequest.self, from: canonicalRequest)
+        #expect(decodedRequest.stage == .floorplan)
+        #expect(decodedRequest.configuration == .default)
         let legacyPayload = try codec.decode(
             PhysicalDesignPayload.self,
             from: Data("{\"physicalDesign\":null,\"changedObjectCount\":0,\"candidateActions\":[]}".utf8)
@@ -49,7 +49,7 @@ struct NativeExecutionTests {
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
 
         #expect(result.status == .blocked)
-        let diagnosticCodes = result.diagnostics.map(\.code)
+        let diagnosticCodes = result.diagnostics.map(\.code.rawValue)
         #expect(diagnosticCodes.contains("DESIGN_PROVENANCE_INPUT_DIGEST_MISMATCH"))
     }
 
@@ -74,7 +74,7 @@ struct NativeExecutionTests {
 
         let diffReference = try #require(result.payload.designDiff)
         let diffData = try #require(await store.data(at: diffReference.path))
-        let diff = try PhysicalDesignJSONCodec().decode(XcircuiteDesignDiff.self, from: diffData)
+        let diff = try PhysicalDesignJSONCodec().decode(PhysicalDesignDesignDiff.self, from: diffData)
         #expect(diff.runID == request.runID)
         #expect(diff.changes.isEmpty == false)
 
@@ -176,7 +176,7 @@ struct NativeExecutionTests {
         )
         let rejected = gate.evaluate(rejectedDecision, for: packet)
         #expect(rejected.status == .rejected)
-        #expect(rejected.diagnostics.contains { $0.code == "physical_design_review_rejected" })
+        #expect(rejected.diagnostics.contains { $0.code.rawValue == "physical_design_review_rejected" })
 
         let staleDecision = PhysicalDesignReviewDecision(
             decisionID: "decision-stale",
@@ -200,8 +200,8 @@ struct NativeExecutionTests {
             packet: packet
         )
         #expect(stale.status == .blocked)
-        #expect(stale.diagnostics.contains { $0.code == "physical_design_review_manifest_stale" })
-        #expect(stale.diagnostics.contains { $0.code == "physical_design_resume_manifest_stale" })
+        #expect(stale.diagnostics.contains { $0.code.rawValue == "physical_design_review_manifest_stale" })
+        #expect(stale.diagnostics.contains { $0.code.rawValue == "physical_design_resume_manifest_stale" })
 
         let mismatchedScopeDecision = PhysicalDesignReviewDecision(
             decisionID: "decision-scope",
@@ -215,7 +215,7 @@ struct NativeExecutionTests {
         )
         let mismatchedScope = gate.evaluate(mismatchedScopeDecision, for: packet)
         #expect(mismatchedScope.status == .blocked)
-        #expect(mismatchedScope.diagnostics.contains { $0.code == "physical_design_review_decision_scope_mismatch" })
+        #expect(mismatchedScope.diagnostics.contains { $0.code.rawValue == "physical_design_review_decision_scope_mismatch" })
     }
 
     @Test("review preparation rejects tampered immutable artifacts")
@@ -283,7 +283,7 @@ struct NativeExecutionTests {
         let resume = await gate.validateResumeAgainstCurrentArtifacts(resumeRequest, packet: packet)
 
         #expect(resume.status == .blocked)
-        #expect(resume.diagnostics.contains { $0.code == "physical_design_resume_artifacts_unavailable" })
+        #expect(resume.diagnostics.contains { $0.code.rawValue == "physical_design_resume_artifacts_unavailable" })
     }
 
     @Test("resume rejects a packet whose embedded manifest was altered")
@@ -325,7 +325,7 @@ struct NativeExecutionTests {
         )
 
         #expect(resume.status == .blocked)
-        #expect(resume.diagnostics.contains { $0.code == "physical_design_resume_artifacts_stale" })
+        #expect(resume.diagnostics.contains { $0.code.rawValue == "physical_design_resume_artifacts_stale" })
     }
 
     @Test("supported DEF round trip preserves interchange structures")
@@ -426,7 +426,7 @@ struct NativeExecutionTests {
         request.inputLayout = PhysicalDesignReference(
             layoutArtifact: sourceReference,
             topCell: sourceSnapshot.topCell,
-            layoutDigest: try #require(sourceReference.sha256)
+            layoutDigest: sourceReference.sha256
         )
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
@@ -439,7 +439,7 @@ struct NativeExecutionTests {
         #expect(manifest.sourceLayoutDigest == sourceReference.sha256)
         #expect(manifest.sourceParserID == PhysicalDesignDEFParser.parserID)
         #expect(manifest.sourceParserVersion == PhysicalDesignDEFParser.parserVersion)
-        #expect(result.diagnostics.contains { $0.code == "def_core_inferred_from_rows" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "def_core_inferred_from_rows" })
     }
 
     @Test("floorplan persists implementation state for IO, power and routing constraints")
@@ -534,7 +534,7 @@ struct NativeExecutionTests {
         )
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "routing_blockage_conflict" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "routing_blockage_conflict" })
         #expect(result.artifacts.isEmpty)
     }
 
@@ -598,7 +598,7 @@ struct NativeExecutionTests {
         )
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "eco_move_illegal" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "eco_move_illegal" })
         #expect(result.artifacts.isEmpty)
     }
 
@@ -676,7 +676,7 @@ struct NativeExecutionTests {
         let result = try await engine.execute(request)
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "physical_snapshot_missing" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "physical_snapshot_missing" })
         #expect(result.artifacts.isEmpty)
     }
 
@@ -686,7 +686,12 @@ struct NativeExecutionTests {
         let engine = PhysicalDesignEngine(artifactStore: store)
         var request = PhysicalDesignFixtureFactory.request(stage: .floorplan)
         request.inputLayout = PhysicalDesignReference(
-            layoutArtifact: XcircuiteFileReference(path: "inputs/base.gds", kind: .layout, format: .gdsii),
+            layoutArtifact: PhysicalDesignFixtureFactory.artifact(
+                path: "inputs/base.gds",
+                kind: .layout,
+                format: .gdsii,
+                role: .input
+            ),
             topCell: "fixture_top",
             layoutDigest: ""
         )
@@ -694,7 +699,7 @@ struct NativeExecutionTests {
         let result = try await engine.execute(request)
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "unsupported_layout_format" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "unsupported_layout_format" })
     }
 
     @Test("input artifact integrity failure is blocked before mutation")
@@ -708,26 +713,24 @@ struct NativeExecutionTests {
             format: .json,
             runID: "input-fixture"
         )
-        let tamperedArtifact = XcircuiteFileReference(
-            artifactID: storedReference.artifactID,
-            path: storedReference.path,
-            kind: storedReference.kind,
-            format: storedReference.format,
-            sha256: storedReference.sha256,
-            byteCount: (storedReference.byteCount ?? 0) + 1,
-            producedByRunID: storedReference.producedByRunID
+        let tamperedArtifact = ArtifactReference(
+            id: storedReference.id,
+            locator: storedReference.locator,
+            digest: storedReference.digest,
+            byteCount: storedReference.byteCount + 1,
+            producer: storedReference.producer
         )
         var request = PhysicalDesignFixtureFactory.request(stage: .floorplan)
         request.inputLayout = PhysicalDesignReference(
             layoutArtifact: tamperedArtifact,
             topCell: "fixture_top",
-            layoutDigest: storedReference.sha256 ?? ""
+            layoutDigest: storedReference.sha256
         )
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "physical_input_artifact_invalid" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "physical_input_artifact_invalid" })
         #expect(result.artifacts.isEmpty)
     }
 
@@ -756,7 +759,7 @@ struct NativeExecutionTests {
         let request = PhysicalDesignFixtureFactory.request(stage: .placement, snapshot: PhysicalDesignFixtureFactory.snapshot())
         let result = try await floorplan.execute(request)
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "stage_mismatch" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "stage_mismatch" })
     }
 
     @Test("all declared native stages execute with their typed prerequisites")

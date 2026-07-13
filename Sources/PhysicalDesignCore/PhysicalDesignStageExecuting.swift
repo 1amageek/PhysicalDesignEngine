@@ -1,10 +1,10 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public protocol PhysicalDesignStageExecuting: Engine
-where Request == PhysicalDesignRequest, Output == XcircuiteEngineResultEnvelope<PhysicalDesignPayload> {
+where Request == PhysicalDesignRequest, Output == PhysicalDesignResult {
     func execute(
         _ request: PhysicalDesignRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload>
+    ) async throws -> PhysicalDesignResult
 }

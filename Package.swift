@@ -18,7 +18,6 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../CircuiteFoundation"),
-        .package(path: "../XcircuitePackage"),
         .package(path: "../LogicDesign"),
         .package(path: "../TimingEngine"),
         .package(path: "../PDKKit"),
@@ -28,7 +27,6 @@ let package = Package(
             name: "PhysicalDesignCore",
             dependencies: [
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
-                .product(name: "XcircuitePackage", package: "XcircuitePackage"),
                 .product(name: "LogicIR", package: "LogicDesign"),
                 .product(name: "TimingCore", package: "TimingEngine"),
                 .product(name: "PDKCore", package: "PDKKit")
@@ -36,31 +34,31 @@ let package = Package(
         ),
         .target(
             name: "FloorplanEngine",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "PhysicalDesignCore"]
+            dependencies: ["PhysicalDesignCore"]
         ),
         .target(
             name: "PlacementEngine",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "PhysicalDesignCore"]
+            dependencies: ["PhysicalDesignCore"]
         ),
         .target(
             name: "CTSEngine",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "PhysicalDesignCore"]
+            dependencies: ["PhysicalDesignCore"]
         ),
         .target(
             name: "RoutingEngine",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "PhysicalDesignCore"]
+            dependencies: ["PhysicalDesignCore"]
         ),
         .target(
             name: "PhysicalECO",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "PhysicalDesignCore"]
+            dependencies: ["PhysicalDesignCore"]
         ),
         .target(
             name: "PhysicalDFM",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "PhysicalDesignCore"]
+            dependencies: ["PhysicalDesignCore"]
         ),
         .target(
             name: "PhysicalDesignEngine",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "PhysicalDesignCore", "FloorplanEngine", "PlacementEngine", "CTSEngine", "RoutingEngine", "PhysicalECO", "PhysicalDFM"]
+            dependencies: ["PhysicalDesignCore", "FloorplanEngine", "PlacementEngine", "CTSEngine", "RoutingEngine", "PhysicalECO", "PhysicalDFM"]
         ),
         .target(
             name: "PhysicalDesignCLISupport",

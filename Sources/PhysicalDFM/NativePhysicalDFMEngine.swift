@@ -1,6 +1,6 @@
 import Foundation
 import PhysicalDesignCore
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct NativePhysicalDFMEngine: PhysicalDFMExecuting {
     private let executor: NativePhysicalDesignExecutor
@@ -20,7 +20,7 @@ public struct NativePhysicalDFMEngine: PhysicalDFMExecuting {
 
     public func execute(
         _ request: PhysicalDesignRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload> {
+    ) async throws -> PhysicalDesignResult {
         try await executor.execute(request)
     }
 }

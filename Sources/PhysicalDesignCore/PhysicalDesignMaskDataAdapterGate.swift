@@ -1,12 +1,12 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignMaskDataAdapterGate: Sendable {
     public init() {}
 
     public func export(
         _ snapshot: PhysicalDesignSnapshot,
-        format: XcircuiteFileFormat,
+        format: ArtifactFormat,
         adapter: any PhysicalDesignMaskDataAdapter
     ) async throws -> Data {
         guard adapter.supportedFormat == format else {

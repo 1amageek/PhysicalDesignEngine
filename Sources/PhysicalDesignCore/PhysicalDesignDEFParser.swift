@@ -1,5 +1,5 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignDEFParser: Sendable {
     public static let parserID = "physical-design-def-parser"
@@ -1028,7 +1028,7 @@ public struct PhysicalDesignDEFParser: Sendable {
         }
 
         private mutating func addDiagnostic(
-            severity: XcircuiteEngineDiagnosticSeverity,
+            severity: DiagnosticSeverity,
             code: String,
             message: String,
             token: PhysicalDesignDEFToken,
@@ -1048,7 +1048,7 @@ public struct PhysicalDesignDEFParser: Sendable {
         }
 
         private mutating func addDiagnostic(
-            severity: XcircuiteEngineDiagnosticSeverity,
+            severity: DiagnosticSeverity,
             code: String,
             message: String,
             line: Int,

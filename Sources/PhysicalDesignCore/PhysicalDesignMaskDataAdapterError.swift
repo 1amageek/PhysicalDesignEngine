@@ -1,8 +1,8 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public enum PhysicalDesignMaskDataAdapterError: Error, LocalizedError, Sendable, Hashable {
-    case unsupportedFormat(XcircuiteFileFormat)
+    case unsupportedFormat(ArtifactFormat)
     case adapterUnqualified(String)
 
     public var errorDescription: String? {

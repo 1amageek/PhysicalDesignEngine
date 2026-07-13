@@ -22,18 +22,18 @@ Transform a mapped design into a traceable physical implementation and close rep
 
 - Every mutation produces a new physical-design digest.
 - DRC, LVS, PEX and Timing remain independent verification or analysis oracles.
-- Xcircuite can iterate repairs and resume after human approval.
+- A host flow can iterate repairs and resume after human approval.
 
 ## Common platform requirements
 
 - Public execution surfaces are protocol-first, Sendable and dependency-injected.
 - Requests and payloads are Codable, Hashable and schema-versioned.
-- Inputs and outputs use immutable XcircuiteFileReference artifacts.
+- Inputs and outputs use immutable ArtifactReference artifacts.
 - Diagnostics contain a stable code, severity, affected entity and suggested actions.
 - Unsupported semantics and missing prerequisites produce blocked results.
 - Native and external-tool backends conform to identical request and payload schemas.
 - Execution capability, corpus validation, oracle correlation, process qualification and release approval remain distinct.
-- Xcircuite owns flow construction, artifact persistence, qualification gates, repair loops, approval and resume.
+- Xcircuite owns concrete artifact persistence and composition; DesignFlowKernel owns flow construction, qualification gates, approval and resume.
 - The package never imports Xcircuite or circuit-studio.
 
 ## Required developer surfaces
@@ -44,4 +44,4 @@ Transform a mapped design into a traceable physical implementation and close rep
 - Contract and parser round-trip tests
 - Reference corpus
 - Capability and limitation report
-- Xcircuite stage adapter tests
+- protocol/API regression tests

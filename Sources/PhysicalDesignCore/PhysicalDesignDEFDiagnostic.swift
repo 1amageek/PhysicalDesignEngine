@@ -1,8 +1,8 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignDEFDiagnostic: Sendable, Hashable, Codable {
-    public var severity: XcircuiteEngineDiagnosticSeverity
+    public var severity: DiagnosticSeverity
     public var code: String
     public var message: String
     public var line: Int
@@ -11,7 +11,7 @@ public struct PhysicalDesignDEFDiagnostic: Sendable, Hashable, Codable {
     public var suggestedActions: [String]
 
     public init(
-        severity: XcircuiteEngineDiagnosticSeverity,
+        severity: DiagnosticSeverity,
         code: String,
         message: String,
         line: Int,

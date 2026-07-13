@@ -1,13 +1,13 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignPayload: Sendable, Hashable, Codable {
     public var physicalDesign: PhysicalDesignReference?
     public var changedObjectCount: Int
     public var candidateActions: [String]
-    public var designDiff: XcircuiteFileReference?
+    public var designDiff: ArtifactReference?
     public var metrics: [PhysicalDesignMetric]
-    public var runManifest: XcircuiteFileReference?
+    public var runManifest: ArtifactReference?
 
     private enum CodingKeys: String, CodingKey {
         case physicalDesign
@@ -22,9 +22,9 @@ public struct PhysicalDesignPayload: Sendable, Hashable, Codable {
         physicalDesign: PhysicalDesignReference?,
         changedObjectCount: Int,
         candidateActions: [String],
-        designDiff: XcircuiteFileReference? = nil,
+        designDiff: ArtifactReference? = nil,
         metrics: [PhysicalDesignMetric] = [],
-        runManifest: XcircuiteFileReference? = nil
+        runManifest: ArtifactReference? = nil
     ) {
         self.physicalDesign = physicalDesign
         self.changedObjectCount = changedObjectCount
@@ -39,8 +39,8 @@ public struct PhysicalDesignPayload: Sendable, Hashable, Codable {
         physicalDesign = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .physicalDesign)
         changedObjectCount = try container.decode(Int.self, forKey: .changedObjectCount)
         candidateActions = try container.decode([String].self, forKey: .candidateActions)
-        designDiff = try container.decodeIfPresent(XcircuiteFileReference.self, forKey: .designDiff)
+        designDiff = try container.decodeIfPresent(ArtifactReference.self, forKey: .designDiff)
         metrics = try container.decodeIfPresent([PhysicalDesignMetric].self, forKey: .metrics) ?? []
-        runManifest = try container.decodeIfPresent(XcircuiteFileReference.self, forKey: .runManifest)
+        runManifest = try container.decodeIfPresent(ArtifactReference.self, forKey: .runManifest)
     }
 }

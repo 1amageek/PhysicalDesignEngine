@@ -1,5 +1,5 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignReviewDecision: Sendable, Hashable, Codable {
     public var decisionID: String
@@ -7,7 +7,7 @@ public struct PhysicalDesignReviewDecision: Sendable, Hashable, Codable {
     public var stage: PhysicalDesignStage
     public var verdict: PhysicalDesignReviewVerdict
     public var reviewer: String
-    public var reviewerKind: XcircuiteRunActionActor.Kind
+    public var reviewerKind: PhysicalDesignReviewerKind
     public var note: String
     public var manifestDigest: String
     public var proposedLayoutDigest: String
@@ -20,7 +20,7 @@ public struct PhysicalDesignReviewDecision: Sendable, Hashable, Codable {
         stage: PhysicalDesignStage,
         verdict: PhysicalDesignReviewVerdict,
         reviewer: String,
-        reviewerKind: XcircuiteRunActionActor.Kind = .human,
+        reviewerKind: PhysicalDesignReviewerKind = .human,
         note: String = "",
         manifestDigest: String,
         proposedLayoutDigest: String,

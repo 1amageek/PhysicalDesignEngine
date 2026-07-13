@@ -1,10 +1,10 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 import PhysicalDesignCore
 
 public protocol FloorplanExecuting: Sendable {
     func execute(
         _ request: PhysicalDesignRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload>
+    ) async throws -> PhysicalDesignResult
 }
 

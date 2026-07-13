@@ -1,6 +1,6 @@
 import Foundation
 import LogicIR
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     public let expectedStage: PhysicalDesignStage?
@@ -14,7 +14,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     private let diffBuilder: PhysicalDesignDiffBuilder
     private let defWriter: PhysicalDesignDEFWriter
     private let defParser: PhysicalDesignDEFParser
-    private let hasher: XcircuiteHasher
+    private let hasher: SHA256ContentDigester
 
     public init(
         expectedStage: PhysicalDesignStage? = nil,
@@ -33,16 +33,16 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         self.diffBuilder = PhysicalDesignDiffBuilder()
         self.defWriter = PhysicalDesignDEFWriter()
         self.defParser = PhysicalDesignDEFParser()
-        self.hasher = XcircuiteHasher()
+        self.hasher = SHA256ContentDigester()
     }
 
     public func execute(
         _ request: PhysicalDesignRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload> {
+    ) async throws -> PhysicalDesignResult {
         let startedAt = Date()
         if let allowedStages, !allowedStages.contains(request.stage) {
             let expectedStage = allowedStages.sorted { $0.rawValue < $1.rawValue }.map(\.rawValue).joined(separator: ", ")
-            return envelope(
+            return try envelope(
                 request: request,
                 status: .blocked,
                 diagnostics: [diagnostic(
@@ -58,7 +58,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
 
         let requestDiagnostics = validate(request)
         guard requestDiagnostics.isEmpty else {
-            return envelope(
+            return try envelope(
                 request: request,
                 status: .blocked,
                 diagnostics: requestDiagnostics,
@@ -74,7 +74,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             let outcome = await mutationEngine.apply(request, to: loaded.snapshot)
             switch outcome.status {
             case .blocked, .cancelled:
-                return envelope(
+                return try envelope(
                     request: request,
                     status: outcome.status,
                     diagnostics: outcome.diagnostics,
@@ -88,7 +88,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                     seed: request.configuration.deterministicSeed
                 )
             case .failed:
-                return envelope(
+                return try envelope(
                     request: request,
                     status: .failed,
                     diagnostics: outcome.diagnostics,
@@ -98,7 +98,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 )
             case .completed:
                 guard let output = outcome.snapshot else {
-                    return envelope(
+                    return try envelope(
                         request: request,
                         status: .failed,
                         diagnostics: [diagnostic(
@@ -122,7 +122,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 )
             }
         } catch is CancellationError {
-            return envelope(
+            return try envelope(
                 request: request,
                 status: .cancelled,
                 diagnostics: [diagnostic(
@@ -136,7 +136,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 seed: request.configuration.deterministicSeed
             )
         } catch let error as PhysicalDesignDEFParseError {
-            return envelope(
+            return try envelope(
                 request: request,
                 status: .blocked,
                 diagnostics: error.diagnostics.map(defDiagnostic),
@@ -152,7 +152,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             case .pathAlreadyExists, .writeFailed:
                 isInputFailure = false
             }
-            return envelope(
+            return try envelope(
                 request: request,
                 status: isInputFailure ? .blocked : .failed,
                 diagnostics: [diagnostic(
@@ -168,7 +168,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 seed: request.configuration.deterministicSeed
             )
         } catch {
-            return envelope(
+            return try envelope(
                 request: request,
                 status: .failed,
                 diagnostics: [diagnostic(
@@ -192,20 +192,19 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             guard reference.layoutArtifact.format == .json || reference.layoutArtifact.format == .def else {
                 throw PhysicalDesignStoreError.readFailed("native backend accepts canonical JSON or supported DEF layout artifacts only")
             }
-            guard let expectedArtifactDigest = reference.layoutArtifact.sha256,
-                  !expectedArtifactDigest.isEmpty,
-                  let expectedArtifactByteCount = reference.layoutArtifact.byteCount,
-                  expectedArtifactByteCount >= 0,
+            let expectedArtifactDigest = reference.layoutArtifact.sha256
+            let expectedArtifactByteCount = reference.layoutArtifact.byteCount
+            guard !expectedArtifactDigest.isEmpty,
                   !reference.layoutDigest.isEmpty else {
                 throw PhysicalDesignStoreError.readFailed(
                     "input layout reference lacks complete integrity metadata"
                 )
             }
             let data = try await artifactStore.read(reference.layoutArtifact)
-            guard Int64(data.count) == expectedArtifactByteCount else {
+            guard UInt64(data.count) == expectedArtifactByteCount else {
                 throw PhysicalDesignStoreError.readFailed("input layout byte count does not match the physical design reference")
             }
-            let sourceDigest = hasher.sha256(data: data)
+            let sourceDigest = try hasher.digest(data: data, using: .sha256).hexadecimalValue
             let snapshot: PhysicalDesignSnapshot
             let sourceParserID: String
             let sourceParserVersion: String
@@ -262,7 +261,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         outcome: PhysicalDesignNativeMutationEngine.Outcome,
         startedAt: Date,
         source: LoadedSnapshot
-    ) async throws -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload> {
+    ) async throws -> PhysicalDesignResult {
         let snapshotData = try codec.encode(output)
         let snapshotPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.json"
         let snapshotReference = try await artifactStore.write(
@@ -288,7 +287,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let physicalReference = PhysicalDesignReference(
             layoutArtifact: snapshotReference,
             topCell: output.topCell,
-            layoutDigest: snapshotReference.sha256 ?? hasher.sha256(data: snapshotData)
+            layoutDigest: snapshotReference.sha256
         )
         let diff = try diffBuilder.build(
             runID: request.runID,
@@ -359,7 +358,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             metrics: outcome.metrics,
             runManifest: manifestReference
         )
-        return envelope(
+        return try envelope(
             request: request,
             status: .completed,
             diagnostics: source.sourceDiagnostics.map(defDiagnostic) + outcome.diagnostics,
@@ -370,8 +369,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         )
     }
 
-    private func validate(_ request: PhysicalDesignRequest) -> [XcircuiteEngineDiagnostic] {
-        var diagnostics: [XcircuiteEngineDiagnostic] = []
+    private func validate(_ request: PhysicalDesignRequest) -> [DesignDiagnostic] {
+        var diagnostics: [DesignDiagnostic] = []
         if request.schemaVersion != PhysicalDesignRequest.currentSchemaVersion {
             diagnostics.append(diagnostic(severity: .error, code: "unsupported_request_schema", message: "Request schema version \(request.schemaVersion) is not supported.", actions: ["upgrade_the_request_schema"]))
         }
@@ -419,21 +418,25 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 )
             })
         }
-        let references = request.inputs + [request.design.artifact, request.constraints.artifact, request.pdk.manifest]
-        for reference in references where reference.path.hasPrefix("/") {
+        let artifactReferences = request.inputs + [request.pdk.manifest]
+        for reference in artifactReferences where reference.path.hasPrefix("/") {
             diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(reference.path)", entity: reference.path, actions: ["use_project_relative_artifact_paths"]))
+        }
+        let artifactPaths = request.inputs.map(\.path) + [request.design.artifact.path, request.constraints.artifact.path, request.pdk.manifest.path]
+        for path in artifactPaths where path.hasPrefix("/") {
+            diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(path)", entity: path, actions: ["use_project_relative_artifact_paths"]))
         }
         return diagnostics
     }
 
     private func verifyWrittenArtifact(
-        _ reference: XcircuiteFileReference,
+        _ reference: ArtifactReference,
         expectedData: Data
     ) async throws {
-        guard reference.byteCount == Int64(expectedData.count) else {
+        guard reference.byteCount == UInt64(expectedData.count) else {
             throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid byte count")
         }
-        let expectedDigest = hasher.sha256(data: expectedData)
+        let expectedDigest = try hasher.digest(data: expectedData, using: reference.digest.algorithm).hexadecimalValue
         guard reference.sha256 == expectedDigest else {
             throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid SHA-256 digest")
         }
@@ -467,45 +470,44 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
 
     private func envelope(
         request: PhysicalDesignRequest,
-        status: XcircuiteEngineExecutionStatus,
-        diagnostics: [XcircuiteEngineDiagnostic],
+        status: PhysicalDesignExecutionStatus,
+        diagnostics: [DesignDiagnostic],
         payload: PhysicalDesignPayload,
-        artifacts: [XcircuiteFileReference] = [],
+        artifacts: [ArtifactReference] = [],
         startedAt: Date,
         seed: UInt64? = nil
-    ) -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload> {
-        XcircuiteEngineResultEnvelope(
+    ) throws -> PhysicalDesignResult {
+        PhysicalDesignResult(
             schemaVersion: PhysicalDesignRequest.currentSchemaVersion,
             runID: request.runID,
             status: status,
             diagnostics: diagnostics,
             artifacts: artifacts,
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: try ExecutionProvenance(
                 engineID: request.stage.engineID,
                 implementationID: implementationID,
                 implementationVersion: implementationVersion,
                 startedAt: startedAt,
-                completedAt: Date(),
-                seed: seed
+                completedAt: Date()
             ),
             payload: payload
         )
     }
 
     private func diagnostic(
-        severity: XcircuiteEngineDiagnosticSeverity,
+        severity: DiagnosticSeverity,
         code: String,
         message: String,
         entity: String? = nil,
         actions: [String]
-    ) -> XcircuiteEngineDiagnostic {
-        XcircuiteEngineDiagnostic(severity: severity, code: code, message: message, entity: entity, suggestedActions: actions)
+    ) -> DesignDiagnostic {
+        DesignDiagnostic(severity: severity, code: code, message: message, entity: entity, suggestedActions: actions)
     }
 
-    private func defDiagnostic(_ diagnostic: PhysicalDesignDEFDiagnostic) -> XcircuiteEngineDiagnostic {
+    private func defDiagnostic(_ diagnostic: PhysicalDesignDEFDiagnostic) -> DesignDiagnostic {
         let location = "DEF:\(diagnostic.section):\(diagnostic.line)"
         let entity = diagnostic.entity.map { "\(location)/\($0)" } ?? location
-        return XcircuiteEngineDiagnostic(
+        return DesignDiagnostic(
             severity: diagnostic.severity,
             code: diagnostic.code,
             message: "\(diagnostic.message) [\(location)]",
@@ -517,7 +519,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     private struct LoadedSnapshot: Sendable {
         var snapshot: PhysicalDesignSnapshot
         var baseReference: PhysicalDesignReference?
-        var sourceLayoutFormat: XcircuiteFileFormat?
+        var sourceLayoutFormat: ArtifactFormat?
         var sourceLayoutDigest: String?
         var sourceParserID: String?
         var sourceParserVersion: String?

@@ -1,15 +1,15 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignReviewResult: Sendable, Hashable, Codable {
     public var status: PhysicalDesignReviewGateStatus
-    public var diagnostics: [XcircuiteEngineDiagnostic]
+    public var diagnostics: [DesignDiagnostic]
     public var packet: PhysicalDesignReviewPacket?
     public var decision: PhysicalDesignReviewDecision?
 
     public init(
         status: PhysicalDesignReviewGateStatus,
-        diagnostics: [XcircuiteEngineDiagnostic] = [],
+        diagnostics: [DesignDiagnostic] = [],
         packet: PhysicalDesignReviewPacket? = nil,
         decision: PhysicalDesignReviewDecision? = nil
     ) {

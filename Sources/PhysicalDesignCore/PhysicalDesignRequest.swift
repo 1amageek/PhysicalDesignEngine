@@ -1,15 +1,15 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 import LogicIR
 import TimingCore
 import PDKCore
 
-public struct PhysicalDesignRequest: XcircuiteEngineRequest {
+public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
     public static let currentSchemaVersion = 1
 
     public var schemaVersion: Int
     public var runID: String
-    public var inputs: [XcircuiteFileReference]
+    public var inputs: [ArtifactReference]
 
     public var design: LogicDesignReference
     public var constraints: TimingConstraintReference
@@ -34,7 +34,7 @@ public struct PhysicalDesignRequest: XcircuiteEngineRequest {
 
     public init(
         runID: String,
-        inputs: [XcircuiteFileReference],
+        inputs: [ArtifactReference],
         design: LogicDesignReference,
         constraints: TimingConstraintReference,
         pdk: PDKReference,
@@ -59,7 +59,7 @@ public struct PhysicalDesignRequest: XcircuiteEngineRequest {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         runID = try container.decode(String.self, forKey: .runID)
-        inputs = try container.decode([XcircuiteFileReference].self, forKey: .inputs)
+        inputs = try container.decode([ArtifactReference].self, forKey: .inputs)
         design = try container.decode(LogicDesignReference.self, forKey: .design)
         constraints = try container.decode(TimingConstraintReference.self, forKey: .constraints)
         pdk = try container.decode(PDKReference.self, forKey: .pdk)

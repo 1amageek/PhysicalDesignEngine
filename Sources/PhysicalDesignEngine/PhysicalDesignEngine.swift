@@ -1,6 +1,6 @@
 import Foundation
 import PhysicalDesignCore
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignEngine: PhysicalDesignStageExecuting {
     public let artifactStore: any PhysicalDesignArtifactStore
@@ -22,7 +22,7 @@ public struct PhysicalDesignEngine: PhysicalDesignStageExecuting {
 
     public func execute(
         _ request: PhysicalDesignRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<PhysicalDesignPayload> {
+    ) async throws -> PhysicalDesignResult {
         try await executor.execute(request)
     }
 }

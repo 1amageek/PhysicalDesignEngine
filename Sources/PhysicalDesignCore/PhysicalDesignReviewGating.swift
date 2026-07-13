@@ -1,9 +1,9 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public protocol PhysicalDesignReviewGating: Sendable {
     func prepareReview(
-        manifestReference: XcircuiteFileReference,
+        manifestReference: ArtifactReference,
         decisionScope: [String]
     ) async throws -> PhysicalDesignReviewPacket
 

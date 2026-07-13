@@ -1,5 +1,5 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignJSONCodec: Sendable {
     public init() {}
@@ -30,8 +30,8 @@ public struct PhysicalDesignJSONCodec: Sendable {
         return try decoder.decode(type, from: data)
     }
 
-    public func jsonValue<T: Encodable>(_ value: T) throws -> XcircuiteJSONValue {
-        try decode(XcircuiteJSONValue.self, from: encode(value))
+    public func jsonValue<T: Encodable>(_ value: T) throws -> PhysicalDesignJSONValue {
+        try decode(PhysicalDesignJSONValue.self, from: encode(value))
     }
 
     private static func iso8601String(from date: Date) -> String {

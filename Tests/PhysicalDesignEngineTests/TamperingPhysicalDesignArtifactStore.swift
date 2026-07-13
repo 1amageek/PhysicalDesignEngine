@@ -1,5 +1,5 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 @testable import PhysicalDesignCore
 
 actor TamperingPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
@@ -14,7 +14,7 @@ actor TamperingPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
         tamperedPath = path
     }
 
-    func read(_ reference: XcircuiteFileReference) async throws -> Data {
+    func read(_ reference: ArtifactReference) async throws -> Data {
         if reference.path == tamperedPath {
             return Data("tampered artifact".utf8)
         }
@@ -24,10 +24,10 @@ actor TamperingPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     func write(
         _ data: Data,
         relativePath: String,
-        kind: XcircuiteFileKind,
-        format: XcircuiteFileFormat,
+        kind: ArtifactKind,
+        format: ArtifactFormat,
         runID: String
-    ) async throws -> XcircuiteFileReference {
+    ) async throws -> ArtifactReference {
         try await base.write(
             data,
             relativePath: relativePath,

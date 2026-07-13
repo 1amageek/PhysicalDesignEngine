@@ -4,7 +4,7 @@ Floorplan, placement, CTS, routing, ECO, antenna repair and DFM mutation contrac
 
 ## Status
 
-The package provides a deterministic native backend over the canonical `PhysicalDesignSnapshot` JSON IR. It accepts canonical JSON and the supported DEF interchange subset, emits immutable JSON and DEF revisions, records line/section-aware parser diagnostics, persists physical implementation proof evidence, and exposes a headless Xcircuite stage adapter. Process-specific qualification and GDSII/OASIS stream-out remain explicit external boundaries.
+The package provides a deterministic native backend over the canonical `PhysicalDesignSnapshot` JSON IR. It accepts canonical JSON and the supported DEF interchange subset, emits immutable JSON and DEF revisions, records line/section-aware parser diagnostics, and persists physical implementation proof evidence. Process-specific qualification and GDSII/OASIS stream-out remain explicit external boundaries.
 
 ## Products
 
@@ -24,44 +24,40 @@ The package provides a deterministic native backend over the canonical `Physical
 
 Every executing product uses:
 
-- a `Codable`, `Hashable`, `Sendable` request conforming to `XcircuiteEngineRequest`;
-- `XcircuiteEngineResultEnvelope<Payload>` for status, diagnostics, artifacts and execution metadata;
+- a `Codable`, `Hashable`, `Sendable` request conforming to `PhysicalDesignRequest`;
+- `PhysicalDesignResult` for status, diagnostics, artifacts and execution metadata;
 - protocol-first dependency injection;
-- immutable `XcircuiteFileReference` inputs and outputs;
+- immutable `ArtifactReference` inputs and outputs;
 - explicit blocked, failed and cancelled states.
 
 Native execution additionally uses:
 
 - `PhysicalDesignSnapshot` as the canonical, UI-independent physical state;
 - `PhysicalDesignArtifactStore` for dependency-injected immutable artifact I/O;
-- `PhysicalDesignDiffBuilder` for reviewable `XcircuiteDesignDiff` artifacts;
+- `PhysicalDesignDiffBuilder` for reviewable `PhysicalDesignDesignDiff` artifacts;
 - `PhysicalDesignConfiguration` for typed, deterministic stage controls.
 
 ### CircuiteFoundation boundary
 
 `CircuiteFoundation` is the shared cross-engine vocabulary and is the direct
-dependency of `PhysicalDesignCore`. The migration is additive: the existing
-Xcircuite request/result and run-manifest models remain at the compatibility
-boundary until the sibling runtime changes its ledger contract.
+dependency of `PhysicalDesignCore`. Physical design uses Foundation artifact,
+diagnostic and provenance types directly; run lifecycle remains outside this
+package in DesignFlowKernel.
 
 ```mermaid
 flowchart LR
   Foundation["CircuiteFoundation\nEngine / Artifact / Evidence"]
-  Boundary["PhysicalDesignFoundationExecuting\nPhysicalDesignFoundationResult"]
+  Boundary["PhysicalDesignStageExecuting\nPhysicalDesignResult"]
   Native["NativePhysicalDesignExecutor"]
-  Legacy["Xcircuite compatibility\nrequest / envelope / manifest"]
   Foundation --> Boundary
   Boundary --> Native
-  Native --> Legacy
 ```
 
-The public migration seam is `PhysicalDesignFoundationExecuting`. Its result
-projects only output artifacts that already have verified SHA-256 and byte
-count metadata into `ArtifactReference`, maps diagnostics into
-`DesignDiagnostic`, and records `ExecutionProvenance` in
-`EvidenceManifest`. `PhysicalDesignFoundationEvidence` is the standalone
+`PhysicalDesignStageExecuting` returns only immutable artifacts with verified
+SHA-256 and byte-count metadata, structured `DesignDiagnostic` values and
+`ExecutionProvenance`. `PhysicalDesignFoundationEvidence` is the standalone
 evidence view for coordinators and agents. Missing integrity metadata is a
-typed boundary error; it is never guessed or silently repaired.
+typed error; it is never guessed or silently repaired.
 
 Artifact paths are immutable. Both artifact stores reject an existing path,
 and the filesystem store commits through a collision-safe temporary-file move.
@@ -81,7 +77,9 @@ GDSII/OASIS integration is protocol-first through `PhysicalDesignMaskDataAdapter
 
 Xcircuite owns the closure loop. Physical products emit immutable layout revisions; Xcircuite sends them to DRC, LVS, PEX and Timing, then constructs typed repair requests. Xcircuite persists the review packet and approval record in its run ledger, while `PhysicalDesignReviewGate` remains the native identity and artifact-integrity gate used before resume.
 
-The library does not depend on the Xcircuite runtime. Xcircuite owns the adapter to `DesignFlowKernel.FlowStageExecutor`, artifact persistence, qualification gates, repair loops and human approval.
+The library does not depend on the Xcircuite runtime. Xcircuite composes the
+public protocols with DesignFlowKernel and owns concrete artifact persistence;
+the engine itself has no runtime adapter.
 
 ## Build
 
@@ -96,7 +94,7 @@ swift run physical-design --request Fixtures/positive-floorplan-request.json --p
 swift run physical-design --request Fixtures/negative-missing-snapshot-request.json --project-root .
 ```
 
-The command emits one JSON result envelope. Successful runs write `revision.json`, `revision.def`, `design-diff.json`, and `run-manifest.json` under `runs/<run-id>/physical-design/<stage>/`.
+The command emits one `PhysicalDesignResult` JSON value. Successful runs write `revision.json`, `revision.def`, `design-diff.json`, and `run-manifest.json` under `runs/<run-id>/physical-design/<stage>/`.
 
 ## Test
 
@@ -105,12 +103,6 @@ perl -e 'alarm 30; exec @ARGV' swift test
 ```
 
 The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, Foundation artifact/evidence conversion, artifact immutability, approval/resume identity, current-byte revalidation, physical connectivity mutations, overflow-safe validation and CLI error output. The 37-test suite passes with a timeout; the positive fixture completes with four immutable artifacts and the negative fixture is blocked with `physical_snapshot_missing`.
-
-The Xcircuite adapter is verified from the sibling repository with:
-
-```bash
-swift test --scratch-path /tmp/lsi-xcircuite-physical-design --filter PhysicalDesignFlowStageExecutorTests
-```
 
 See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1 through the native M5 approval/resume slice are complete; M6, retained corpus and oracle correlation, is next.
 

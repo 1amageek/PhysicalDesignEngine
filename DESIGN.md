@@ -19,17 +19,14 @@ This package owns the schemas and engine protocols listed in its public products
 ```mermaid
 flowchart TD
   Standard["Standard artifacts / canonical references"] --> Foundation["CircuiteFoundation\nshared typed vocabulary"]
-  Foundation --> Boundary["PhysicalDesignFoundation\nengine and evidence boundary"]
-  Boundary --> Native["Native or external-tool backends"]
-  Native --> Compatibility["Xcircuite compatibility\nrequest / envelope / manifest"]
-  Compatibility --> Runtime["Xcircuite stage adapters\nand DesignFlowKernel"]
+  Foundation --> Native["PhysicalDesignStageExecuting\nNative or external-tool backends"]
+  Native --> Runtime["DesignFlowKernel flow\nand Xcircuite workspace"]
   Runtime --> Package[".xcircuite artifacts"]
 ```
 
-`CircuiteFoundation` is the dependency floor for cross-engine concepts. The
-Xcircuite models are retained only where the current project/run ledger still
-requires them; new shared engine, artifact, diagnostic and evidence contracts
-must be expressed through Foundation types.
+`CircuiteFoundation` is the dependency floor for cross-engine concepts. Engine,
+artifact, diagnostic and evidence contracts are expressed through Foundation
+types; run lifecycle and workspace persistence remain in their owning packages.
 
 Backends may depend on lower-level data packages. This package must never import `Xcircuite` or `circuit-studio`.
 
@@ -39,13 +36,12 @@ Kernel availability, corpus validation, oracle correlation, process-scoped quali
 
 ## Artifact requirements
 
-All outputs are immutable run artifacts with format, digest, producer metadata and the input design/PDK revision needed to reproduce the result.
+All outputs are immutable run artifacts with role, format, digest and the input design/PDK revision needed to reproduce the result.
 
 The filesystem artifact store uses `ArtifactLocation` for workspace-relative
 resolution and creates a new path with a collision-safe temporary-file move.
-An existing path is never replaced. Foundation projection also requires the
-legacy reference to carry a valid digest and byte count before creating an
-`ArtifactReference`.
+An existing path is never replaced. Artifact references are created directly
+with verified digest and byte-count metadata.
 
 Human approval is a second integrity boundary: resume first validates the
 decision identity, then re-reads the current manifest and all artifacts and

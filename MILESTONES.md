@@ -9,7 +9,7 @@ flowchart LR
   M1 --> M2[Standard layout interchange]
   M2 --> M3[Physical implementation algorithms]
   M3 --> M4[Repair and DFM closure]
-  M4 --> M5[Xcircuite approval/resume flow]
+  M4 --> M5[Approval/resume composition]
   M5 --> M6[Retained corpus and oracle correlation]
   M6 --> M7[Process qualification and release profile]
 ```
@@ -37,11 +37,9 @@ Acceptance criteria:
 - Convert only artifact references with verified digest and byte-count metadata.
 - Map native diagnostics and execution provenance to Foundation values without
   creating a new orchestration wrapper.
-- Keep Xcircuite request/result/manifest types explicitly at the compatibility
-  boundary until the sibling runtime migrates its ledger contract.
+- Keep run lifecycle and workspace persistence outside the engine package.
 
-Evidence: `PhysicalDesignFoundationBoundary.swift`,
-`PhysicalDesignFoundationEngine.swift`,
+Evidence: `PhysicalDesignResult.swift`, `PhysicalDesignStageExecuting.swift`,
 `PhysicalDesignFoundationEvidence.swift`, and the Foundation integration suite.
 
 ## M1 — Immutable physical-design run transaction

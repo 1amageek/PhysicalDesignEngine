@@ -1,17 +1,16 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     public let projectRoot: URL
-    private let hasher: XcircuiteHasher
+    private let hasher: SHA256ContentDigester
 
-    public init(projectRoot: URL, hasher: XcircuiteHasher = XcircuiteHasher()) {
+    public init(projectRoot: URL, hasher: SHA256ContentDigester = SHA256ContentDigester()) {
         self.projectRoot = projectRoot.standardizedFileURL
         self.hasher = hasher
     }
 
-    public func read(_ reference: XcircuiteFileReference) async throws -> Data {
+    public func read(_ reference: ArtifactReference) async throws -> Data {
         let location: ArtifactLocation
         let url: URL
         do {
@@ -23,10 +22,11 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
 
         do {
             let data = try Data(contentsOf: url)
-            if let expectedByteCount = reference.byteCount, Int64(data.count) != expectedByteCount {
+            if UInt64(data.count) != reference.byteCount {
                 throw PhysicalDesignStoreError.readFailed("\(reference.path): byte count does not match the reference")
             }
-            if let expectedDigest = reference.sha256, hasher.sha256(data: data) != expectedDigest {
+            let actualDigest = try hasher.digest(data: data, using: reference.digest.algorithm)
+            if actualDigest != reference.digest {
                 throw PhysicalDesignStoreError.readFailed("\(reference.path): SHA-256 digest does not match the reference")
             }
             return data
@@ -40,10 +40,10 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
     public func write(
         _ data: Data,
         relativePath: String,
-        kind: XcircuiteFileKind,
-        format: XcircuiteFileFormat,
+        kind: ArtifactKind,
+        format: ArtifactFormat,
         runID: String
-    ) async throws -> XcircuiteFileReference {
+    ) async throws -> ArtifactReference {
         let location: ArtifactLocation
         let url: URL
         do {
@@ -73,15 +73,18 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
                 }
                 throw error
             }
-            let digest = hasher.sha256(data: data)
-            return XcircuiteFileReference(
-                artifactID: artifactID(for: relativePath, kind: kind, format: format, digest: digest),
-                path: relativePath,
+            let digest = try hasher.digest(data: data, using: .sha256)
+            let locator = ArtifactLocator(
+                location: location,
+                role: .output,
                 kind: kind,
-                format: format,
-                sha256: digest,
-                byteCount: Int64(data.count),
-                producedByRunID: runID
+                format: format
+            )
+            return ArtifactReference(
+                id: ArtifactID(stableKey: artifactID(for: relativePath, kind: kind, format: format, digest: digest.hexadecimalValue, runID: runID)),
+                locator: locator,
+                digest: digest,
+                byteCount: UInt64(data.count)
             )
         } catch let error as PhysicalDesignStoreError {
             do {
@@ -112,11 +115,11 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
 
     private func artifactID(
         for relativePath: String,
-        kind: XcircuiteFileKind,
-        format: XcircuiteFileFormat,
-        digest: String
+        kind: ArtifactKind,
+        format: ArtifactFormat,
+        digest: String,
+        runID: String
     ) -> String {
-        let identity = hasher.sha256(data: Data("\(relativePath):\(digest)".utf8))
-        return "physical-design-\(kind.rawValue)-\(format.rawValue.lowercased())-\(identity.prefix(16))"
+        "physical-design:\(runID):\(relativePath):\(kind.rawValue):\(format.rawValue):\(digest)"
     }
 }

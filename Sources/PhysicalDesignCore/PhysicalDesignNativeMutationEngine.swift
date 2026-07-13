@@ -1,18 +1,18 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignNativeMutationEngine: Sendable {
     public struct Outcome: Sendable, Hashable {
         public var snapshot: PhysicalDesignSnapshot?
-        public var status: XcircuiteEngineExecutionStatus
-        public var diagnostics: [XcircuiteEngineDiagnostic]
+        public var status: PhysicalDesignExecutionStatus
+        public var diagnostics: [DesignDiagnostic]
         public var candidateActions: [String]
         public var metrics: [PhysicalDesignMetric]
 
         public init(
             snapshot: PhysicalDesignSnapshot?,
-            status: XcircuiteEngineExecutionStatus,
-            diagnostics: [XcircuiteEngineDiagnostic] = [],
+            status: PhysicalDesignExecutionStatus,
+            diagnostics: [DesignDiagnostic] = [],
             candidateActions: [String] = [],
             metrics: [PhysicalDesignMetric] = []
         ) {
@@ -511,7 +511,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 actions: ["repair_placement_conflicts", "increase_core_area", "adjust_placement_blockages"]
             )
         }
-        var placementDiagnostics: [XcircuiteEngineDiagnostic] = []
+        var placementDiagnostics: [DesignDiagnostic] = []
         if utilization > configuration.targetUtilization {
             placementDiagnostics.append(diagnostic(
                 severity: .warning,
@@ -569,7 +569,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
-        var skewDiagnostics: [XcircuiteEngineDiagnostic] = []
+        var skewDiagnostics: [DesignDiagnostic] = []
         for net in clockNets {
             guard net.pinIDs.count >= 2 else {
                 return blocked(
@@ -955,8 +955,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             .filter { onlyNetID == nil || $0.id == onlyNetID }
         let reroutedNetIDs = Set(routableNets.map(\.id))
         var routes: [PhysicalDesignSnapshot.Route] = []
-        var warnings: [XcircuiteEngineDiagnostic] = []
-        var routeFailures: [XcircuiteEngineDiagnostic] = []
+        var warnings: [DesignDiagnostic] = []
+        var routeFailures: [DesignDiagnostic] = []
         var skippedNetIDs: [String] = []
         var blockageConflictCount = 0
         var layerDirectionViolations = 0
@@ -1956,7 +1956,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         strategy: String,
         targetIDs: [String],
         details: [String]
-    ) -> XcircuiteEngineDiagnostic? {
+    ) -> DesignDiagnostic? {
         let before = repairViolationCount(
             input,
             configuration: configuration,
@@ -2261,14 +2261,14 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func completed(
         _ snapshot: PhysicalDesignSnapshot,
-        diagnostics: [XcircuiteEngineDiagnostic] = [],
+        diagnostics: [DesignDiagnostic] = [],
         actions: [String],
         metrics: [PhysicalDesignMetric],
         note: String? = nil
     ) -> Outcome {
         var allDiagnostics = diagnostics
         if let note {
-            allDiagnostics.append(diagnostic(severity: .info, code: "execution_note", message: note, actions: []))
+            allDiagnostics.append(diagnostic(severity: .information, code: "execution_note", message: note, actions: []))
         }
         return Outcome(snapshot: snapshot, status: .completed, diagnostics: allDiagnostics, candidateActions: actions, metrics: metrics)
     }
@@ -2302,13 +2302,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
     }
 
     private func diagnostic(
-        severity: XcircuiteEngineDiagnosticSeverity,
+        severity: DiagnosticSeverity,
         code: String,
         message: String,
         entity: String? = nil,
         actions: [String]
-    ) -> XcircuiteEngineDiagnostic {
-        XcircuiteEngineDiagnostic(severity: severity, code: code, message: message, entity: entity, suggestedActions: actions)
+    ) -> DesignDiagnostic {
+        DesignDiagnostic(severity: severity, code: code, message: message, entity: entity, suggestedActions: actions)
     }
 
     private func metrics(for snapshot: PhysicalDesignSnapshot) -> [PhysicalDesignMetric] {

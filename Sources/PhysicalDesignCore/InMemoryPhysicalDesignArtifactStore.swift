@@ -1,23 +1,23 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     private var dataByPath: [String: Data] = [:]
-    private let hasher: XcircuiteHasher
+    private let hasher: SHA256ContentDigester
 
-    public init(hasher: XcircuiteHasher = XcircuiteHasher()) {
+    public init(hasher: SHA256ContentDigester = SHA256ContentDigester()) {
         self.hasher = hasher
     }
 
-    public func read(_ reference: XcircuiteFileReference) async throws -> Data {
+    public func read(_ reference: ArtifactReference) async throws -> Data {
         guard let data = dataByPath[reference.path] else {
             throw PhysicalDesignStoreError.readFailed("artifact does not exist: \(reference.path)")
         }
-        if let expectedByteCount = reference.byteCount, Int64(data.count) != expectedByteCount {
+        if UInt64(data.count) != reference.byteCount {
             throw PhysicalDesignStoreError.readFailed("\(reference.path): byte count does not match the reference")
         }
-        if let expectedDigest = reference.sha256, hasher.sha256(data: data) != expectedDigest {
+        let actualDigest = try hasher.digest(data: data, using: reference.digest.algorithm)
+        if actualDigest != reference.digest {
             throw PhysicalDesignStoreError.readFailed("\(reference.path): SHA-256 digest does not match the reference")
         }
         return data
@@ -26,10 +26,10 @@ public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     public func write(
         _ data: Data,
         relativePath: String,
-        kind: XcircuiteFileKind,
-        format: XcircuiteFileFormat,
+        kind: ArtifactKind,
+        format: ArtifactFormat,
         runID: String
-    ) async throws -> XcircuiteFileReference {
+    ) async throws -> ArtifactReference {
         do {
             _ = try ArtifactLocation(workspaceRelativePath: relativePath)
         } catch {
@@ -38,27 +38,30 @@ public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
         guard dataByPath[relativePath] == nil else {
             throw PhysicalDesignStoreError.pathAlreadyExists(relativePath)
         }
-        let digest = hasher.sha256(data: data)
+        let digest = try hasher.digest(data: data, using: .sha256)
         dataByPath[relativePath] = data
-        return XcircuiteFileReference(
-            artifactID: artifactID(for: relativePath, kind: kind, format: format, digest: digest),
-            path: relativePath,
+        let locator = ArtifactLocator(
+            location: try ArtifactLocation(workspaceRelativePath: relativePath),
+            role: .output,
             kind: kind,
-            format: format,
-            sha256: digest,
-            byteCount: Int64(data.count),
-            producedByRunID: runID
+            format: format
+        )
+        return ArtifactReference(
+            id: ArtifactID(stableKey: artifactID(for: relativePath, kind: kind, format: format, digest: digest.hexadecimalValue, runID: runID)),
+            locator: locator,
+            digest: digest,
+            byteCount: UInt64(data.count)
         )
     }
 
     private func artifactID(
         for relativePath: String,
-        kind: XcircuiteFileKind,
-        format: XcircuiteFileFormat,
-        digest: String
+        kind: ArtifactKind,
+        format: ArtifactFormat,
+        digest: String,
+        runID: String
     ) -> String {
-        let identity = hasher.sha256(data: Data("\(relativePath):\(digest)".utf8))
-        return "physical-design-\(kind.rawValue)-\(format.rawValue.lowercased())-\(identity.prefix(16))"
+        "physical-design:\(runID):\(relativePath):\(kind.rawValue):\(format.rawValue):\(digest)"
     }
 
     public func data(at path: String) -> Data? {

@@ -2,9 +2,8 @@ import CircuiteFoundation
 
 /// Canonical evidence view exposed by the physical-design boundary.
 ///
-/// Xcircuite keeps the domain-specific run manifest and review packet. This
-/// value is the small shared representation consumed by flow coordinators and
-/// agents without requiring them to depend on those compatibility models.
+/// This value is the small shared representation consumed by flow coordinators
+/// and agents without exposing the domain run manifest or review packet.
 public struct PhysicalDesignFoundationEvidence: Sendable, Hashable, Codable,
     ArtifactProducing, EvidenceProviding, DiagnosticReporting
 {

@@ -1,5 +1,5 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignDiffBuilder: Sendable {
     private let codec: PhysicalDesignJSONCodec
@@ -14,15 +14,15 @@ public struct PhysicalDesignDiffBuilder: Sendable {
         actor: String,
         before: PhysicalDesignSnapshot?,
         after: PhysicalDesignSnapshot,
-        baseSnapshot: XcircuiteFileReference?,
-        proposedSnapshot: XcircuiteFileReference?
-    ) throws -> XcircuiteDesignDiff {
-        let changes: [XcircuiteDesignDiffChange]
+        baseSnapshot: ArtifactReference?,
+        proposedSnapshot: ArtifactReference?
+    ) throws -> PhysicalDesignDesignDiff {
+        let changes: [PhysicalDesignDesignDiffChange]
         if let before {
             changes = try fieldChanges(before: before, after: after, stage: stage)
         } else {
             changes = [
-                XcircuiteDesignDiffChange(
+                PhysicalDesignDesignDiffChange(
                     changeID: "change-001",
                     domain: .layout,
                     operation: .add,
@@ -33,7 +33,7 @@ public struct PhysicalDesignDiffBuilder: Sendable {
                 )
             ]
         }
-        return XcircuiteDesignDiff(
+        return PhysicalDesignDesignDiff(
             runID: runID,
             title: "Physical design \(stage.rawValue) revision",
             actor: actor,
@@ -48,8 +48,8 @@ public struct PhysicalDesignDiffBuilder: Sendable {
         before: PhysicalDesignSnapshot,
         after: PhysicalDesignSnapshot,
         stage: PhysicalDesignStage
-    ) throws -> [XcircuiteDesignDiffChange] {
-        var changes: [XcircuiteDesignDiffChange] = []
+    ) throws -> [PhysicalDesignDesignDiffChange] {
+        var changes: [PhysicalDesignDesignDiffChange] = []
         var nextID = 1
         func appendChange<T: Encodable & Equatable>(
             _ path: String,
@@ -59,7 +59,7 @@ public struct PhysicalDesignDiffBuilder: Sendable {
         ) throws {
             guard beforeValue != afterValue else { return }
             changes.append(
-                XcircuiteDesignDiffChange(
+                PhysicalDesignDesignDiffChange(
                     changeID: String(format: "change-%03d", nextID),
                     domain: .layout,
                     operation: .replace,
@@ -87,7 +87,7 @@ public struct PhysicalDesignDiffBuilder: Sendable {
         try appendChange("/implementationState", before.implementationState, after.implementationState, "Updated physical implementation constraints or proof evidence.")
         if changes.isEmpty {
             changes.append(
-                XcircuiteDesignDiffChange(
+                PhysicalDesignDesignDiffChange(
                     changeID: "change-001",
                     domain: .layout,
                     operation: .metadata,

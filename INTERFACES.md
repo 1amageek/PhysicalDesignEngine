@@ -6,26 +6,23 @@
 public protocol DomainExecuting: Sendable {
     func execute(
         _ request: DomainRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DomainPayload>
+    ) async throws -> PhysicalDesignResult
 }
 ```
 
-Requests carry a schema version, run ID and typed artifact references. Payloads contain domain metrics only. Diagnostics and artifacts belong to the shared envelope during the compatibility migration. Cross-engine consumers use the Foundation seam below.
+Requests carry a schema version, run ID and typed Foundation artifact references. Payloads contain domain metrics only; diagnostics, artifacts and provenance are fields of `PhysicalDesignResult`.
 
-## CircuiteFoundation seam
+## CircuiteFoundation boundary
 
 ```swift
-public protocol PhysicalDesignFoundationExecuting: Engine
+public protocol PhysicalDesignStageExecuting: Engine
 where Request == PhysicalDesignRequest,
-      Output == PhysicalDesignFoundationResult {}
+      Output == PhysicalDesignResult {}
 ```
 
-`PhysicalDesignFoundationEngine` adapts the native Xcircuite-backed executor
-without introducing an `AgentHarness` or another orchestration wrapper. The
-adapter projects completed output references into Foundation
-`ArtifactReference` values only when digest and byte-count metadata are
-present, maps diagnostics to `DesignDiagnostic`, and records producer/time/
-seed data in `ExecutionProvenance` and `EvidenceManifest`.
+`PhysicalDesignStageExecuting` directly refines the Foundation `Engine`
+contract. Each result includes immutable artifact references, diagnostics and
+execution provenance; no compatibility envelope or adapter is required.
 
 `PhysicalDesignFoundationEvidence` provides the same evidence and diagnostic
 surface independently of the execution result. `PhysicalDesignRequest` also
@@ -63,7 +60,7 @@ Fill, redundant via and manufacturability mutation.
 
 ### PhysicalDesignEngine
 
-Umbrella API. `PhysicalDesignEngine` dispatches the request stage to the deterministic native implementation while preserving the common result envelope.
+Umbrella API. `PhysicalDesignEngine` dispatches the request stage to the deterministic native implementation and returns `PhysicalDesignResult`.
 
 ### Canonical input and output
 
@@ -73,14 +70,15 @@ Umbrella API. `PhysicalDesignEngine` dispatches the request stage to the determi
 |---|---|---|
 | `revision.json` | JSON | Canonical immutable physical snapshot |
 | `revision.def` | DEF | Standard layout handoff for supported native output |
-| `design-diff.json` | JSON | `XcircuiteDesignDiff` for human review and Agent resume |
+| `design-diff.json` | JSON | `PhysicalDesignDesignDiff` for human review and Agent resume |
 | `run-manifest.json` | JSON | Provenance binding for the complete physical-design transaction |
 
-Each output reference records format, digest, byte count and producer run ID.
+Each output reference records role, format, digest and byte count. Run identity
+is carried by the containing manifest and execution provenance.
 
 `PhysicalDesignMaskDataAdapter` is the protocol boundary for future GDSII/OASIS adapters. `PhysicalDesignMaskDataAdapterGate` requires a matching format and explicit process qualification before invoking an adapter.
 
-`PhysicalDesignSnapshot.implementationState` is the canonical evidence surface for M3. It carries generated tracks, power domains, pads, placement proof, clock route constraints and routing evidence. These fields are included in JSON revisions and `XcircuiteDesignDiff`; the run manifest also records the implementation configuration used to produce them.
+`PhysicalDesignSnapshot.implementationState` is the canonical evidence surface for M3. It carries generated tracks, power domains, pads, placement proof, clock route constraints and routing evidence. These fields are included in JSON revisions and `PhysicalDesignDesignDiff`; the run manifest also records the implementation configuration used to produce them.
 
 M4 repair requests use `PhysicalDesignConfiguration.repairConstraints`. A completed repair appends `PhysicalDesignImplementationState.RepairProof`; when verification is required and native post-repair checks find a violation, the executor returns `blocked` and writes no immutable revision.
 
@@ -98,7 +96,7 @@ flowchart LR
   Resume -->|stale or mismatched| Blocked
 ```
 
-`PhysicalDesignReviewGate.prepareReview` reads the manifest and all manifest artifacts through the injected `PhysicalDesignArtifactStore`. It verifies artifact bytes, SHA-256 digests, byte counts, the proposed layout digest and the design-diff binding before returning `PhysicalDesignReviewPacket`. `evaluate` returns `approved`, `rejected` or `blocked`. `validateResume` returns `readyToResume` only when the approval is bound to the same run ID, stage, manifest digest, proposed layout digest, optional base layout digest and complete decision scope. The packet and decision are Codable artifacts; Xcircuite persists them and records the ledger action.
+`PhysicalDesignReviewGate.prepareReview` reads the manifest and all manifest artifacts through the injected `PhysicalDesignArtifactStore`. It verifies artifact bytes, SHA-256 digests, byte counts, the proposed layout digest and the design-diff binding before returning `PhysicalDesignReviewPacket`. `evaluate` returns `approved`, `rejected` or `blocked`. `validateResume` returns `readyToResume` only when the approval is bound to the same run ID, stage, manifest digest, proposed layout digest, optional base layout digest and complete decision scope. The packet and decision are Codable artifacts; a host workspace may persist them through its run ledger.
 
 
 ## Error contract
@@ -109,17 +107,8 @@ flowchart LR
 - Preserve cancellation as `cancelled`.
 - Do not swallow parser, process or persistence failures.
 
-## Xcircuite adapter
+## Composition
 
-The adapter must:
-
-1. resolve project-relative references through XcircuitePackage;
-2. verify input digests;
-3. evaluate ToolQualification requirements;
-4. invoke the injected engine protocol;
-5. persist every returned artifact;
-6. map diagnostics and status to FlowStageResult;
-7. attach design, PDK and tool provenance;
-8. persist the review packet and approval in the run ledger;
-9. revalidate current packet artifact bytes and the embedded manifest in the synchronous Xcircuite approval hook, then invoke `PhysicalDesignReviewGate.validateResume`; direct asynchronous integrations use `validateResumeAgainstCurrentArtifacts`;
-10. leave flow scheduling and stage ordering to DesignFlowKernel.
+Xcircuite invokes `PhysicalDesignStageExecuting` directly and persists returned
+artifacts in its workspace store. DesignFlowKernel owns flow status, approval,
+resume and scheduling; ToolQualification owns capability and trust decisions.

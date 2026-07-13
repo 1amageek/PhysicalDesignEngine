@@ -1,13 +1,12 @@
 import Foundation
 import Testing
 import CircuiteFoundation
-import XcircuitePackage
 @testable import PhysicalDesignCore
 @testable import PhysicalDesignEngine
 
 @Suite("PhysicalDesignEngine CircuiteFoundation boundary")
 struct PhysicalDesignFoundationIntegrationTests {
-    @Test("native execution is exposed through the Foundation engine boundary")
+    @Test("native execution conforms directly to the Foundation engine boundary")
     func foundationExecutionBoundary() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
         let legacyEngine = PhysicalDesignEngine(artifactStore: store)
@@ -16,11 +15,10 @@ struct PhysicalDesignFoundationIntegrationTests {
             snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
         )
 
-        let result = try await PhysicalDesignFoundationEngine(legacyEngine: legacyEngine).execute(request)
+        let result = try await legacyEngine.execute(request)
 
         #expect(result.status == .completed)
         #expect(result.runID == request.runID)
-        #expect(result.stage == request.stage)
         #expect(result.artifacts.count == 4)
         #expect(result.evidence.artifacts == result.artifacts)
         #expect(result.evidence.provenance.inputs.isEmpty)
@@ -38,47 +36,24 @@ struct PhysicalDesignFoundationIntegrationTests {
             snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
         )
 
-        let reference = try request.designObjectReference()
-
-        #expect(reference.kind == .cell)
-        #expect(reference.identifier == "fixture_top")
-        #expect(reference.hierarchy == .root)
+        #expect(request.design.topDesignName == "fixture_top")
+        #expect(request.initialSnapshot?.topCell == "fixture_top")
     }
 
-    @Test("legacy artifact references convert only with verified integrity metadata")
-    func artifactConversionRequiresIntegrity() throws {
-        let reference = XcircuiteFileReference(
-            artifactID: "legacy-artifact",
-            path: "runs/run/revision.json",
-            kind: .layout,
-            format: .json
-        )
-
-        do {
-            _ = try PhysicalDesignFoundationArtifactConversion.reference(from: reference)
-            Issue.record("An artifact without digest and byte count unexpectedly crossed the Foundation boundary")
-        } catch let error as PhysicalDesignFoundationBoundaryError {
-            #expect(error == .missingDigest("runs/run/revision.json"))
-        }
-    }
-
-    @Test("artifact conversion preserves opaque legacy identity")
-    func artifactConversionPreservesOpaqueIdentity() throws {
-        let reference = XcircuiteFileReference(
-            artifactID: "layout-revision",
+    @Test("artifact conversion preserves the canonical Foundation reference")
+    func artifactConversionPreservesCanonicalIdentity() throws {
+        let reference = PhysicalDesignFixtureFactory.artifact(
             path: "runs/run/revision.json",
             kind: .layout,
             format: .json,
-            sha256: String(repeating: "a", count: 64),
-            byteCount: 1
+            role: .output
         )
 
-        let converted = try PhysicalDesignFoundationArtifactConversion.reference(
-            from: reference
-        )
+        let converted = try PhysicalDesignFoundationArtifactConversion.reference(from: reference)
 
-        #expect(converted.id.rawValue == "layout-revision")
+        #expect(converted.id == reference.id)
         #expect(converted.locator.format == .json)
+        #expect(converted.locator.role == .output)
     }
 
     @Test("artifact stores refuse to overwrite an immutable path")

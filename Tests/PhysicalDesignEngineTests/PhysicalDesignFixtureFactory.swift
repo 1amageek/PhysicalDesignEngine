@@ -1,5 +1,5 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 import LogicIR
 import TimingCore
 import PDKCore
@@ -26,6 +26,28 @@ enum PhysicalDesignFixtureFactory {
         deterministicSeed: 0
     )
 
+    static func artifact(
+        path: String,
+        kind: ArtifactKind,
+        format: ArtifactFormat,
+        role: ArtifactRole = .input,
+        digest: String = String(repeating: "a", count: 64),
+        byteCount: UInt64 = 1
+    ) -> ArtifactReference {
+        do {
+            let locator = ArtifactLocator(
+                location: try ArtifactLocation(workspaceRelativePath: path),
+                role: role,
+                kind: kind,
+                format: format
+            )
+            let contentDigest = try ContentDigest(algorithm: .sha256, hexadecimalValue: digest)
+            return ArtifactReference(locator: locator, digest: contentDigest, byteCount: byteCount)
+        } catch {
+            fatalError("Invalid physical-design fixture artifact: \(error)")
+        }
+    }
+
     static func request(
         stage: PhysicalDesignStage,
         snapshot: PhysicalDesignSnapshot? = nil,
@@ -35,16 +57,16 @@ enum PhysicalDesignFixtureFactory {
             runID: "test-\(stage.rawValue)",
             inputs: [],
             design: LogicDesignReference(
-                artifact: XcircuiteFileReference(path: "inputs/design.json", kind: .netlist, format: .json),
+                artifact: artifact(path: "inputs/design.json", kind: .netlist, format: .json).locator,
                 topDesignName: "fixture_top",
                 designDigest: designDigest
             ),
             constraints: TimingConstraintReference(
-                artifact: XcircuiteFileReference(path: "inputs/constraints.sdc", kind: .constraint, format: .sdc),
+                artifact: artifact(path: "inputs/constraints.sdc", kind: .constraint, format: .sdc),
                 modeIDs: ["func"]
             ),
             pdk: PDKReference(
-                manifest: XcircuiteFileReference(path: "inputs/pdk.json", kind: .technology, format: .json),
+                manifest: artifact(path: "inputs/pdk.json", kind: .technology, format: .json),
                 processID: "fixture-130nm",
                 version: "1",
                 digest: pdkDigest

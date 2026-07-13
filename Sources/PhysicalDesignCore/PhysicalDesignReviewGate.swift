@@ -1,20 +1,20 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
     public let artifactStore: any PhysicalDesignArtifactStore
 
     private let codec: PhysicalDesignJSONCodec
-    private let hasher: XcircuiteHasher
+    private let hasher: SHA256ContentDigester
 
     public init(artifactStore: any PhysicalDesignArtifactStore) {
         self.artifactStore = artifactStore
         self.codec = PhysicalDesignJSONCodec()
-        self.hasher = XcircuiteHasher()
+        self.hasher = SHA256ContentDigester()
     }
 
     public func prepareReview(
-        manifestReference: XcircuiteFileReference,
+        manifestReference: ArtifactReference,
         decisionScope: [String] = ["proposed_layout", "design_diff", "implementation_configuration"]
     ) async throws -> PhysicalDesignReviewPacket {
         let data: Data
@@ -23,21 +23,20 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
         } catch {
             throw PhysicalDesignReviewGateError.artifactReadFailed(error.localizedDescription)
         }
-        guard let expectedManifestDigest = manifestReference.sha256,
-              !expectedManifestDigest.isEmpty,
-              let expectedManifestByteCount = manifestReference.byteCount,
-              expectedManifestByteCount >= 0 else {
+        let expectedManifestDigest = manifestReference.sha256
+        let expectedManifestByteCount = manifestReference.byteCount
+        guard !expectedManifestDigest.isEmpty else {
             throw PhysicalDesignReviewGateError.artifactReadFailed(
                 "\(manifestReference.path): manifest reference lacks complete integrity metadata"
             )
         }
-        let actualManifestDigest = hasher.sha256(data: data)
+        let actualManifestDigest = try hasher.digest(data: data, using: manifestReference.digest.algorithm).hexadecimalValue
         if expectedManifestDigest != actualManifestDigest {
             throw PhysicalDesignReviewGateError.artifactReadFailed(
                 "\(manifestReference.path): SHA-256 digest does not match the manifest reference"
             )
         }
-        if Int64(data.count) != expectedManifestByteCount {
+        if UInt64(data.count) != expectedManifestByteCount {
             throw PhysicalDesignReviewGateError.artifactReadFailed(
                 "\(manifestReference.path): byte count does not match the manifest reference"
             )
@@ -50,9 +49,6 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
         }
         guard manifestReference.format == .json else {
             throw PhysicalDesignReviewGateError.invalidManifest("review manifest reference must use JSON format")
-        }
-        if let producedByRunID = manifestReference.producedByRunID, producedByRunID != manifest.runID {
-            throw PhysicalDesignReviewGateError.invalidManifest("review manifest reference is produced by a different run")
         }
         let manifestDiagnostics = manifest.validationDiagnostics()
         guard manifestDiagnostics.isEmpty else {
@@ -71,21 +67,20 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             } catch {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(error.localizedDescription)
             }
-            guard let expectedDigest = artifact.sha256,
-                  !expectedDigest.isEmpty,
-                  let expectedByteCount = artifact.byteCount,
-                  expectedByteCount >= 0 else {
+            let expectedDigest = artifact.sha256
+            let expectedByteCount = artifact.byteCount
+            guard !expectedDigest.isEmpty else {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(
                     "\(artifact.path): artifact reference lacks complete integrity metadata"
                 )
             }
-            let digest = hasher.sha256(data: artifactData)
+            let digest = try hasher.digest(data: artifactData, using: artifact.digest.algorithm).hexadecimalValue
             if expectedDigest != digest {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(
                     "\(artifact.path): SHA-256 digest does not match the manifest reference"
                 )
             }
-            if Int64(artifactData.count) != expectedByteCount {
+            if UInt64(artifactData.count) != expectedByteCount {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(
                     "\(artifact.path): byte count does not match the manifest reference"
                 )
@@ -123,7 +118,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
     ) -> PhysicalDesignReviewResult {
         var diagnostics = validate(decision: decision, packet: packet)
         if decision.verdict == .rejected, diagnostics.isEmpty {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .warning,
                 code: "physical_design_review_rejected",
                 message: "Human review rejected the proposed physical-design revision.",
@@ -143,7 +138,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
     ) -> PhysicalDesignReviewResult {
         var diagnostics = validate(decision: request.decision, packet: packet)
         if request.decision.verdict != .approved {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_resume_approval_missing",
                 message: "Resume requires an approved physical-design review decision.",
@@ -151,7 +146,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             ))
         }
         if request.runID != packet.runID || request.stage != packet.stage || request.decision.runID != request.runID || request.decision.stage != request.stage {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_resume_scope_mismatch",
                 message: "Resume request, decision and review packet do not refer to the same run and stage.",
@@ -159,7 +154,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             ))
         }
         if request.manifestDigest != packet.manifestDigest {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_resume_manifest_stale",
                 message: "Resume manifest digest does not match the reviewed immutable manifest.",
@@ -167,7 +162,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             ))
         }
         if request.proposedLayoutDigest != packet.proposedLayout.layoutDigest {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_resume_proposed_revision_stale",
                 message: "Resume proposed-layout digest does not match the reviewed revision.",
@@ -176,7 +171,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
         }
         let expectedBaseDigest = packet.baseLayout?.layoutDigest
         if request.expectedBaseLayoutDigest != expectedBaseDigest {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_resume_base_revision_stale",
                 message: "Resume base-layout digest does not match the reviewed base revision.",
@@ -215,7 +210,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
                   currentPacket.decisionScope == packet.decisionScope else {
                 return PhysicalDesignReviewResult(
                     status: .blocked,
-                    diagnostics: [XcircuiteEngineDiagnostic(
+                    diagnostics: [DesignDiagnostic(
                         severity: .error,
                         code: "physical_design_resume_artifacts_stale",
                         message: "Reviewed physical-design artifacts changed after approval and must be reviewed again.",
@@ -229,7 +224,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
         } catch {
             return PhysicalDesignReviewResult(
                 status: .blocked,
-                diagnostics: [XcircuiteEngineDiagnostic(
+                diagnostics: [DesignDiagnostic(
                     severity: .error,
                     code: "physical_design_resume_artifacts_unavailable",
                     message: "Current physical-design artifacts could not be revalidated before resume: \(error.localizedDescription)",
@@ -244,10 +239,10 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
     private func validate(
         decision: PhysicalDesignReviewDecision,
         packet: PhysicalDesignReviewPacket
-    ) -> [XcircuiteEngineDiagnostic] {
-        var diagnostics: [XcircuiteEngineDiagnostic] = []
+    ) -> [DesignDiagnostic] {
+        var diagnostics: [DesignDiagnostic] = []
         diagnostics.append(contentsOf: packet.validationDiagnostics().map {
-            XcircuiteEngineDiagnostic(
+            DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_review_packet_invalid",
                 message: $0,
@@ -255,7 +250,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             )
         })
         if decision.decisionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || decision.reviewer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_review_identity_missing",
                 message: "Review decision requires a decision ID and reviewer identity.",
@@ -263,7 +258,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             ))
         }
         if decision.runID != packet.runID || decision.stage != packet.stage {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_review_scope_mismatch",
                 message: "Review decision does not match the packet run and stage.",
@@ -271,7 +266,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             ))
         }
         if decision.manifestDigest != packet.manifestDigest {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_review_manifest_stale",
                 message: "Review decision references a different manifest digest.",
@@ -279,7 +274,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             ))
         }
         if decision.proposedLayoutDigest != packet.proposedLayout.layoutDigest {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_review_revision_stale",
                 message: "Review decision references a different proposed layout revision.",
@@ -287,7 +282,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             ))
         }
         if Set(decision.decisionScope) != Set(packet.decisionScope) {
-            diagnostics.append(XcircuiteEngineDiagnostic(
+            diagnostics.append(DesignDiagnostic(
                 severity: .error,
                 code: "physical_design_review_decision_scope_mismatch",
                 message: "Review decision scope does not cover the reviewed packet scope.",

@@ -1,12 +1,12 @@
 import Foundation
 import Testing
-import XcircuitePackage
+import CircuiteFoundation
 @testable import PhysicalDesignCore
 
 @Suite("PhysicalDesignEngine mask-data adapter boundary")
 struct MaskDataAdapterTests {
     private struct FixtureAdapter: PhysicalDesignMaskDataAdapter {
-        let supportedFormat: XcircuiteFileFormat = .gdsii
+        let supportedFormat: ArtifactFormat = .gdsii
         let implementationID = "fixture-mask-adapter"
         let qualification: PhysicalDesignMaskDataAdapterQualification = .unqualified
 
