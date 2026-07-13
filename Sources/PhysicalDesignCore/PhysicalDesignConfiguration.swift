@@ -125,7 +125,9 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         if dieWidth <= 0 || dieHeight <= 0 {
             diagnostics.append("die dimensions must be positive")
         }
-        if coreMargin < 0 || coreMargin * 2 >= min(dieWidth, dieHeight) {
+        let minimumDieDimension = min(dieWidth, dieHeight)
+        let (doubleCoreMargin, coreMarginOverflow) = coreMargin.multipliedReportingOverflow(by: 2)
+        if coreMargin < 0 || coreMarginOverflow || doubleCoreMargin >= minimumDieDimension {
             diagnostics.append("core margin must leave a positive core area")
         }
         if rowHeight <= 0 || siteWidth <= 0 || placementSpacing < 0 {
@@ -152,8 +154,19 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         if powerNetNames.isEmpty || powerNetNames.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
             diagnostics.append("at least one non-empty power net is required")
         }
+        if Set(powerNetNames).count != powerNetNames.count {
+            diagnostics.append("power net names must be unique")
+        }
         if maximumAntennaRatio <= 0 || fillWindowSize <= 0 || fillSpacing < 0 {
             diagnostics.append("antenna and fill configuration values are invalid")
+        }
+        if siteWidth > Int64.max / 10 {
+            diagnostics.append("site width is too large for native power-structure pitch calculations")
+        }
+        let minimumFillSpacing = repairConstraints?.minimumFillSpacing ?? PhysicalDesignRepairConstraints.default.minimumFillSpacing
+        let (_, fillStepOverflow) = fillWindowSize.addingReportingOverflow(max(fillSpacing, minimumFillSpacing))
+        if fillStepOverflow {
+            diagnostics.append("fill grid step overflows the coordinate range")
         }
         if let implementationConstraints {
             diagnostics.append(contentsOf: implementationConstraints.validationDiagnostics())

@@ -76,10 +76,10 @@ Status: complete for the deterministic native rule-aware slice; process qualific
 
 Acceptance criteria:
 
-- Floorplan supports hierarchy, IO pins/pads, blockages, rows, tracks and power domains.
+- Floorplan supports hierarchy, IO pins/pads, blockages, rows, tracks and power domains; power planning materializes declared power connectivity, rings, straps, rails and checked vias.
 - Placement consumes timing and congestion objectives and reports legal-placement proof data.
-- CTS materializes buffers, clock connectivity and route constraints, not only estimated tree records.
-- Routing accounts for blockages, layer direction, vias, spacing and antenna risk with structured failure diagnostics.
+- CTS materializes buffers, branch connectivity, clock routes/vias and route constraints, not only estimated tree records.
+- Routing accounts for core boundaries, blockages, layer direction, non-degenerate vias, via spacing, route spacing and antenna risk with structured failure diagnostics.
 
 Evidence: `PhysicalDesignImplementationState`, `PhysicalDesignImplementationConstraints`, native floorplan/placement/CTS/routing paths, implementation proof and routing regression tests, and immutable diff/run-manifest persistence.
 
@@ -89,7 +89,7 @@ Status: complete for the native rule-aware repair slice; external oracle recheck
 
 Acceptance criteria:
 
-- ECO actions are typed, scoped, diffed and independently rechecked by the relevant oracle.
+- ECO actions are typed, scoped, diffed and independently rechecked by the relevant oracle; buffer insertion must split and reroute both native net branches.
 - Antenna repair supports reroute, jumper and protection-device strategies without claiming a DRC verdict.
 - Fill, redundant-via and hotspot operations are window/rule aware and produce reviewable candidates.
 

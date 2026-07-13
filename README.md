@@ -69,7 +69,7 @@ Approval resume uses `validateResumeAgainstCurrentArtifacts` to re-read the
 manifest and every referenced artifact immediately before resume, including
 the embedded manifest and digest map.
 
-The native backend supports canonical JSON and DEF input and emits canonical JSON plus deterministic DEF. The supported DEF subset covers design units, die area, rows, components, top-level pins, net connections, routed segments, placement blockages and power structures. Unsupported opaque layout formats return `blocked` with a structured diagnostic; no native result claims DRC, LVS, PEX, timing, GDSII, OASIS, or foundry qualification.
+The native backend supports canonical JSON and DEF input and emits canonical JSON plus deterministic DEF. The supported DEF subset covers design units, die area, rows, components, top-level pins, net connections, routed segments, placement blockages and power structures. Power planning materializes declared power-net source/sink connectivity, rings, straps, rails and checked vias. CTS materializes clock branch routes and vias in addition to buffer cells and constraints. Unsupported opaque layout formats return `blocked` with a structured diagnostic; no native result claims DRC, LVS, PEX, timing, GDSII, OASIS, or foundry qualification.
 
 Native M3 execution records tracks, power domains, IO pads, placement legalization proof, CTS branch connectivity and routing evidence in `PhysicalDesignSnapshot.implementationState`. M4 repair stages additionally persist verified repair proofs. Placement, routing and repair verification fail closed on physical conflicts; timing objectives and antenna risk remain review metrics for independent signoff oracles.
 
@@ -104,7 +104,7 @@ The command emits one JSON result envelope. Successful runs write `revision.json
 perl -e 'alarm 30; exec @ARGV' swift test
 ```
 
-The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, Foundation artifact/evidence conversion, artifact immutability, approval/resume identity, current-byte revalidation and CLI error output. The 32-test suite passes with a timeout; the positive fixture completes with four immutable artifacts and the negative fixture is blocked with `physical_snapshot_missing`.
+The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, Foundation artifact/evidence conversion, artifact immutability, approval/resume identity, current-byte revalidation, physical connectivity mutations, overflow-safe validation and CLI error output. The 37-test suite passes with a timeout; the positive fixture completes with four immutable artifacts and the negative fixture is blocked with `physical_snapshot_missing`.
 
 The Xcircuite adapter is verified from the sibling repository with:
 

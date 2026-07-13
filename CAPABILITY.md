@@ -7,9 +7,9 @@ The native implementation accepts a `PhysicalDesignRequest` carrying a canonical
 | Stage | Native behavior |
 |---|---|
 | Floorplan | Die/core geometry and placement rows |
-| Power planning | Rings and straps for declared power nets |
+| Power planning | Connected source/sink power nets, rings, straps, rails and checked rail/strap vias |
 | Placement | Deterministic row-based legal placement |
-| CTS | Clock source/sink tree records with estimated skew and latency |
+| CTS | Clock buffers, branch-net connectivity, physically materialized clock routes/vias and estimated skew/latency |
 | Global/detailed routing | Deterministic Manhattan route candidates and via records |
 | Timing/DRC ECO | Typed resize, move, buffer, reroute and blockage actions |
 | Antenna repair | Jumper repair candidates and ratio update records |
@@ -39,14 +39,14 @@ M3 also persists `implementationState` in the canonical snapshot:
 |---|---|
 | Tracks / power domains / pads | Generated deterministically during floorplan when absent |
 | Placement proof | Reports legal cells, overlaps, core bounds, blockage attempts, utilization and timing/congestion proxy objectives |
-| CTS state | Materializes clock buffer cells, branch nets and clock route constraints |
-| Routing evidence | Selects directional layers, emits bend vias, checks blockages/spacing and records antenna-risk nets |
+| CTS state | Materializes clock buffer cells, branch nets, clock routes/vias and clock route constraints including transition limits |
+| Routing evidence | Selects directional layers, emits non-degenerate bend vias, checks core/blockage/spacing/via constraints and records antenna-risk nets |
 
 M4 repair behavior is qualification-aware at the native contract boundary:
 
 | Repair | Native behavior | Evidence |
 |---|---|---|
-| ECO | Applies typed cell/net/blockage actions and rechecks the native snapshot | `RepairProof` |
+| ECO | Applies typed cell/net/blockage actions, splits and reroutes buffer ECO connectivity, and rechecks the native snapshot | `RepairProof` |
 | Antenna | Supports jumper, reroute and protection-device strategies | Ratio result, strategy and repair proof |
 | Fill | Uses window spacing, density, cell, blockage and power-structure exclusions | Fill proof and density checks |
 | Redundant via | Searches spaced candidate offsets and rejects conflicting candidates | Via spacing proof |

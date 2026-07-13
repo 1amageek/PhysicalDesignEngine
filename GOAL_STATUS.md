@@ -13,7 +13,7 @@ Milestone status: M0 complete, M0.5 CircuiteFoundation boundary complete, M1 imm
 | Public package products | Implemented for native scope | Package.swift and native products |
 | Shared Xcircuite request/result contract | Implemented for native scope | Public Swift protocols and payloads |
 | Contract build | Passed | swift build |
-| Contract test | Passed | timeout-bounded `swift test` (32 tests) |
+| Contract test | Passed | timeout-bounded `swift test` (37 tests) |
 | Domain implementation | Smoke-checked | `NativePhysicalDesignExecutor` and stage regression tests |
 | CLI implementation | Complete | `physical-design` executable and JSON fixtures |
 | Fixture corpus | Smoke-checked | `Fixtures/` positive and negative requests |
@@ -39,7 +39,7 @@ Milestone status: M0 complete, M0.5 CircuiteFoundation boundary complete, M1 imm
 | Repair/DFM closure | Contract defined | Rule-aware ECO, antenna, fill, via and hotspot candidates with repair proofs | Strategy and DFM proof regression | Complete for native scope |
 | DEF interchange | Contract defined | Native parser/writer with structured diagnostics and source provenance | Round-trip, retained fixture and DEF input tests | Complete for supported subset |
 | GDSII/OASIS adapter boundary | Protocol defined | Qualification-gated external adapter protocol | Gate contract pending external implementation | Blocked until qualified |
-| Approval and resume identity | Contract defined | Immutable review packet, decision and current-byte revalidation gate | 32-test native regression suite | Native boundary complete; ledger persistence owned by Xcircuite |
+| Approval and resume identity | Contract defined | Immutable review packet, decision and current-byte revalidation gate | 37-test native regression suite | Native boundary complete; ledger persistence owned by Xcircuite |
 | CircuiteFoundation projection | Contract defined | Foundation engine/evidence adapter, verified artifact conversion and stable design identity | Foundation integration regression | Complete for the migration slice |
 
 ## Goal progression

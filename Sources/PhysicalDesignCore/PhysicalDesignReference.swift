@@ -15,5 +15,30 @@ public struct PhysicalDesignReference: Sendable, Hashable, Codable {
         self.topCell = topCell
         self.layoutDigest = layoutDigest
     }
-}
 
+    public func validationDiagnostics() -> [String] {
+        var diagnostics: [String] = []
+        if topCell.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            diagnostics.append("physical design top cell is empty")
+        }
+        if layoutDigest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            diagnostics.append("physical design layout digest is empty")
+        }
+        if layoutArtifact.kind != .layout {
+            diagnostics.append("physical design artifact kind must be layout")
+        }
+        if layoutArtifact.format != .json && layoutArtifact.format != .def {
+            diagnostics.append("physical design reference format is unsupported by the native backend")
+        }
+        if layoutArtifact.sha256?.isEmpty != false {
+            diagnostics.append("physical design artifact SHA-256 digest is missing")
+        }
+        if layoutArtifact.byteCount == nil || layoutArtifact.byteCount ?? -1 < 0 {
+            diagnostics.append("physical design artifact byte count is missing or invalid")
+        }
+        if layoutArtifact.path.hasPrefix("/") {
+            diagnostics.append("physical design artifact path must be project-relative")
+        }
+        return diagnostics
+    }
+}

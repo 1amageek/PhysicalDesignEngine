@@ -4,6 +4,7 @@ public struct PhysicalDesignImplementationConstraints: Sendable, Hashable, Codab
     public var timingWeight: Double
     public var congestionWeight: Double
     public var clockTargetSkewPS: Int64
+    public var clockMaximumTransitionPS: Int64?
     public var clockBufferMaster: String
     public var clockRouteLayer: Int
     public var routeWidth: Int64
@@ -14,6 +15,7 @@ public struct PhysicalDesignImplementationConstraints: Sendable, Hashable, Codab
         timingWeight: Double = 1.0,
         congestionWeight: Double = 1.0,
         clockTargetSkewPS: Int64 = 100,
+        clockMaximumTransitionPS: Int64? = 100,
         clockBufferMaster: String = "CLKBUF_X1",
         clockRouteLayer: Int = 3,
         routeWidth: Int64 = 100,
@@ -23,6 +25,7 @@ public struct PhysicalDesignImplementationConstraints: Sendable, Hashable, Codab
         self.timingWeight = timingWeight
         self.congestionWeight = congestionWeight
         self.clockTargetSkewPS = clockTargetSkewPS
+        self.clockMaximumTransitionPS = clockMaximumTransitionPS
         self.clockBufferMaster = clockBufferMaster
         self.clockRouteLayer = clockRouteLayer
         self.routeWidth = routeWidth
@@ -42,6 +45,12 @@ public struct PhysicalDesignImplementationConstraints: Sendable, Hashable, Codab
         }
         if clockTargetSkewPS < 0 || clockRouteLayer <= 0 {
             diagnostics.append("clock skew target and route layer must be positive")
+        }
+        if clockTargetSkewPS > Int64.max / 4 {
+            diagnostics.append("clock skew target is too large for native route-length bounds")
+        }
+        if let clockMaximumTransitionPS, clockMaximumTransitionPS <= 0 {
+            diagnostics.append("clock maximum transition must be positive when provided")
         }
         if clockBufferMaster.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append("clock buffer master must be non-empty")

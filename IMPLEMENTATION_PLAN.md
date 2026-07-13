@@ -33,7 +33,7 @@
 
 ## Delivered implementation slice
 
-The native backend now covers floorplan, power planning, placement, CTS, global and detailed routing, timing/DRC ECO actions, antenna repair, fill insertion, redundant-via insertion and hotspot repair. Every completed mutation creates a new snapshot digest and design diff. Missing canonical state, unsupported layout formats, invalid geometry, missing clock/connectivity, and unavailable repair targets return structured `blocked` results.
+The native backend now covers floorplan, connected power planning, placement, CTS route materialization, global and detailed routing, timing/DRC ECO actions, antenna repair, fill insertion, redundant-via insertion and hotspot repair. Every completed mutation creates a new snapshot digest and design diff. Missing canonical state, unsupported layout formats, invalid geometry, missing clock/connectivity, integrity failures and unavailable repair targets return structured `blocked` results.
 
 Remaining release gates are process-specific corpus retention, reference-oracle correlation, qualification evidence, and a qualified GDSII/OASIS stream-out adapter.
 

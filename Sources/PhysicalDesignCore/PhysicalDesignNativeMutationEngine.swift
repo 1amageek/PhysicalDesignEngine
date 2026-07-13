@@ -61,30 +61,45 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
 
+        let outcome: Outcome
         switch request.stage {
         case .floorplan:
-            return floorplan(input, configuration: request.configuration)
+            outcome = floorplan(input, configuration: request.configuration)
         case .powerPlanning:
-            return powerPlanning(input, configuration: request.configuration)
+            outcome = powerPlanning(input, configuration: request.configuration)
         case .placement:
-            return placement(input, configuration: request.configuration)
+            outcome = placement(input, configuration: request.configuration)
         case .clockTreeSynthesis:
-            return clockTreeSynthesis(input, configuration: request.configuration)
+            outcome = clockTreeSynthesis(input, configuration: request.configuration)
         case .globalRouting:
-            return routing(input, configuration: request.configuration, mode: "global")
+            outcome = routing(input, configuration: request.configuration, mode: "global")
         case .detailedRouting:
-            return routing(input, configuration: request.configuration, mode: "detailed")
+            outcome = routing(input, configuration: request.configuration, mode: "detailed")
         case .timingECO, .drcRepair:
-            return eco(input, configuration: request.configuration, stage: request.stage)
+            outcome = eco(input, configuration: request.configuration, stage: request.stage)
         case .antennaRepair:
-            return antennaRepair(input, configuration: request.configuration)
+            outcome = antennaRepair(input, configuration: request.configuration)
         case .fillInsertion:
-            return fillInsertion(input, configuration: request.configuration)
+            outcome = fillInsertion(input, configuration: request.configuration)
         case .redundantViaInsertion:
-            return redundantViaInsertion(input, configuration: request.configuration)
+            outcome = redundantViaInsertion(input, configuration: request.configuration)
         case .hotspotRepair:
-            return hotspotRepair(input, configuration: request.configuration)
+            outcome = hotspotRepair(input, configuration: request.configuration)
         }
+        return validateCompletedOutcome(outcome)
+    }
+
+    private func validateCompletedOutcome(_ outcome: Outcome) -> Outcome {
+        guard outcome.status == .completed, let snapshot = outcome.snapshot else { return outcome }
+        let diagnostics = snapshot.validationDiagnostics()
+        guard diagnostics.isEmpty else {
+            return blocked(
+                code: "invalid_output_snapshot",
+                message: diagnostics.joined(separator: "; "),
+                actions: ["inspect_native_mutation_output", "repair_the_canonical_snapshot"]
+            )
+        }
+        return outcome
     }
 
     private func floorplan(
@@ -180,9 +195,50 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
         var output = input
+        guard configuration.siteWidth < min(core.width, core.height) else {
+            return blocked(
+                code: "power_geometry_invalid",
+                message: "Power ring and rail width must be smaller than both core dimensions.",
+                actions: ["reduce_power_structure_width", "increase_core_area"]
+            )
+        }
         let startingCount = output.powerStructures.count
-        let existingIDs = Set(output.powerStructures.map(\.id))
+        var existingIDs = Set(output.powerStructures.map(\.id))
+        let existingViaIDs = Set(output.vias.map(\.id))
+        var powerViasAdded = 0
         for (netIndex, netID) in configuration.powerNetNames.enumerated() {
+            let sourcePinID = "power_\(netID)_source"
+            let sinkPinID = "power_\(netID)_sink"
+            if !output.pins.contains(where: { $0.id == sourcePinID }) {
+                output.pins.append(PhysicalDesignSnapshot.Pin(
+                    id: sourcePinID,
+                    name: "\(netID)_SOURCE",
+                    x: core.x,
+                    y: core.y + core.height / 2,
+                    netID: netID,
+                    direction: "inout"
+                ))
+            }
+            if !output.pins.contains(where: { $0.id == sinkPinID }) {
+                output.pins.append(PhysicalDesignSnapshot.Pin(
+                    id: sinkPinID,
+                    name: "\(netID)_SINK",
+                    x: core.maxX,
+                    y: core.y + core.height / 2,
+                    netID: netID,
+                    direction: "inout"
+                ))
+            }
+            if let netIndexInSnapshot = output.nets.firstIndex(where: { $0.id == netID }) {
+                for pinID in [sourcePinID, sinkPinID] where !output.nets[netIndexInSnapshot].pinIDs.contains(pinID) {
+                    output.nets[netIndexInSnapshot].pinIDs.append(pinID)
+                }
+            } else {
+                output.nets.append(PhysicalDesignSnapshot.Net(
+                    id: netID,
+                    pinIDs: [sourcePinID, sinkPinID]
+                ))
+            }
             let ringGeometries = [
                 PhysicalDesignSnapshot.Rect(x: core.x, y: core.y, width: core.width, height: configuration.siteWidth),
                 PhysicalDesignSnapshot.Rect(x: core.x, y: core.maxY - configuration.siteWidth, width: core.width, height: configuration.siteWidth),
@@ -201,10 +257,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                         geometry: geometry
                     )
                 )
+                existingIDs.insert(id)
             }
             let strapCount = max(1, core.width / max(configuration.fillWindowSize, configuration.siteWidth * 10))
+            let strapDenominator = strapCount + 1 + Int64(configuration.powerNetNames.count)
             for index in 0..<strapCount {
-                let x = core.x + (index + 1) * core.width / (strapCount + 1)
+                let strapNumerator = (index + 1 + Int64(netIndex)) * core.width
+                let x = core.x + strapNumerator / strapDenominator
                 let id = "power_\(netID)_strap_\(index)"
                 guard !existingIDs.contains(id) else { continue }
                 output.powerStructures.append(
@@ -221,6 +280,48 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                         )
                     )
                 )
+                existingIDs.insert(id)
+            }
+            let railCount = max(1, core.height / max(configuration.fillWindowSize, configuration.siteWidth * 10))
+            let railDenominator = railCount + 1 + Int64(configuration.powerNetNames.count)
+            for index in 0..<railCount {
+                let railNumerator = (index + 1 + Int64(netIndex)) * core.height
+                let y = core.y + railNumerator / railDenominator
+                let id = "power_\(netID)_rail_\(index)"
+                guard !existingIDs.contains(id) else { continue }
+                output.powerStructures.append(
+                    PhysicalDesignSnapshot.PowerStructure(
+                        id: id,
+                        netID: netID,
+                        kind: "rail",
+                        layer: 1 + netIndex,
+                        geometry: PhysicalDesignSnapshot.Rect(
+                            x: core.x,
+                            y: y,
+                            width: core.width,
+                            height: configuration.siteWidth
+                        )
+                    )
+                )
+                existingIDs.insert(id)
+                for strapIndex in 0..<strapCount {
+                    let strapNumerator = (strapIndex + 1 + Int64(netIndex)) * core.width
+                    let x = core.x + strapNumerator / strapDenominator
+                    let viaID = "power_\(netID)_via_\(strapIndex)_\(index)"
+                    let via = PhysicalDesignSnapshot.Via(
+                        id: viaID,
+                        netID: netID,
+                        x: x,
+                        y: y,
+                        lowerLayer: 1 + netIndex,
+                        upperLayer: 2 + netIndex
+                    )
+                    guard !existingViaIDs.contains(viaID), !output.vias.contains(where: {
+                        manhattan($0.x, $0.y, via.x, via.y) < (configuration.repairConstraints ?? .default).minimumViaSpacing
+                    }) else { continue }
+                    output.vias.append(via)
+                    powerViasAdded += 1
+                }
             }
         }
         output.metadata["powerPlanningStatus"] = "generated"
@@ -228,7 +329,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         return completed(
             output,
             actions: ["run_placement", "run_global_routing", "verify_power_connectivity"],
-            metrics: metrics(for: output) + [PhysicalDesignMetric(name: "powerStructuresAdded", value: Double(added), unit: "structures")]
+            metrics: metrics(for: output) + [
+                PhysicalDesignMetric(name: "powerStructuresAdded", value: Double(added), unit: "structures"),
+                PhysicalDesignMetric(name: "powerViasAdded", value: Double(powerViasAdded), unit: "vias"),
+                PhysicalDesignMetric(name: "powerConnectivityNets", value: Double(configuration.powerNetNames.count), unit: "nets")
+            ]
         )
     }
 
@@ -299,6 +404,31 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     cell.y = row.originY
                     cell.placed = true
                     cursorX = alignedX + cell.width + configuration.placementSpacing
+                    let previousCell = output.cells[cellIndex]
+                    for pinIndex in output.pins.indices where output.pins[pinIndex].cellID == cell.id {
+                        let (offsetX, offsetXOverflow) = output.pins[pinIndex].x.subtractingReportingOverflow(previousCell.x)
+                        let (offsetY, offsetYOverflow) = output.pins[pinIndex].y.subtractingReportingOverflow(previousCell.y)
+                        guard !offsetXOverflow, !offsetYOverflow else {
+                            return blocked(
+                                code: "placement_pin_coordinate_overflow",
+                                message: "Placement could not translate pin geometry for cell \(cell.id) without overflowing the coordinate range.",
+                                entity: cell.id,
+                                actions: ["repair_pin_geometry", "reduce_placement_coordinate_range"]
+                            )
+                        }
+                        let (newPinX, newPinXOverflow) = cell.x.addingReportingOverflow(offsetX)
+                        let (newPinY, newPinYOverflow) = cell.y.addingReportingOverflow(offsetY)
+                        guard !newPinXOverflow, !newPinYOverflow else {
+                            return blocked(
+                                code: "placement_pin_coordinate_overflow",
+                                message: "Placement could not translate pin geometry for cell \(cell.id) without overflowing the coordinate range.",
+                                entity: cell.id,
+                                actions: ["repair_pin_geometry", "reduce_placement_coordinate_range"]
+                            )
+                        }
+                        output.pins[pinIndex].x = newPinX
+                        output.pins[pinIndex].y = newPinY
+                    }
                     output.cells[cellIndex] = cell
                     break
                 }
@@ -431,7 +561,15 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         let pinByID = Dictionary(uniqueKeysWithValues: output.pins.map { ($0.id, $0) })
         let existingIDs = Set(output.clockTrees.map(\.id))
         let implementationConstraints = configuration.implementationConstraints ?? .default
+        guard let core = input.core else {
+            return blocked(
+                code: "core_geometry_missing",
+                message: "Clock-tree synthesis requires a core rectangle to bound generated clock routes.",
+                actions: ["run_floorplan"]
+            )
+        }
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
+        var skewDiagnostics: [XcircuiteEngineDiagnostic] = []
         for net in clockNets {
             guard net.pinIDs.count >= 2 else {
                 return blocked(
@@ -453,20 +591,22 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             let source = pins.first(where: { $0.direction.lowercased() == "output" }) ?? pins[0]
             let sinks = pins.filter { $0.id != source.id }.sorted { $0.id < $1.id }
             let distances = sinks.map { manhattan(source.x, source.y, $0.x, $0.y) }
-            let skew = (distances.max() ?? 0) - (distances.min() ?? 0)
             let id = "clock_tree_\(net.id)"
             guard !existingIDs.contains(id) else { continue }
             var parentPinIDs: [String] = [source.id]
             var bufferCellIDs: [String] = []
+            var sinkPathLengths: [Int64] = []
             var bufferIndex = 0
             for (sinkIndex, sink) in sinks.enumerated() {
                 let distance = distances[sinkIndex]
                 guard distance > implementationConstraints.clockTargetSkewPS else {
                     parentPinIDs.append(sink.id)
+                    sinkPathLengths.append(distance)
                     continue
                 }
+                let targetY = midpoint(source.y, sink.y)
                 guard let row = output.rows.sorted(by: { $0.id < $1.id }).min(by: { lhs, rhs in
-                    abs(lhs.originY - (source.y + sink.y) / 2) < abs(rhs.originY - (source.y + sink.y) / 2)
+                    absoluteDifference(lhs.originY, targetY) < absoluteDifference(rhs.originY, targetY)
                 }) else {
                     return blocked(
                         code: "cts_rows_missing",
@@ -476,7 +616,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     )
                 }
                 let width = max(configuration.siteWidth * 2, implementationConstraints.routeWidth)
-                let x = max(row.originX, min((source.x + sink.x) / 2, row.originX + row.siteCount * row.siteWidth - width))
+                let x = max(row.originX, min(midpoint(source.x, sink.x), row.originX + row.siteCount * row.siteWidth - width))
                 let y = row.originY
                 let bufferGeometry = PhysicalDesignSnapshot.Rect(x: x, y: y, width: width, height: row.height)
                 guard !output.blockages.contains(where: { $0.intersects(bufferGeometry) }) else {
@@ -529,13 +669,18 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 ))
                 parentPinIDs.append(inputPinID)
                 bufferCellIDs.append(bufferID)
+                sinkPathLengths.append(
+                    manhattan(source.x, source.y, x, y + row.height / 2)
+                        + manhattan(x + width, y + row.height / 2, sink.x, sink.y)
+                )
                 implementationState.clockRouteConstraints.append(PhysicalDesignImplementationState.ClockRouteConstraint(
                     id: "clock_route_\(branchNetID)",
                     netID: branchNetID,
                     layer: implementationConstraints.clockRouteLayer,
                     width: implementationConstraints.routeWidth,
                     spacing: implementationConstraints.routeSpacing,
-                    maximumLength: implementationConstraints.clockTargetSkewPS * 4
+                    maximumLength: max(1, implementationConstraints.clockTargetSkewPS * 4),
+                    maximumTransitionPS: implementationConstraints.clockMaximumTransitionPS
                 ))
                 bufferIndex += 1
             }
@@ -549,28 +694,211 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     sourcePinID: source.id,
                     sinkPinIDs: sinks.map(\.id),
                     bufferCellIDs: bufferCellIDs,
-                    estimatedSkewPS: skew,
-                    estimatedLatencyPS: distances.max() ?? 0
+                    estimatedSkewPS: (sinkPathLengths.max() ?? 0) - (sinkPathLengths.min() ?? 0),
+                    estimatedLatencyPS: sinkPathLengths.max() ?? 0
                 )
             )
+            if let tree = output.clockTrees.last,
+               tree.estimatedSkewPS > implementationConstraints.clockTargetSkewPS {
+                skewDiagnostics.append(diagnostic(
+                    severity: .warning,
+                    code: "cts_target_skew_unmet",
+                    message: "Clock tree \(tree.id) has estimated skew \(tree.estimatedSkewPS) ps above the target \(implementationConstraints.clockTargetSkewPS) ps.",
+                    entity: tree.id,
+                    actions: ["run_timing_analysis", "use_a_qualified_external_cts"]
+                ))
+            }
             implementationState.clockRouteConstraints.append(PhysicalDesignImplementationState.ClockRouteConstraint(
                 id: "clock_route_\(net.id)",
                 netID: net.id,
                 layer: implementationConstraints.clockRouteLayer,
                 width: implementationConstraints.routeWidth,
                 spacing: implementationConstraints.routeSpacing,
-                maximumLength: implementationConstraints.clockTargetSkewPS * 4
+                maximumLength: max(1, implementationConstraints.clockTargetSkewPS * 4),
+                maximumTransitionPS: implementationConstraints.clockMaximumTransitionPS
             ))
         }
+        let clockTreeIDs = Set(output.clockTrees.map(\.netID))
+        var clockRouteGeometries = output.routes
+            .filter { !clockTreeIDs.contains($0.netID) }
+            .flatMap { route in
+                route.segments.map {
+                    (netID: route.netID, layer: $0.layer, geometry: segmentGeometry($0, width: implementationConstraints.routeWidth))
+                }
+            }
+        var materializedClockRoutes: [PhysicalDesignSnapshot.Route] = []
+        var materializedClockVias: [PhysicalDesignSnapshot.Via] = []
+        for tree in output.clockTrees {
+            guard let materialization = materializeClockTree(
+                tree,
+                snapshot: output,
+                core: core,
+                configuration: configuration,
+                existingGeometries: &clockRouteGeometries
+            ) else {
+                return blocked(
+                    code: "cts_route_materialization_failed",
+                    message: "Clock tree \(tree.id) could not be materialized within the core, blockages and route spacing constraints.",
+                    entity: tree.id,
+                    actions: ["repair_clock_geometry", "move_clock_blockages", "use_a_qualified_external_cts"]
+                )
+            }
+            materializedClockRoutes.append(contentsOf: materialization.routes)
+            materializedClockVias.append(contentsOf: materialization.vias)
+        }
+        output.routes = output.routes.filter { !clockTreeIDs.contains($0.netID) } + materializedClockRoutes
+        let existingViaIDs = Set(output.vias.map(\.id))
+        output.vias.append(contentsOf: materializedClockVias.filter { !existingViaIDs.contains($0.id) })
         output.implementationState = implementationState
         output.metadata["clockTreeStatus"] = "constructed"
         return completed(
             output,
+            diagnostics: skewDiagnostics,
             actions: ["run_detailed_routing", "run_timing_analysis"],
             metrics: metrics(for: output) + [
                 PhysicalDesignMetric(name: "clockTreeCount", value: Double(output.clockTrees.count), unit: "trees")
             ]
         )
+    }
+
+    private struct ClockRouteMaterialization: Sendable {
+        var routes: [PhysicalDesignSnapshot.Route]
+        var vias: [PhysicalDesignSnapshot.Via]
+    }
+
+    private func materializeClockTree(
+        _ tree: PhysicalDesignSnapshot.ClockTree,
+        snapshot: PhysicalDesignSnapshot,
+        core: PhysicalDesignSnapshot.Rect,
+        configuration: PhysicalDesignConfiguration,
+        existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)]
+    ) -> ClockRouteMaterialization? {
+        let implementationConstraints = configuration.implementationConstraints ?? .default
+        let horizontalLayers = configuration.preferredRoutingLayers.filter { !$0.isMultiple(of: 2) }.sorted()
+        let verticalLayers = configuration.preferredRoutingLayers.filter { $0.isMultiple(of: 2) }.sorted()
+        guard let horizontalLayer = horizontalLayers.first(where: { $0 == implementationConstraints.clockRouteLayer }) ?? horizontalLayers.first,
+              let verticalLayer = verticalLayers.last ?? verticalLayers.first else {
+            return nil
+        }
+        let pinByID = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
+        guard pinByID[tree.sourcePinID] != nil else { return nil }
+        var endpoints: [(netID: String, sourcePinID: String, sinkPinID: String)] = []
+        if let net = snapshot.nets.first(where: { $0.id == tree.netID }) {
+            endpoints.append(contentsOf: net.pinIDs.filter { $0 != tree.sourcePinID }.map { (netID: tree.netID, sourcePinID: tree.sourcePinID, sinkPinID: $0) })
+        }
+        for bufferCellID in tree.bufferCellIDs {
+            let outputPinID = "pin_\(bufferCellID)_Y"
+            guard let branchNet = snapshot.nets.first(where: { $0.pinIDs.contains(outputPinID) }) else { return nil }
+            endpoints.append(contentsOf: branchNet.pinIDs.filter { $0 != outputPinID }.map { (netID: branchNet.id, sourcePinID: outputPinID, sinkPinID: $0) })
+        }
+        guard !endpoints.isEmpty else { return nil }
+
+        var routes: [PhysicalDesignSnapshot.Route] = []
+        var vias: [PhysicalDesignSnapshot.Via] = []
+        let cellByID = Dictionary(uniqueKeysWithValues: snapshot.cells.map { ($0.id, $0) })
+        for (ordinal, endpoint) in endpoints.enumerated() {
+            guard let endpointSourcePin = pinByID[endpoint.sourcePinID] else { return nil }
+            guard let sinkPin = pinByID[endpoint.sinkPinID] else { return nil }
+            let endpointSource = pinLocation(endpointSourcePin, cells: cellByID)
+            let target = pinLocation(sinkPin, cells: cellByID)
+            guard endpointSource != target else { return nil }
+            guard let path = clockPath(
+                from: endpointSource,
+                to: target,
+                netID: endpoint.netID,
+                routeID: "clock_route_\(endpoint.netID)_\(ordinal)",
+                horizontalLayer: horizontalLayer,
+                verticalLayer: verticalLayer,
+                core: core,
+                blockages: snapshot.blockages,
+                configuration: configuration,
+                clockFamilyID: tree.netID,
+                existingGeometries: &existingGeometries
+            ) else {
+                return nil
+            }
+            routes.append(path.route)
+            if let via = path.via {
+                vias.append(via)
+            }
+        }
+        return ClockRouteMaterialization(routes: routes, vias: vias)
+    }
+
+    private struct ClockPath {
+        var route: PhysicalDesignSnapshot.Route
+        var via: PhysicalDesignSnapshot.Via?
+    }
+
+    private func clockPath(
+        from source: (x: Int64, y: Int64),
+        to target: (x: Int64, y: Int64),
+        netID: String,
+        routeID: String,
+        horizontalLayer: Int,
+        verticalLayer: Int,
+        core: PhysicalDesignSnapshot.Rect,
+        blockages: [PhysicalDesignSnapshot.Rect],
+        configuration: PhysicalDesignConfiguration,
+        clockFamilyID: String,
+        existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)]
+    ) -> ClockPath? {
+        let implementationConstraints = configuration.implementationConstraints ?? .default
+        var segments: [PhysicalDesignSnapshot.RouteSegment] = []
+        var geometries: [(layer: Int, geometry: PhysicalDesignSnapshot.Rect)] = []
+        if source.x != target.x {
+            let segment = PhysicalDesignSnapshot.RouteSegment(
+                id: "\(routeID)_h",
+                layer: horizontalLayer,
+                x1: source.x,
+                y1: source.y,
+                x2: target.x,
+                y2: source.y
+            )
+            geometries.append((horizontalLayer, segmentGeometry(segment, width: implementationConstraints.routeWidth)))
+            segments.append(segment)
+        }
+        if source.y != target.y {
+            let segment = PhysicalDesignSnapshot.RouteSegment(
+                id: "\(routeID)_v",
+                layer: verticalLayer,
+                x1: target.x,
+                y1: source.y,
+                x2: target.x,
+                y2: target.y
+            )
+            geometries.append((verticalLayer, segmentGeometry(segment, width: implementationConstraints.routeWidth)))
+            segments.append(segment)
+        }
+        guard !segments.isEmpty else { return nil }
+        guard geometries.allSatisfy({ layer, geometry in
+            core.contains(geometry)
+                && !blockages.contains(where: { $0.intersects(geometry) })
+                && !existingGeometries.contains {
+                    !isClockFamilyNet($0.netID, familyID: clockFamilyID)
+                        && $0.layer == layer
+                        && $0.geometry.expanded(by: implementationConstraints.routeSpacing).intersects(geometry)
+                }
+        }) else { return nil }
+        existingGeometries.append(contentsOf: geometries.map { (netID: netID, layer: $0.layer, geometry: $0.geometry) })
+        let via: PhysicalDesignSnapshot.Via?
+        if source.x != target.x, source.y != target.y {
+            via = PhysicalDesignSnapshot.Via(
+                id: "\(routeID)_via",
+                netID: netID,
+                x: target.x,
+                y: source.y,
+                lowerLayer: min(horizontalLayer, verticalLayer),
+                upperLayer: max(horizontalLayer, verticalLayer)
+            )
+        } else {
+            via = nil
+        }
+        return ClockPath(route: PhysicalDesignSnapshot.Route(id: routeID, netID: netID, segments: segments), via: via)
+    }
+
+    private func isClockFamilyNet(_ netID: String, familyID: String) -> Bool {
+        netID == familyID || netID.hasPrefix("\(familyID)_branch_")
     }
 
     private func routing(
@@ -586,6 +914,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 actions: ["run_placement"]
             )
         }
+        guard let core = input.core else {
+            return blocked(
+                code: "core_geometry_missing",
+                message: "Routing requires a core rectangle to bound generated route geometry.",
+                actions: ["run_floorplan"]
+            )
+        }
         guard !input.nets.isEmpty else {
             return blocked(
                 code: "routable_nets_missing",
@@ -598,7 +933,27 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         let pinByID = Dictionary(uniqueKeysWithValues: output.pins.map { ($0.id, $0) })
         let cellByID = Dictionary(uniqueKeysWithValues: output.cells.map { ($0.id, $0) })
         let implementationConstraints = configuration.implementationConstraints ?? .default
-        let tracks = output.implementationState?.tracks ?? []
+        let tracks = (output.implementationState?.tracks ?? []).filter {
+            $0.layer > 0 && $0.layer <= configuration.maximumRoutingLayer
+        }
+        let powerNetIDs = Set(configuration.powerNetNames)
+        let powerNetsWithoutStructures = output.nets
+            .filter { powerNetIDs.contains($0.id) }
+            .filter { net in
+                !output.powerStructures.contains(where: { $0.netID == net.id })
+            }
+        guard powerNetsWithoutStructures.isEmpty else {
+            return blocked(
+                code: "power_connectivity_missing",
+                message: "Power net(s) must be materialized by power structures before native signal routing can proceed: \(powerNetsWithoutStructures.map(\.id).sorted().joined(separator: ", ")).",
+                actions: ["run_power_planning", "verify_power_connectivity"]
+            )
+        }
+        let routableNets = output.nets
+            .sorted(by: { $0.id < $1.id })
+            .filter { !powerNetIDs.contains($0.id) }
+            .filter { onlyNetID == nil || $0.id == onlyNetID }
+        let reroutedNetIDs = Set(routableNets.map(\.id))
         var routes: [PhysicalDesignSnapshot.Route] = []
         var warnings: [XcircuiteEngineDiagnostic] = []
         var routeFailures: [XcircuiteEngineDiagnostic] = []
@@ -608,23 +963,18 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         var spacingConflicts = 0
         var antennaRiskNetIDs: [String] = []
         var routeGeometries: [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)] = []
-        if let onlyNetID {
-            routeGeometries = output.routes
-                .filter { $0.netID != onlyNetID }
-                .flatMap { route in
-                    route.segments.map {
-                        (
-                            netID: route.netID,
-                            layer: $0.layer,
-                            geometry: segmentGeometry($0, width: implementationConstraints.routeWidth)
-                        )
-                    }
+        routeGeometries = output.routes
+            .filter { !reroutedNetIDs.contains($0.netID) }
+            .flatMap { route in
+                route.segments.map {
+                    (
+                        netID: route.netID,
+                        layer: $0.layer,
+                        geometry: segmentGeometry($0, width: implementationConstraints.routeWidth)
+                    )
                 }
-        }
+            }
         var generatedVias: [PhysicalDesignSnapshot.Via] = []
-        let routableNets = output.nets
-            .sorted(by: { $0.id < $1.id })
-            .filter { onlyNetID == nil || $0.id == onlyNetID }
         for (netOrdinal, net) in routableNets.enumerated() {
             if Task.isCancelled {
                 return cancelled(actions: ["resume_from_the_last_immutable_revision"])
@@ -647,6 +997,17 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             var segmentGeometries: [PhysicalDesignSnapshot.Rect] = []
             var netFailed = false
             for (index, location) in locations.dropFirst().enumerated() {
+                guard source != location else {
+                    routeFailures.append(diagnostic(
+                        severity: .error,
+                        code: "net_pins_collocated",
+                        message: "Net \(net.id) contains distinct pins at the same physical location and cannot be represented by a native route segment.",
+                        entity: net.id,
+                        actions: ["repair_pin_geometry", "use_a_qualified_external_router"]
+                    ))
+                    netFailed = true
+                    break
+                }
                 guard let horizontalLayer = routingLayer(direction: "horizontal", preferredLayers: configuration.preferredRoutingLayers, tracks: tracks, offset: netOrdinal),
                       let verticalLayer = routingLayer(direction: "vertical", preferredLayers: configuration.preferredRoutingLayers, tracks: tracks, offset: netOrdinal) else {
                     layerDirectionViolations += 1
@@ -660,26 +1021,50 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     netFailed = true
                     break
                 }
-                let horizontalSegment = PhysicalDesignSnapshot.RouteSegment(
-                    id: "route_\(net.id)_\(index)_h",
-                    layer: horizontalLayer,
-                    x1: source.x,
-                    y1: source.y,
-                    x2: location.x,
-                    y2: source.y
-                )
-                let verticalSegment = PhysicalDesignSnapshot.RouteSegment(
-                    id: "route_\(net.id)_\(index)_v",
-                    layer: verticalLayer,
-                    x1: location.x,
-                    y1: source.y,
-                    x2: location.x,
-                    y2: location.y
-                )
-                let geometries = [
-                    segmentGeometry(horizontalSegment, width: implementationConstraints.routeWidth),
-                    segmentGeometry(verticalSegment, width: implementationConstraints.routeWidth)
-                ]
+                var pathSegments: [PhysicalDesignSnapshot.RouteSegment] = []
+                if source.x != location.x {
+                    pathSegments.append(PhysicalDesignSnapshot.RouteSegment(
+                        id: "route_\(net.id)_\(index)_h",
+                        layer: horizontalLayer,
+                        x1: source.x,
+                        y1: source.y,
+                        x2: location.x,
+                        y2: source.y
+                    ))
+                }
+                if source.y != location.y {
+                    pathSegments.append(PhysicalDesignSnapshot.RouteSegment(
+                        id: "route_\(net.id)_\(index)_v",
+                        layer: verticalLayer,
+                        x1: location.x,
+                        y1: source.y,
+                        x2: location.x,
+                        y2: location.y
+                    ))
+                }
+                guard !pathSegments.isEmpty else {
+                    routeFailures.append(diagnostic(
+                        severity: .error,
+                        code: "net_pins_collocated",
+                        message: "Net \(net.id) contains distinct pins at the same physical location and cannot be represented by a native route segment.",
+                        entity: net.id,
+                        actions: ["repair_pin_geometry", "use_a_qualified_external_router"]
+                    ))
+                    netFailed = true
+                    break
+                }
+                let geometries = pathSegments.map { segmentGeometry($0, width: implementationConstraints.routeWidth) }
+                if geometries.contains(where: { !core.contains($0) }) {
+                    routeFailures.append(diagnostic(
+                        severity: .error,
+                        code: "routing_core_boundary_conflict",
+                        message: "Net \(net.id) would leave the core boundary during native routing.",
+                        entity: net.id,
+                        actions: ["repair_pin_geometry", "increase_core_area", "use_a_qualified_external_router"]
+                    ))
+                    netFailed = true
+                    break
+                }
                 if geometries.contains(where: { geometry in
                     output.blockages.contains { $0.intersects(geometry) }
                 }) {
@@ -710,17 +1095,16 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     netFailed = true
                     break
                 }
-                segments.append(horizontalSegment)
-                segments.append(verticalSegment)
+                segments.append(contentsOf: pathSegments)
                 segmentGeometries.append(contentsOf: geometries)
-                if horizontalLayer != verticalLayer {
+                if pathSegments.count == 2 {
                     generatedVias.append(PhysicalDesignSnapshot.Via(
                         id: "via_\(net.id)_\(index)",
                         netID: net.id,
                         x: location.x,
                         y: source.y,
-                        lowerLayer: min(horizontalLayer, verticalLayer),
-                        upperLayer: max(horizontalLayer, verticalLayer)
+                        lowerLayer: min(pathSegments[0].layer, pathSegments[1].layer),
+                        upperLayer: max(pathSegments[0].layer, pathSegments[1].layer)
                     ))
                 }
             }
@@ -765,6 +1149,23 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
         guard !routes.isEmpty else {
+            if routableNets.isEmpty {
+                var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
+                implementationState.routingEvidence = PhysicalDesignImplementationState.RoutingEvidence(
+                    mode: mode,
+                    routedNetCount: 0,
+                    skippedNetIDs: [],
+                    viaCount: 0
+                )
+                output.implementationState = implementationState
+                output.metadata["routingStatus"] = mode
+                return completed(
+                    output,
+                    actions: ["run_drc", "run_lvs"],
+                    metrics: metrics(for: output),
+                    note: "Native \(mode) routing found no signal nets; declared power nets are represented by verified power structures."
+                )
+            }
             return blocked(
                 code: "no_net_could_be_routed",
                 message: "No net had sufficient connectivity for native routing.",
@@ -772,8 +1173,24 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
         let existingViaIDs = Set(output.vias.map(\.id))
+        let remainingVias = output.vias.filter { !reroutedNetIDs.contains($0.netID) }
+        let minimumViaSpacing = (configuration.repairConstraints ?? .default).minimumViaSpacing
+        let allVias = remainingVias + generatedVias
+        if allVias.indices.contains(where: { leftIndex in
+            allVias.indices.contains(where: { rightIndex in
+                rightIndex > leftIndex
+                    && manhattan(allVias[leftIndex].x, allVias[leftIndex].y, allVias[rightIndex].x, allVias[rightIndex].y) < minimumViaSpacing
+            })
+        }) {
+            return blocked(
+                code: "routing_via_spacing_conflict",
+                message: "Native routing generated vias that violate the configured minimum via spacing.",
+                actions: ["increase_via_spacing", "choose_another_routing_layer", "use_a_qualified_external_router"]
+            )
+        }
+        output.vias = output.vias.filter { !reroutedNetIDs.contains($0.netID) }
         output.vias.append(contentsOf: generatedVias.filter { !existingViaIDs.contains($0.id) })
-        output.routes = output.routes.filter { route in !routes.contains(where: { $0.netID == route.netID }) } + routes
+        output.routes = output.routes.filter { !reroutedNetIDs.contains($0.netID) } + routes
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
         implementationState.routingEvidence = PhysicalDesignImplementationState.RoutingEvidence(
             mode: mode,
@@ -828,17 +1245,17 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             let minimumX = min(segment.x1, segment.x2)
             return PhysicalDesignSnapshot.Rect(
                 x: minimumX,
-                y: segment.y1 - halfWidth,
-                width: max(1, abs(segment.x2 - segment.x1)),
+                y: saturatedSubtract(segment.y1, halfWidth),
+                width: max(1, absoluteDifference(segment.x2, segment.x1)),
                 height: max(1, width)
             )
         }
         let minimumY = min(segment.y1, segment.y2)
         return PhysicalDesignSnapshot.Rect(
-            x: segment.x1 - halfWidth,
+            x: saturatedSubtract(segment.x1, halfWidth),
             y: minimumY,
             width: max(1, width),
-            height: max(1, abs(segment.y2 - segment.y1))
+            height: max(1, absoluteDifference(segment.y2, segment.y1))
         )
     }
 
@@ -848,6 +1265,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         stage: PhysicalDesignStage
     ) -> Outcome {
         var output = input
+        var netsToRoute: [String] = []
         switch configuration.ecoAction {
         case .resizeCell:
             guard let target = configuration.ecoTargetCellID,
@@ -866,8 +1284,24 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["unlock_the_cell_or_choose_another_target"]
                 )
             }
+            guard output.cells[index].width <= Int64.max - configuration.siteWidth else {
+                return blocked(
+                    code: "eco_resize_overflow",
+                    message: "ECO resize would overflow the target cell geometry.",
+                    entity: target,
+                    actions: ["reduce_eco_resize_delta"]
+                )
+            }
             output.cells[index].width += configuration.siteWidth
             output.cells[index].master += "_ECO"
+            if let violation = placedCellViolation(output.cells[index], in: output, excluding: target) {
+                return blocked(
+                    code: "eco_resize_illegal",
+                    message: violation,
+                    entity: target,
+                    actions: ["choose_another_eco_target", "move_adjacent_cells", "increase_core_area"]
+                )
+            }
         case .moveCell:
             guard let target = configuration.ecoTargetCellID,
                   let index = output.cells.firstIndex(where: { $0.id == target }) else {
@@ -880,10 +1314,28 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             guard let core = output.core else {
                 return blocked(code: "core_geometry_missing", message: "ECO move requires a core rectangle.", actions: ["run_floorplan"])
             }
+            guard !output.cells[index].locked else {
+                return blocked(
+                    code: "eco_locked_cell",
+                    message: "ECO move cannot mutate locked cell \(target).",
+                    entity: target,
+                    actions: ["unlock_the_cell_or_choose_another_target"]
+                )
+            }
             let cell = output.cells[index]
+            let (movedX, xOverflow) = cell.x.addingReportingOverflow(configuration.ecoDeltaX)
+            let (movedY, yOverflow) = cell.y.addingReportingOverflow(configuration.ecoDeltaY)
+            guard !xOverflow, !yOverflow else {
+                return blocked(
+                    code: "eco_move_overflow",
+                    message: "ECO move would overflow the target cell coordinates.",
+                    entity: target,
+                    actions: ["reduce_eco_delta"]
+                )
+            }
             let moved = PhysicalDesignSnapshot.Rect(
-                x: cell.x + configuration.ecoDeltaX,
-                y: cell.y + configuration.ecoDeltaY,
+                x: movedX,
+                y: movedY,
                 width: cell.width,
                 height: cell.height
             )
@@ -898,9 +1350,17 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             output.cells[index].x = moved.x
             output.cells[index].y = moved.y
             output.cells[index].placed = true
+            if let violation = placedCellViolation(output.cells[index], in: output, excluding: target) {
+                return blocked(
+                    code: "eco_move_illegal",
+                    message: violation,
+                    entity: target,
+                    actions: ["reduce_eco_delta", "move_adjacent_cells"]
+                )
+            }
         case .bufferInsertion:
             guard let netID = configuration.ecoTargetNetID,
-                  output.nets.contains(where: { $0.id == netID }) else {
+                  let netIndex = output.nets.firstIndex(where: { $0.id == netID }) else {
                 return blocked(
                     code: "eco_target_net_missing",
                     message: "Buffer insertion requires an existing target net.",
@@ -915,8 +1375,52 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 )
             }
             let bufferID = "eco_buf_\(netID)"
-            guard !output.cells.contains(where: { $0.id == bufferID }) else { return completed(output, actions: ["run_timing_analysis"], metrics: metrics(for: output)) }
-            let location = output.pins.first(where: { $0.netID == netID })
+            let originalNet = output.nets[netIndex]
+            guard originalNet.pinIDs.count >= 2 else {
+                return blocked(
+                    code: "eco_buffer_connectivity_insufficient",
+                    message: "Buffer insertion requires a target net with at least a source and sink.",
+                    entity: netID,
+                    actions: ["repair_net_connectivity"]
+                )
+            }
+            let pinByID = Dictionary(uniqueKeysWithValues: output.pins.map { ($0.id, $0) })
+            let sourcePinID = originalNet.pinIDs.first(where: { pinByID[$0]?.direction.lowercased() == "output" }) ?? originalNet.pinIDs[0]
+            let sinkPinIDs = originalNet.pinIDs.filter { $0 != sourcePinID }
+            let branchNetID = "\(netID)_eco_branch"
+            let inputPinID = "pin_\(bufferID)_A"
+            let outputPinID = "pin_\(bufferID)_Y"
+            if output.cells.contains(where: { $0.id == bufferID }) {
+                guard output.nets.contains(where: { $0.id == branchNetID }),
+                      output.pins.contains(where: { $0.id == inputPinID && $0.cellID == bufferID && $0.netID == netID }),
+                      output.pins.contains(where: { $0.id == outputPinID && $0.cellID == bufferID && $0.netID == branchNetID }),
+                      output.nets[netIndex].pinIDs == [sourcePinID, inputPinID],
+                      output.nets.first(where: { $0.id == branchNetID })?.pinIDs == [outputPinID] + sinkPinIDs,
+                      output.routes.contains(where: { $0.netID == netID }),
+                      output.routes.contains(where: { $0.netID == branchNetID }) else {
+                    return blocked(
+                        code: "eco_buffer_existing_incomplete",
+                        message: "The existing ECO buffer \(bufferID) does not have complete split-net connectivity and cannot be treated as a completed no-op.",
+                        entity: netID,
+                        actions: ["resume_from_the_last_immutable_revision", "repair_eco_connectivity"]
+                    )
+                }
+                return completed(
+                    output,
+                    actions: ["run_timing_analysis", "run_drc"],
+                    metrics: metrics(for: output),
+                    note: "The requested ECO buffer and both routed branch nets already exist in the canonical snapshot."
+                )
+            }
+            guard !output.nets.contains(where: { $0.id == branchNetID }) else {
+                return blocked(
+                    code: "eco_buffer_branch_exists",
+                    message: "The target net already has the reserved ECO branch net \(branchNetID).",
+                    entity: netID,
+                    actions: ["resume_from_the_existing_eco_revision"]
+                )
+            }
+            let location = output.pins.first(where: { $0.id == sourcePinID })
             guard let placement = legalBufferPlacement(
                 near: location,
                 core: core,
@@ -945,6 +1449,39 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     isClockBuffer: false
                 )
             )
+            let inputX = placement.x
+            let inputY = placement.y + configuration.rowHeight / 2
+            let outputX = placement.x + configuration.siteWidth * 2
+            output.pins.append(PhysicalDesignSnapshot.Pin(
+                id: inputPinID,
+                cellID: bufferID,
+                name: "A",
+                x: inputX,
+                y: inputY,
+                netID: netID,
+                direction: "input"
+            ))
+            output.pins.append(PhysicalDesignSnapshot.Pin(
+                id: outputPinID,
+                cellID: bufferID,
+                name: "Y",
+                x: outputX,
+                y: inputY,
+                netID: branchNetID,
+                direction: "output"
+            ))
+            for index in output.pins.indices where sinkPinIDs.contains(output.pins[index].id) {
+                output.pins[index].netID = branchNetID
+            }
+            output.nets[netIndex].pinIDs = [sourcePinID, inputPinID]
+            output.nets.append(PhysicalDesignSnapshot.Net(
+                id: branchNetID,
+                pinIDs: [outputPinID] + sinkPinIDs,
+                isClock: originalNet.isClock,
+                antennaRatio: originalNet.antennaRatio,
+                maximumAntennaRatio: originalNet.maximumAntennaRatio
+            ))
+            netsToRoute = [netID, branchNetID]
         case .rerouteNet:
             guard let netID = configuration.ecoTargetNetID,
                   output.nets.contains(where: { $0.id == netID }) else {
@@ -963,7 +1500,23 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 width: max(configuration.siteWidth, core.width / 20),
                 height: max(configuration.rowHeight, core.height / 20)
             )
+            guard !output.cells.contains(where: { cell in
+                cell.placed && PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height).intersects(geometry)
+            }) else {
+                return blocked(
+                    code: "eco_blockage_cell_conflict",
+                    message: "ECO blockage candidate intersects a placed cell.",
+                    actions: ["move_the_cell", "choose_a_different_repair_region"]
+                )
+            }
             output.blockages.append(geometry)
+        }
+        for netID in netsToRoute {
+            let routingOutcome = routing(output, configuration: configuration, mode: "eco", onlyNetID: netID)
+            guard let routed = routingOutcome.snapshot, routingOutcome.status == .completed else {
+                return routingOutcome
+            }
+            output = routed
         }
         if let verificationDiagnostic = verifyAndRecordRepair(
             input: input,
@@ -1001,6 +1554,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         let routeNetIDs = Set(output.routes.map(\.netID))
         var repaired = 0
         var strategies: [String] = []
+        var repairIDs: [String] = []
         for index in output.nets.indices {
             guard let ratio = output.nets[index].antennaRatio,
                   ratio > (output.nets[index].maximumAntennaRatio ?? configuration.maximumAntennaRatio) else { continue }
@@ -1010,54 +1564,86 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             let resultingRatio = min(ratio, limit * 0.5)
             output.nets[index].antennaRatio = resultingRatio
             let strategy = repairConstraints.antennaStrategy.rawValue
+            let repairID = "antenna_repair_\(netID)_\(output.antennaRepairs.filter { $0.netID == netID }.count + 1)"
             output.antennaRepairs.append(
                 PhysicalDesignSnapshot.AntennaRepair(
-                    id: "antenna_repair_\(netID)",
+                    id: repairID,
                     netID: netID,
                     strategy: strategy,
                     previousRatio: ratio,
                     resultingRatio: resultingRatio
                 )
             )
+            repairIDs.append(repairID)
             if let routeIndex = output.routes.firstIndex(where: { $0.netID == netID }),
                let last = output.routes[routeIndex].segments.last {
                 switch repairConstraints.antennaStrategy {
                 case .jumper:
-                    output.routes[routeIndex].segments.append(
-                        PhysicalDesignSnapshot.RouteSegment(
-                            id: "antenna_jumper_\(netID)",
-                            layer: min(configuration.maximumRoutingLayer, last.layer + 1),
-                            x1: last.x2,
-                            y1: last.y2,
-                            x2: last.x2 + configuration.siteWidth,
-                            y2: last.y2,
-                            isJumper: true
-                        )
+                    guard let core = output.core else {
+                        return blocked(code: "core_geometry_missing", message: "Antenna jumper repair requires a core rectangle.", actions: ["run_floorplan"])
+                    }
+                    let nextLayer = last.layer == Int.max ? Int.max : last.layer + 1
+                    let layer = min(configuration.maximumRoutingLayer, nextLayer)
+                    let (endX, overflow) = last.x2.addingReportingOverflow(configuration.siteWidth)
+                    guard !overflow else {
+                        return blocked(code: "antenna_jumper_overflow", message: "Antenna jumper geometry would overflow the coordinate range.", entity: netID, actions: ["reduce_jumper_length"])
+                    }
+                    let segment = PhysicalDesignSnapshot.RouteSegment(
+                        id: "antenna_jumper_\(netID)_\(repaired)",
+                        layer: layer,
+                        x1: last.x2,
+                        y1: last.y2,
+                        x2: endX,
+                        y2: last.y2,
+                        isJumper: true
                     )
+                    let geometry = segmentGeometry(segment, width: configuration.implementationConstraints?.routeWidth ?? PhysicalDesignImplementationConstraints.default.routeWidth)
+                    guard core.contains(geometry), !output.blockages.contains(where: { $0.intersects(geometry) }) else {
+                        return blocked(code: "antenna_jumper_illegal", message: "Antenna jumper candidate for net \(netID) leaves the core or intersects a blockage.", entity: netID, actions: ["move_the_blockage", "select_the_protection_device_strategy"])
+                    }
+                    output.routes[routeIndex].segments.append(segment)
                 case .reroute:
-                    output.routes[routeIndex].segments.append(
-                        PhysicalDesignSnapshot.RouteSegment(
-                            id: "antenna_reroute_\(netID)",
-                            layer: min(configuration.maximumRoutingLayer, last.layer + 1),
-                            x1: last.x2,
-                            y1: last.y2,
-                            x2: last.x2,
-                            y2: last.y2 + configuration.siteWidth
-                        )
+                    guard let core = output.core else {
+                        return blocked(code: "core_geometry_missing", message: "Antenna reroute repair requires a core rectangle.", actions: ["run_floorplan"])
+                    }
+                    let nextLayer = last.layer == Int.max ? Int.max : last.layer + 1
+                    let layer = min(configuration.maximumRoutingLayer, nextLayer)
+                    let (endY, overflow) = last.y2.addingReportingOverflow(configuration.siteWidth)
+                    guard !overflow else {
+                        return blocked(code: "antenna_reroute_overflow", message: "Antenna reroute geometry would overflow the coordinate range.", entity: netID, actions: ["reduce_reroute_length"])
+                    }
+                    let segment = PhysicalDesignSnapshot.RouteSegment(
+                        id: "antenna_reroute_\(netID)_\(repaired)",
+                        layer: layer,
+                        x1: last.x2,
+                        y1: last.y2,
+                        x2: last.x2,
+                        y2: endY
                     )
+                    let geometry = segmentGeometry(segment, width: configuration.implementationConstraints?.routeWidth ?? PhysicalDesignImplementationConstraints.default.routeWidth)
+                    guard core.contains(geometry), !output.blockages.contains(where: { $0.intersects(geometry) }) else {
+                        return blocked(code: "antenna_reroute_illegal", message: "Antenna reroute candidate for net \(netID) leaves the core or intersects a blockage.", entity: netID, actions: ["move_the_blockage", "select_the_protection_device_strategy"])
+                    }
+                    output.routes[routeIndex].segments.append(segment)
                 case .protectionDevice:
                     let protectionID = "antenna_protect_\(netID)"
-                    if !output.cells.contains(where: { $0.id == protectionID }), let core = output.core {
+                    guard let core = output.core, !output.rows.isEmpty else {
+                        return blocked(code: "antenna_protection_placement_context_missing", message: "Antenna protection devices require core geometry and placement rows.", entity: netID, actions: ["run_floorplan", "run_placement"])
+                    }
+                    if !output.cells.contains(where: { $0.id == protectionID }) {
                         let width = max(configuration.siteWidth, configuration.siteWidth * 2)
-                        let geometry = PhysicalDesignSnapshot.Rect(x: core.x, y: core.y, width: width, height: configuration.rowHeight)
-                        guard !output.blockages.contains(where: { $0.intersects(geometry) }) else {
-                            return blocked(
-                                code: "antenna_protection_location_blocked",
-                                message: "Protection device location for net \(netID) intersects a blockage.",
-                                entity: netID,
-                                actions: ["move_the_blockage", "select_the_jumper_strategy"]
-                            )
+                        guard let placement = legalBufferPlacement(
+                            near: output.pins.first(where: { $0.netID == netID }),
+                            core: core,
+                            rows: output.rows,
+                            cells: output.cells,
+                            blockages: output.blockages,
+                            width: width,
+                            height: configuration.rowHeight
+                        ) else {
+                            return blocked(code: "antenna_protection_location_unavailable", message: "No legal placement row is available for the antenna protection device on net \(netID).", entity: netID, actions: ["move_the_blockage", "increase_core_area", "select_the_jumper_strategy"])
                         }
+                        let geometry = PhysicalDesignSnapshot.Rect(x: placement.x, y: placement.y, width: width, height: configuration.rowHeight)
                         output.cells.append(PhysicalDesignSnapshot.Cell(
                             id: protectionID,
                             master: "ANTENNA_DIODE",
@@ -1067,16 +1653,28 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                             height: geometry.height,
                             placed: true
                         ))
-                        let pinID = "pin_\(protectionID)_A"
+                    }
+                    let pinID = "pin_\(protectionID)_A"
+                    if !output.pins.contains(where: { $0.id == pinID }) {
+                        guard let protection = output.cells.first(where: { $0.id == protectionID }) else {
+                            return blocked(
+                                code: "antenna_protection_cell_missing",
+                                message: "The antenna protection device was selected but is missing from the canonical snapshot.",
+                                entity: netID,
+                                actions: ["repair_antenna_snapshot", "rerun_antenna_repair"]
+                            )
+                        }
                         output.pins.append(PhysicalDesignSnapshot.Pin(
                             id: pinID,
                             cellID: protectionID,
                             name: "A",
-                            x: geometry.x,
-                            y: geometry.y,
+                            x: protection.x,
+                            y: protection.y + protection.height / 2,
                             netID: netID,
                             direction: "input"
                         ))
+                    }
+                    if !output.nets[index].pinIDs.contains(pinID) {
                         output.nets[index].pinIDs.append(pinID)
                     }
                 }
@@ -1097,7 +1695,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             configuration: configuration,
             stage: PhysicalDesignStage.antennaRepair.rawValue,
             strategy: uniqueStrings(strategies).joined(separator: "+"),
-            targetIDs: output.antennaRepairs.suffix(repaired).map(\.netID),
+            targetIDs: repairIDs,
             details: ["rechecked_antenna_ratio_and_native_geometry"]
         ) == nil else {
             return blocked(
@@ -1125,7 +1723,19 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         var output = input
         let repairConstraints = configuration.repairConstraints ?? .default
         guard output.fills.isEmpty else {
-            return completed(output, actions: ["run_density_drc"], metrics: metrics(for: output))
+            guard fillViolationCount(output, repairConstraints: repairConstraints) == 0 else {
+                return blocked(
+                    code: "existing_fill_invalid",
+                    message: "Existing fill geometry violates native density, spacing or exclusion checks.",
+                    actions: ["remove_invalid_fill", "rerun_fill_insertion"]
+                )
+            }
+            return completed(
+                output,
+                actions: ["run_density_drc"],
+                metrics: metrics(for: output),
+                note: "Existing fill geometry already satisfies native checks; no new fill was inserted."
+            )
         }
         let step = configuration.fillWindowSize + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
         guard step > 0 else {
@@ -1134,17 +1744,30 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         let fillWidth = max(configuration.siteWidth, configuration.fillWindowSize / 4)
         let fillHeight = max(configuration.rowHeight, configuration.fillWindowSize / 4)
         var id = 0
-        var y = core.y + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
+        let fillOffset = max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
+        let (initialY, initialYOverflow) = core.y.addingReportingOverflow(fillOffset)
+        guard !initialYOverflow else {
+            return blocked(code: "fill_geometry_overflow", message: "Fill insertion cannot establish a safe starting coordinate within the core.", actions: ["reduce_fill_spacing", "move_the_core_geometry"])
+        }
+        var y = initialY
         let maximumFillArea = Double(core.width) * Double(core.height) * repairConstraints.maximumFillDensity
-        while y + fillHeight <= core.maxY {
+        while true {
             if Task.isCancelled {
                 return cancelled(actions: ["resume_from_the_last_immutable_revision"])
             }
-            var x = core.x + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
-            while x + fillWidth <= core.maxX {
+            let (yEnd, yEndOverflow) = y.addingReportingOverflow(fillHeight)
+            guard !yEndOverflow, yEnd <= core.maxY else { break }
+            let (initialX, initialXOverflow) = core.x.addingReportingOverflow(fillOffset)
+            guard !initialXOverflow else {
+                return blocked(code: "fill_geometry_overflow", message: "Fill insertion cannot establish a safe starting coordinate within the core.", actions: ["reduce_fill_spacing", "move_the_core_geometry"])
+            }
+            var x = initialX
+            while true {
                 if Task.isCancelled {
                     return cancelled(actions: ["resume_from_the_last_immutable_revision"])
                 }
+                let (xEnd, xEndOverflow) = x.addingReportingOverflow(fillWidth)
+                guard !xEndOverflow, xEnd <= core.maxX else { break }
                 let geometry = PhysicalDesignSnapshot.Rect(x: x, y: y, width: fillWidth, height: fillHeight)
                 let currentFillArea = output.fills.reduce(0.0) { $0 + Double($1.geometry.width) * Double($1.geometry.height) }
                 let conflicts = output.cells.contains { cell in
@@ -1162,9 +1785,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 )
                 id += 1
                 }
-                x += step
+                let (nextX, nextXOverflow) = x.addingReportingOverflow(step)
+                guard !nextXOverflow else { break }
+                x = nextX
             }
-            y += step
+            let (nextY, nextYOverflow) = y.addingReportingOverflow(step)
+            guard !nextYOverflow else { break }
+            y = nextY
         }
         guard !output.fills.isEmpty else {
             return blocked(code: "fill_area_unavailable", message: "The core is too small for the configured fill grid.", actions: ["reduce_fill_window_size"])
@@ -1192,9 +1819,25 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             return blocked(code: "vias_missing", message: "Redundant-via insertion requires existing vias.", actions: ["run_detailed_routing"])
         }
         var output = input
+        guard let core = output.core else {
+            return blocked(code: "core_geometry_missing", message: "Redundant-via insertion requires a core rectangle.", actions: ["run_floorplan"])
+        }
         let repairConstraints = configuration.repairConstraints ?? .default
+        guard viaViolationCount(output, minimumSpacing: repairConstraints.minimumViaSpacing) == 0 else {
+            return blocked(
+                code: "existing_via_spacing_invalid",
+                message: "Existing via geometry already violates the native minimum spacing.",
+                actions: ["repair_existing_via_spacing", "rerun_detailed_routing"]
+            )
+        }
         let existingIDs = Set(output.vias.map(\.id))
-        let candidates = output.vias.filter { !$0.isRedundant }
+        let candidates = output.vias.filter {
+            !$0.isRedundant
+                && core.containsPoint(x: $0.x, y: $0.y)
+                && $0.lowerLayer <= configuration.maximumRoutingLayer
+                && $0.upperLayer <= configuration.maximumRoutingLayer
+                && viaHasRouteConnection($0, snapshot: output)
+        }
         var inserted = 0
         for via in candidates {
             let id = "\(via.id)_redundant"
@@ -1206,8 +1849,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 (-repairConstraints.minimumViaSpacing, -repairConstraints.minimumViaSpacing)
             ]
             guard let offset = offsets.first(where: { deltaX, deltaY in
-                let x = via.x + deltaX
-                let y = via.y + deltaY
+                let (x, xOverflow) = via.x.addingReportingOverflow(deltaX)
+                let (y, yOverflow) = via.y.addingReportingOverflow(deltaY)
+                guard !xOverflow, !yOverflow, core.containsPoint(x: x, y: y) else { return false }
                 return output.vias.allSatisfy { existing in
                     existing.id == via.id || manhattan(x, y, existing.x, existing.y) >= repairConstraints.minimumViaSpacing
                 }
@@ -1226,7 +1870,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             inserted += 1
         }
         guard inserted > 0 else {
-            return completed(output, actions: ["run_via_drc"], metrics: metrics(for: output))
+            return blocked(
+                code: "redundant_via_location_unavailable",
+                message: "No legal redundant-via location satisfies core and spacing constraints.",
+                actions: ["increase_via_spacing", "rerun_detailed_routing"]
+            )
         }
         if let verificationDiagnostic = verifyAndRecordRepair(
             input: input,
@@ -1249,6 +1897,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
     ) -> Outcome {
         var output = input
         let repairConstraints = configuration.repairConstraints ?? .default
+        guard output.core != nil else {
+            return blocked(code: "core_geometry_missing", message: "Hotspot repair requires a core rectangle.", actions: ["run_floorplan"])
+        }
         let unresolved = output.hotspots.filter { !$0.resolved }
         guard !unresolved.isEmpty else {
             return blocked(code: "hotspot_target_missing", message: "No unresolved physical hotspots are present.", actions: ["provide_hotspot_analysis"])
@@ -1463,6 +2114,22 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         return count
     }
 
+    private func viaHasRouteConnection(
+        _ via: PhysicalDesignSnapshot.Via,
+        snapshot: PhysicalDesignSnapshot
+    ) -> Bool {
+        snapshot.routes
+            .filter { $0.netID == via.netID }
+            .flatMap(\.segments)
+            .contains { segment in
+                guard segment.layer == via.lowerLayer || segment.layer == via.upperLayer else { return false }
+                if segment.y1 == segment.y2 {
+                    return via.y == segment.y1 && via.x >= min(segment.x1, segment.x2) && via.x <= max(segment.x1, segment.x2)
+                }
+                return via.x == segment.x1 && via.y >= min(segment.y1, segment.y2) && via.y <= max(segment.y1, segment.y2)
+            }
+    }
+
     private func uniqueStrings(_ values: [String]) -> [String] {
         var seen = Set<String>()
         return values.filter { seen.insert($0).inserted }
@@ -1478,6 +2145,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         height: Int64
     ) -> (x: Int64, y: Int64)? {
         guard width > 0, height > 0 else { return nil }
+        let edgeClearance = max(1, width / 2)
         let targetX = pin?.x ?? core.x
         for row in rows.sorted(by: { $0.id < $1.id }) where height <= row.height {
             let rowEnd = min(row.originX + row.siteCount * row.siteWidth, core.maxX)
@@ -1498,7 +2166,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             }
             for x in candidates where x >= row.originX && x <= maximumX {
                 let geometry = PhysicalDesignSnapshot.Rect(x: x, y: row.originY, width: width, height: height)
-                guard core.contains(geometry), !blockages.contains(where: { $0.intersects(geometry) }) else { continue }
+                guard core.contains(geometry.expanded(by: edgeClearance)), !blockages.contains(where: { $0.intersects(geometry) }) else { continue }
                 guard !cells.contains(where: { cell in
                     cell.placed && PhysicalDesignSnapshot.Rect(
                         x: cell.x,
@@ -1513,12 +2181,36 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         return nil
     }
 
+    private func placedCellViolation(
+        _ cell: PhysicalDesignSnapshot.Cell,
+        in snapshot: PhysicalDesignSnapshot,
+        excluding excludedCellID: String
+    ) -> String? {
+        guard cell.placed else { return nil }
+        let geometry = PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)
+        if let core = snapshot.core, !core.contains(geometry) {
+            return "Cell \(cell.id) is outside the core rectangle."
+        }
+        if snapshot.blockages.contains(where: { $0.intersects(geometry) }) {
+            return "Cell \(cell.id) intersects a placement blockage."
+        }
+        if snapshot.cells.contains(where: { other in
+            other.id != excludedCellID
+                && other.id != cell.id
+                && other.placed
+                && PhysicalDesignSnapshot.Rect(x: other.x, y: other.y, width: other.width, height: other.height).intersects(geometry)
+        }) {
+            return "Cell \(cell.id) overlaps another placed cell."
+        }
+        return nil
+    }
+
     private func padSide(for pin: PhysicalDesignSnapshot.Pin, die: PhysicalDesignSnapshot.Rect) -> String {
         let distances: [(String, Int64)] = [
-            ("left", abs(pin.x - die.x)),
-            ("right", abs(die.maxX - pin.x)),
-            ("bottom", abs(pin.y - die.y)),
-            ("top", abs(die.maxY - pin.y))
+            ("left", absoluteDifference(pin.x, die.x)),
+            ("right", absoluteDifference(die.maxX, pin.x)),
+            ("bottom", absoluteDifference(pin.y, die.y)),
+            ("top", absoluteDifference(die.maxY, pin.y))
         ]
         return distances.min { lhs, rhs in lhs.1 == rhs.1 ? lhs.0 < rhs.0 : lhs.1 < rhs.1 }?.0 ?? "left"
     }
@@ -1529,17 +2221,19 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         die: PhysicalDesignSnapshot.Rect,
         configuration: PhysicalDesignConfiguration
     ) -> PhysicalDesignSnapshot.Rect {
-        let width = max(configuration.siteWidth, configuration.rowHeight / 2)
-        let height = max(configuration.siteWidth, configuration.rowHeight / 2)
+        let width = min(max(configuration.siteWidth, configuration.rowHeight / 2), die.width)
+        let height = min(max(configuration.siteWidth, configuration.rowHeight / 2), die.height)
+        let boundedX = max(die.x, min(pin.x, die.maxX - width))
+        let boundedY = max(die.y, min(pin.y, die.maxY - height))
         switch side {
         case "right":
-            return PhysicalDesignSnapshot.Rect(x: die.maxX - width, y: pin.y, width: width, height: height)
+            return PhysicalDesignSnapshot.Rect(x: die.maxX - width, y: boundedY, width: width, height: height)
         case "bottom":
-            return PhysicalDesignSnapshot.Rect(x: pin.x, y: die.y, width: width, height: height)
+            return PhysicalDesignSnapshot.Rect(x: boundedX, y: die.y, width: width, height: height)
         case "top":
-            return PhysicalDesignSnapshot.Rect(x: pin.x, y: die.maxY - height, width: width, height: height)
+            return PhysicalDesignSnapshot.Rect(x: boundedX, y: die.maxY - height, width: width, height: height)
         default:
-            return PhysicalDesignSnapshot.Rect(x: die.x, y: pin.y, width: width, height: height)
+            return PhysicalDesignSnapshot.Rect(x: die.x, y: boundedY, width: width, height: height)
         }
     }
 
@@ -1557,9 +2251,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func maximumRowUtilization(_ snapshot: PhysicalDesignSnapshot) -> Double {
         snapshot.rows.reduce(0.0) { maximum, row in
-            let usedWidth = snapshot.cells.filter { $0.placed && $0.y == row.originY }.reduce(0) { $0 + $1.width }
-            let capacity = max(1, row.siteCount * row.siteWidth)
-            return max(maximum, Double(usedWidth) / Double(capacity))
+            let usedWidth = snapshot.cells
+                .filter { $0.placed && $0.y == row.originY }
+                .reduce(0.0) { $0 + Double($1.width) }
+            let capacity = max(1.0, Double(row.siteCount) * Double(row.siteWidth))
+            return max(maximum, usedWidth / capacity)
         }
     }
 
@@ -1629,15 +2325,34 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func pinLocation(
         _ pin: PhysicalDesignSnapshot.Pin,
-        cells: [String: PhysicalDesignSnapshot.Cell]
+        cells _: [String: PhysicalDesignSnapshot.Cell]
     ) -> (x: Int64, y: Int64) {
-        if let cellID = pin.cellID, let cell = cells[cellID] {
-            return (cell.x + cell.width / 2, cell.y + cell.height / 2)
-        }
         return (pin.x, pin.y)
     }
 
+    private func absoluteDifference(_ left: Int64, _ right: Int64) -> Int64 {
+        let (difference, overflow) = left.subtractingReportingOverflow(right)
+        guard !overflow else { return .max }
+        return difference == .min ? .max : abs(difference)
+    }
+
+    private func saturatedSubtract(_ value: Int64, _ amount: Int64) -> Int64 {
+        let (result, overflow) = value.subtractingReportingOverflow(amount)
+        return overflow ? .min : result
+    }
+
     private func manhattan(_ x1: Int64, _ y1: Int64, _ x2: Int64, _ y2: Int64) -> Int64 {
-        abs(x1 - x2) + abs(y1 - y2)
+        let xDistance = absoluteDifference(x1, x2)
+        let yDistance = absoluteDifference(y1, y2)
+        let (distance, overflow) = xDistance.addingReportingOverflow(yDistance)
+        return overflow ? .max : distance
+    }
+
+    private func midpoint(_ left: Int64, _ right: Int64) -> Int64 {
+        let (difference, overflow) = right.subtractingReportingOverflow(left)
+        guard !overflow else {
+            return left >= 0 && right >= 0 ? Int64.max / 2 : Int64.min / 2
+        }
+        return left + difference / 2
     }
 }

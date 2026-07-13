@@ -49,6 +49,10 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         if schemaVersion != Self.currentSchemaVersion { diagnostics.append("unsupported review packet schema version") }
         if runID.isEmpty || manifest.runID != runID { diagnostics.append("review packet run ID does not match the manifest") }
         if manifest.stage != stage { diagnostics.append("review packet stage does not match the manifest") }
+        diagnostics.append(contentsOf: proposedLayout.validationDiagnostics().map { "proposed layout: \($0)" })
+        if let baseLayout {
+            diagnostics.append(contentsOf: baseLayout.validationDiagnostics().map { "base layout: \($0)" })
+        }
         if manifestDigest.isEmpty { diagnostics.append("review packet manifest digest is empty") }
         if proposedLayout.layoutDigest.isEmpty { diagnostics.append("review packet proposed layout digest is empty") }
         if decisionScope.isEmpty { diagnostics.append("review packet decision scope is empty") }

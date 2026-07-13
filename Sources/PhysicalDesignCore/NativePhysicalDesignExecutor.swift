@@ -144,6 +144,29 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 startedAt: startedAt,
                 seed: request.configuration.deterministicSeed
             )
+        } catch let error as PhysicalDesignStoreError {
+            let isInputFailure: Bool
+            switch error {
+            case .invalidPath, .readFailed:
+                isInputFailure = true
+            case .pathAlreadyExists, .writeFailed:
+                isInputFailure = false
+            }
+            return envelope(
+                request: request,
+                status: isInputFailure ? .blocked : .failed,
+                diagnostics: [diagnostic(
+                    severity: .error,
+                    code: isInputFailure ? "physical_input_artifact_invalid" : "physical_artifact_persistence_failed",
+                    message: error.localizedDescription,
+                    actions: isInputFailure
+                        ? ["repair_input_layout_artifact_and_integrity_metadata"]
+                        : ["inspect_artifact_store_and_retry_with_a_new_run_id"]
+                )],
+                payload: emptyPayload,
+                startedAt: startedAt,
+                seed: request.configuration.deterministicSeed
+            )
         } catch {
             return envelope(
                 request: request,
@@ -179,6 +202,9 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 )
             }
             let data = try await artifactStore.read(reference.layoutArtifact)
+            guard Int64(data.count) == expectedArtifactByteCount else {
+                throw PhysicalDesignStoreError.readFailed("input layout byte count does not match the physical design reference")
+            }
             let sourceDigest = hasher.sha256(data: data)
             let snapshot: PhysicalDesignSnapshot
             let sourceParserID: String
@@ -246,6 +272,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             format: .json,
             runID: request.runID
         )
+        try await verifyWrittenArtifact(snapshotReference, expectedData: snapshotData)
 
         let defData = Data(defWriter.write(output).utf8)
         let defPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.def"
@@ -256,6 +283,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             format: .def,
             runID: request.runID
         )
+        try await verifyWrittenArtifact(defReference, expectedData: defData)
 
         let physicalReference = PhysicalDesignReference(
             layoutArtifact: snapshotReference,
@@ -280,6 +308,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             format: .json,
             runID: request.runID
         )
+        try await verifyWrittenArtifact(diffReference, expectedData: diffData)
 
         let completedAt = Date()
         let manifest = PhysicalDesignRunManifest(
@@ -319,6 +348,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             format: .json,
             runID: request.runID
         )
+        try await verifyWrittenArtifact(manifestReference, expectedData: manifestData)
 
         let changedObjectCount = changedObjectCount(before: before, after: output)
         let payload = PhysicalDesignPayload(
@@ -379,11 +409,38 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         if let inputLayout = request.inputLayout, inputLayout.layoutArtifact.format != .json && inputLayout.layoutArtifact.format != .def {
             diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts canonical JSON and the supported DEF subset; \(inputLayout.layoutArtifact.format.rawValue) requires an external adapter.", actions: ["convert_to_canonical_json_or_def", "use_a_qualified_external_adapter"]))
         }
+        if let inputLayout = request.inputLayout {
+            diagnostics.append(contentsOf: inputLayout.validationDiagnostics().map {
+                diagnostic(
+                    severity: .error,
+                    code: "physical_design_reference_invalid",
+                    message: $0,
+                    actions: ["repair_input_layout_reference"]
+                )
+            })
+        }
         let references = request.inputs + [request.design.artifact, request.constraints.artifact, request.pdk.manifest]
         for reference in references where reference.path.hasPrefix("/") {
             diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(reference.path)", entity: reference.path, actions: ["use_project_relative_artifact_paths"]))
         }
         return diagnostics
+    }
+
+    private func verifyWrittenArtifact(
+        _ reference: XcircuiteFileReference,
+        expectedData: Data
+    ) async throws {
+        guard reference.byteCount == Int64(expectedData.count) else {
+            throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid byte count")
+        }
+        let expectedDigest = hasher.sha256(data: expectedData)
+        guard reference.sha256 == expectedDigest else {
+            throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid SHA-256 digest")
+        }
+        let persistedData = try await artifactStore.read(reference)
+        guard persistedData == expectedData else {
+            throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) could not be re-read with identical bytes")
+        }
     }
 
     private var emptyPayload: PhysicalDesignPayload {

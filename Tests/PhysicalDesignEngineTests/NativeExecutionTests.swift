@@ -488,7 +488,6 @@ struct NativeExecutionTests {
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(
             PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis, snapshot: PhysicalDesignFixtureFactory.snapshot())
         )
-
         #expect(result.status == .completed)
         let revision = try #require(result.payload.physicalDesign)
         let data = try #require(await store.data(at: revision.layoutArtifact.path))
@@ -496,7 +495,13 @@ struct NativeExecutionTests {
         #expect(output.cells.contains { $0.isClockBuffer })
         #expect(output.nets.contains { $0.id.hasPrefix("CLK_branch_") && $0.isClock })
         #expect(output.implementationState?.clockRouteConstraints.isEmpty == false)
+        #expect(output.implementationState?.clockRouteConstraints.allSatisfy { $0.maximumTransitionPS == 100 } == true)
         #expect(output.clockTrees.contains { !$0.bufferCellIDs.isEmpty })
+        #expect(output.routes.contains { $0.netID == "CLK" })
+        #expect(output.routes.contains { $0.netID.hasPrefix("CLK_branch_") })
+        #expect(output.routes.flatMap(\.segments).allSatisfy { segment in
+            segment.x1 != segment.x2 || segment.y1 != segment.y2
+        })
     }
 
     @Test("routing records layer, spacing and antenna evidence")
@@ -516,6 +521,7 @@ struct NativeExecutionTests {
         #expect(evidence.viaCount > 0)
         #expect(output.routes.flatMap(\.segments).contains { $0.layer % 2 == 1 })
         #expect(output.routes.flatMap(\.segments).contains { $0.layer % 2 == 0 })
+        #expect(output.routes.flatMap(\.segments).allSatisfy { $0.x1 == $0.x2 || $0.y1 == $0.y2 })
     }
 
     @Test("routing fails closed on blockage conflicts")
@@ -532,10 +538,74 @@ struct NativeExecutionTests {
         #expect(result.artifacts.isEmpty)
     }
 
+    @Test("power planning materializes connected power nets and vias")
+    func powerPlanningMaterializesConnectivity() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .powerPlanning, snapshot: PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false))
+        )
+
+        #expect(result.status == .completed)
+        let reference = try #require(result.payload.physicalDesign)
+        let data = try #require(await store.data(at: reference.layoutArtifact.path))
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        #expect(output.powerStructures.contains { $0.kind == "ring" })
+        #expect(output.powerStructures.contains { $0.kind == "strap" })
+        #expect(output.powerStructures.contains { $0.kind == "rail" })
+        #expect(output.vias.contains { $0.netID == "VDD" })
+        #expect(output.vias.contains { $0.netID == "VSS" })
+        #expect(output.nets.first { $0.id == "VDD" }?.pinIDs.count == 2)
+        #expect(output.nets.first { $0.id == "VSS" }?.pinIDs.count == 2)
+    }
+
+    @Test("buffer ECO splits connectivity and reroutes both branches")
+    func bufferEcoSplitsAndReroutesNet() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.ecoAction = .bufferInsertion
+        configuration.ecoTargetNetID = "DATA"
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .timingECO,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false),
+                configuration: configuration
+            )
+        )
+
+        #expect(result.status == .completed)
+        let reference = try #require(result.payload.physicalDesign)
+        let data = try #require(await store.data(at: reference.layoutArtifact.path))
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let bufferID = "eco_buf_DATA"
+        #expect(output.cells.contains { $0.id == bufferID && $0.placed })
+        #expect(output.nets.contains { $0.id == "DATA_eco_branch" })
+        #expect(output.nets.first { $0.id == "DATA" }?.pinIDs.contains("pin_\(bufferID)_A") == true)
+        #expect(output.nets.first { $0.id == "DATA_eco_branch" }?.pinIDs.contains("pin_\(bufferID)_Y") == true)
+        #expect(output.routes.contains { $0.netID == "DATA" })
+        #expect(output.routes.contains { $0.netID == "DATA_eco_branch" })
+    }
+
+    @Test("illegal ECO movement is blocked without an artifact")
+    func illegalEcoMovementIsBlocked() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.ecoAction = .moveCell
+        configuration.ecoTargetCellID = "U1"
+        configuration.ecoDeltaX = 10_000
+        configuration.ecoDeltaY = 1_000
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .timingECO, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: configuration)
+        )
+
+        #expect(result.status == .blocked)
+        #expect(result.diagnostics.contains { $0.code == "eco_move_illegal" })
+        #expect(result.artifacts.isEmpty)
+    }
+
     @Test("repair strategies persist verified proof evidence")
     func repairProofs() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
-        var ecoConfiguration = PhysicalDesignConfiguration.default
+        var ecoConfiguration = PhysicalDesignFixtureFactory.configuration
         ecoConfiguration.ecoTargetCellID = "U1"
         ecoConfiguration.ecoAction = .resizeCell
         let ecoResult = try await PhysicalDesignEngine(artifactStore: store).execute(
@@ -547,7 +617,7 @@ struct NativeExecutionTests {
         let ecoOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: ecoData)
         #expect(ecoOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.timingECO.rawValue && $0.verified } == true)
 
-        var antennaConfiguration = PhysicalDesignConfiguration.default
+        var antennaConfiguration = PhysicalDesignFixtureFactory.configuration
         antennaConfiguration.repairConstraints = PhysicalDesignRepairConstraints(antennaStrategy: .protectionDevice)
         let antennaResult = try await PhysicalDesignEngine(artifactStore: store).execute(
             PhysicalDesignFixtureFactory.request(stage: .antennaRepair, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: antennaConfiguration)
@@ -627,6 +697,58 @@ struct NativeExecutionTests {
         #expect(result.diagnostics.contains { $0.code == "unsupported_layout_format" })
     }
 
+    @Test("input artifact integrity failure is blocked before mutation")
+    func inputArtifactIntegrityFailureIsBlocked() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let snapshotData = try PhysicalDesignJSONCodec().encode(PhysicalDesignFixtureFactory.snapshot())
+        let storedReference = try await store.write(
+            snapshotData,
+            relativePath: "inputs/base.json",
+            kind: .layout,
+            format: .json,
+            runID: "input-fixture"
+        )
+        let tamperedArtifact = XcircuiteFileReference(
+            artifactID: storedReference.artifactID,
+            path: storedReference.path,
+            kind: storedReference.kind,
+            format: storedReference.format,
+            sha256: storedReference.sha256,
+            byteCount: (storedReference.byteCount ?? 0) + 1,
+            producedByRunID: storedReference.producedByRunID
+        )
+        var request = PhysicalDesignFixtureFactory.request(stage: .floorplan)
+        request.inputLayout = PhysicalDesignReference(
+            layoutArtifact: tamperedArtifact,
+            topCell: "fixture_top",
+            layoutDigest: storedReference.sha256 ?? ""
+        )
+
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.diagnostics.contains { $0.code == "physical_input_artifact_invalid" })
+        #expect(result.artifacts.isEmpty)
+    }
+
+    @Test("snapshot validation reports overflowing row geometry")
+    func snapshotValidationReportsOverflow() {
+        let snapshot = PhysicalDesignSnapshot(
+            topCell: "overflow_fixture",
+            rows: [PhysicalDesignSnapshot.Row(
+                id: "row_overflow",
+                originX: Int64.max,
+                originY: 0,
+                siteWidth: 2,
+                height: 1,
+                siteCount: Int64.max
+            )]
+        )
+
+        #expect(snapshot.validationDiagnostics().contains { $0.contains("row row_overflow has invalid geometry") })
+        #expect(PhysicalDesignSnapshot.Rect(x: Int64.max, y: 0, width: 2, height: 1).maxX == Int64.max)
+    }
+
     @Test("stage-specific native wrappers reject incompatible requests")
     func stageBoundaryIsEnforced() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
@@ -654,7 +776,7 @@ struct NativeExecutionTests {
             .hotspotRepair
         ]
         for stage in stages {
-            var configuration = PhysicalDesignConfiguration.default
+            var configuration = PhysicalDesignFixtureFactory.configuration
             if stage == .antennaRepair {
                 configuration.maximumAntennaRatio = 300
             }
@@ -669,7 +791,7 @@ struct NativeExecutionTests {
             #expect(result.payload.physicalDesign != nil)
         }
 
-        var ecoConfiguration = PhysicalDesignConfiguration.default
+        var ecoConfiguration = PhysicalDesignFixtureFactory.configuration
         ecoConfiguration.ecoTargetCellID = "U1"
         ecoConfiguration.ecoAction = .resizeCell
         let ecoResult = try await engine.execute(
@@ -677,7 +799,7 @@ struct NativeExecutionTests {
         )
         #expect(ecoResult.status == .completed)
 
-        var drcConfiguration = PhysicalDesignConfiguration.default
+        var drcConfiguration = PhysicalDesignFixtureFactory.configuration
         drcConfiguration.ecoAction = .addBlockage
         let drcResult = try await engine.execute(
             PhysicalDesignFixtureFactory.request(stage: .drcRepair, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: drcConfiguration)

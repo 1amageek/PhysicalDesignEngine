@@ -167,6 +167,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if status == .completed && designDiff == nil {
             diagnostics.append("completed manifest has no design diff")
         }
+        if status == .completed && artifacts.count != 3 {
+            diagnostics.append("completed manifest must contain the JSON revision, DEF revision and design diff artifacts")
+        }
         let artifactPaths = Set(artifacts.map(\.path))
         if artifactPaths.count != artifacts.count {
             diagnostics.append("artifact paths are not unique")
@@ -183,6 +186,23 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         }
         for artifact in artifacts where artifact.producedByRunID != runID {
             diagnostics.append("artifact \(artifact.path) is not produced by run \(runID)")
+        }
+        for artifact in artifacts {
+            if artifact.path.hasPrefix("/") {
+                diagnostics.append("artifact \(artifact.path) is not project-relative")
+            }
+            if artifact.sha256?.isEmpty != false {
+                diagnostics.append("artifact \(artifact.path) has no SHA-256 digest")
+            }
+            if artifact.byteCount == nil || artifact.byteCount ?? -1 < 0 {
+                diagnostics.append("artifact \(artifact.path) has no valid byte count")
+            }
+        }
+        if let proposedLayout {
+            diagnostics.append(contentsOf: proposedLayout.validationDiagnostics().map { "proposed layout: \($0)" })
+        }
+        if let baseLayout {
+            diagnostics.append(contentsOf: baseLayout.validationDiagnostics().map { "base layout: \($0)" })
         }
         return diagnostics
     }

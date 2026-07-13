@@ -90,14 +90,24 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
         public var width: Int64
         public var spacing: Int64
         public var maximumLength: Int64?
+        public var maximumTransitionPS: Int64?
 
-        public init(id: String, netID: String, layer: Int, width: Int64, spacing: Int64, maximumLength: Int64? = nil) {
+        public init(
+            id: String,
+            netID: String,
+            layer: Int,
+            width: Int64,
+            spacing: Int64,
+            maximumLength: Int64? = nil,
+            maximumTransitionPS: Int64? = nil
+        ) {
             self.id = id
             self.netID = netID
             self.layer = layer
             self.width = width
             self.spacing = spacing
             self.maximumLength = maximumLength
+            self.maximumTransitionPS = maximumTransitionPS
         }
     }
 
