@@ -81,6 +81,17 @@ The CLI emits one structured `PhysicalDesignResult` JSON value.
 
 ## Build and test
 
+`Package.swift` selects each dependency independently. A sibling checkout is
+used when its `Package.swift` exists; otherwise SwiftPM resolves the pinned
+GitHub revision. This repository does not require an umbrella checkout.
+
+| Dependency | Local sibling | Remote fallback revision |
+|---|---|---|
+| CircuiteFoundation | `../CircuiteFoundation` | `2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac` |
+| LogicDesign | `../LogicDesign` | `8e0c8c2c63152aa45bf12d943fa034bb1aba0f1e` |
+| TimingEngine | `../TimingEngine` | `5b2f711d355af8a204819c6ed33f98ef722e379c` |
+| PDKKit | `../PDKKit` | `aa145dfaa67454c44ac7767c37a28ab7f4b1d2e2` |
+
 ```bash
 perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
   -scheme PhysicalDesignEngine-Package \
