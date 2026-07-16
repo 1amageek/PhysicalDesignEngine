@@ -205,12 +205,12 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        tracks = try container.decodeIfPresent([Track].self, forKey: .tracks) ?? []
-        powerDomains = try container.decodeIfPresent([PowerDomain].self, forKey: .powerDomains) ?? []
-        pads = try container.decodeIfPresent([Pad].self, forKey: .pads) ?? []
+        tracks = try container.decode([Track].self, forKey: .tracks)
+        powerDomains = try container.decode([PowerDomain].self, forKey: .powerDomains)
+        pads = try container.decode([Pad].self, forKey: .pads)
         placementProof = try container.decodeIfPresent(PlacementProof.self, forKey: .placementProof)
-        clockRouteConstraints = try container.decodeIfPresent([ClockRouteConstraint].self, forKey: .clockRouteConstraints) ?? []
+        clockRouteConstraints = try container.decode([ClockRouteConstraint].self, forKey: .clockRouteConstraints)
         routingEvidence = try container.decodeIfPresent(RoutingEvidence.self, forKey: .routingEvidence)
-        repairProofs = try container.decodeIfPresent([RepairProof].self, forKey: .repairProofs) ?? []
+        repairProofs = try container.decode([RepairProof].self, forKey: .repairProofs)
     }
 }

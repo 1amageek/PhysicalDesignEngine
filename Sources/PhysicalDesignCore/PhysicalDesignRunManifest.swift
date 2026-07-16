@@ -113,6 +113,13 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        guard schemaVersion == Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: container,
+                debugDescription: "Unsupported physical design run manifest schema version \(schemaVersion)."
+            )
+        }
         runID = try container.decode(String.self, forKey: .runID)
         stage = try container.decode(PhysicalDesignStage.self, forKey: .stage)
         status = try container.decode(PhysicalDesignExecutionStatus.self, forKey: .status)
