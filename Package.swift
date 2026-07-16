@@ -81,7 +81,8 @@ let package = Package(
                 "PhysicalDFM",
                 "PhysicalDesignEngine",
                 "PhysicalDesignCLISupport"
-            ]
+            ],
+            resources: [.copy("../../Fixtures")]
         ),
     ]
 )

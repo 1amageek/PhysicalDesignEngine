@@ -386,11 +386,13 @@ struct NativeExecutionTests {
 
     @Test("retained DEF interchange fixture parses")
     func defFixtureParses() throws {
-        let fixtureURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/positive-interchange.def")
+        let fixtureURL = try #require(
+            Bundle.module.url(
+                forResource: "positive-interchange",
+                withExtension: "def",
+                subdirectory: "Fixtures"
+            )
+        )
         let data = try Data(contentsOf: fixtureURL)
         let result = PhysicalDesignDEFParser().parse(data)
 
@@ -416,7 +418,7 @@ struct NativeExecutionTests {
         request.inputLayout = PhysicalDesignReference(
             layoutArtifact: sourceReference,
             topCell: sourceSnapshot.topCell,
-            layoutDigest: sourceReference.sha256
+            layoutDigest: sourceReference.digest.hexadecimalValue
         )
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
@@ -426,7 +428,7 @@ struct NativeExecutionTests {
         let manifestData = try #require(await store.data(at: manifestReference.path))
         let manifest = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: manifestData)
         #expect(manifest.sourceLayoutFormat == .def)
-        #expect(manifest.sourceLayoutDigest == sourceReference.sha256)
+        #expect(manifest.sourceLayoutDigest == sourceReference.digest.hexadecimalValue)
         #expect(manifest.sourceParserID == PhysicalDesignDEFParser.parserID)
         #expect(manifest.sourceParserVersion == PhysicalDesignDEFParser.parserVersion)
         #expect(result.diagnostics.contains { $0.code.rawValue == "def_core_inferred_from_rows" })
@@ -525,9 +527,9 @@ struct NativeExecutionTests {
             processID: "fixture-130nm",
             pdkVersion: "1",
             cornerID: "typical",
-            pdkManifestDigest: pdk.sha256,
-            rcModelDigest: rc.sha256,
-            cellLibraryDigest: library.sha256,
+            pdkManifestDigest: pdk.digest.hexadecimalValue,
+            rcModelDigest: rc.digest.hexadecimalValue,
+            cellLibraryDigest: library.digest.hexadecimalValue,
             wireDelaySamples: [
                 .init(pathLengthDBU: 0, delayPS: 0),
                 .init(pathLengthDBU: 20_000, delayPS: 40),
@@ -559,7 +561,7 @@ struct NativeExecutionTests {
             manifest: pdk,
             processID: "fixture-130nm",
             version: "1",
-            digest: pdk.sha256
+            digest: pdk.digest.hexadecimalValue
         )
         request.executionIntent = .characterizedTiming
         request.clockTimingModel = modelReference
@@ -575,7 +577,7 @@ struct NativeExecutionTests {
         let estimate = try #require(output.clockTrees.first?.timingEstimate)
         #expect(estimate.cornerID == "typical")
         #expect(estimate.estimatedLatencyPS > 0)
-        #expect(estimate.modelDigest == modelArtifact.sha256)
+        #expect(estimate.modelDigest == modelArtifact.digest.hexadecimalValue)
     }
 
     @Test("execution intent does not encode flow authority")
@@ -806,7 +808,7 @@ struct NativeExecutionTests {
         request.inputLayout = PhysicalDesignReference(
             layoutArtifact: tamperedArtifact,
             topCell: "fixture_top",
-            layoutDigest: storedReference.sha256
+            layoutDigest: storedReference.digest.hexadecimalValue
         )
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)

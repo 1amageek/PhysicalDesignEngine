@@ -57,7 +57,7 @@ enum PhysicalDesignFixtureFactory {
             runID: "test-\(stage.rawValue)",
             inputs: [],
             design: LogicDesignReference(
-                artifact: artifact(path: "inputs/design.json", kind: .netlist, format: .json).locator,
+                artifact: artifact(path: "inputs/design.json", kind: .netlist, format: .json),
                 topDesignName: "fixture_top",
                 designDigest: designDigest
             ),
