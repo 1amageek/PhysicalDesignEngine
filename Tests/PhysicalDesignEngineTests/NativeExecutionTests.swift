@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import CircuiteFoundation
 import LogicIR
+import PDKCore
 import PhysicalDesignCLISupport
 import FloorplanEngine
 @testable import PhysicalDesignCore
@@ -18,17 +19,6 @@ struct NativeExecutionTests {
         #expect(decoded == request)
         #expect(try codec.decode(PhysicalDesignSnapshot.self, from: codec.encode(request.initialSnapshot!)) == request.initialSnapshot!)
 
-        let canonicalRequest = Data("""
-        {"schemaVersion":1,"runID":"canonical","inputs":[],"design":{"artifact":{"location":{"storage":"workspaceRelative","value":"design.json"},"role":"legacy-unspecified","kind":"netlist","format":"json"},"topDesignName":"top","designDigest":"\(String(repeating: "b", count: 64))"},"constraints":{"artifact":{"path":"constraints.sdc","kind":"constraint","format":"SDC","sha256":"\(String(repeating: "a", count: 64))","byteCount":1},"modeIDs":["func"]},"pdk":{"manifest":{"path":"pdk.json","kind":"technology","format":"JSON","sha256":"\(String(repeating: "a", count: 64))","byteCount":1},"processID":"p","version":"1","digest":"\(String(repeating: "c", count: 64))"}}
-        """.utf8)
-        let decodedRequest = try codec.decode(PhysicalDesignRequest.self, from: canonicalRequest)
-        #expect(decodedRequest.stage == .floorplan)
-        #expect(decodedRequest.configuration == .default)
-        let legacyPayload = try codec.decode(
-            PhysicalDesignPayload.self,
-            from: Data("{\"physicalDesign\":null,\"changedObjectCount\":0,\"candidateActions\":[]}".utf8)
-        )
-        #expect(legacyPayload.metrics.isEmpty)
     }
 
     @Test("rejects a design handoff with mismatched provenance input")
@@ -495,13 +485,105 @@ struct NativeExecutionTests {
         #expect(output.cells.contains { $0.isClockBuffer })
         #expect(output.nets.contains { $0.id.hasPrefix("CLK_branch_") && $0.isClock })
         #expect(output.implementationState?.clockRouteConstraints.isEmpty == false)
-        #expect(output.implementationState?.clockRouteConstraints.allSatisfy { $0.maximumTransitionPS == 100 } == true)
+        #expect(output.implementationState?.clockRouteConstraints.allSatisfy { $0.maximumLength == 40_000 } == true)
         #expect(output.clockTrees.contains { !$0.bufferCellIDs.isEmpty })
+        #expect(output.clockTrees.allSatisfy { $0.longestPathLengthDBU >= $0.shortestPathLengthDBU })
+        #expect(output.clockTrees.allSatisfy { $0.timingEstimate == nil })
+        #expect(result.payload.claims.geometry == .verified)
+        #expect(result.payload.claims.timing == .blocked)
+        #expect(result.payload.claims.production == .blocked)
+        #expect(result.diagnostics.contains { $0.code.rawValue == "cts_timing_characterization_missing" })
         #expect(output.routes.contains { $0.netID == "CLK" })
         #expect(output.routes.contains { $0.netID.hasPrefix("CLK_branch_") })
         #expect(output.routes.flatMap(\.segments).allSatisfy { segment in
             segment.x1 != segment.x2 || segment.y1 != segment.y2
         })
+    }
+
+    @Test("CTS timing estimates require verified PDK RC cell and corner characterization")
+    func characterizedCTSTiming() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let pdk = try await store.registerInput(
+            Data("pdk".utf8),
+            relativePath: "inputs/characterized-pdk.json",
+            kind: .technology,
+            format: .json
+        )
+        let rc = try await store.registerInput(
+            Data("rc".utf8),
+            relativePath: "inputs/clock-rc.json",
+            kind: try ArtifactKind(rawValue: "technology.rc"),
+            format: .json
+        )
+        let library = try await store.registerInput(
+            Data("library".utf8),
+            relativePath: "inputs/clock.lib",
+            kind: try ArtifactKind(rawValue: "timing.library"),
+            format: .liberty
+        )
+        let model = PhysicalDesignClockTimingModel(
+            processID: "fixture-130nm",
+            pdkVersion: "1",
+            cornerID: "typical",
+            pdkManifestDigest: pdk.sha256,
+            rcModelDigest: rc.sha256,
+            cellLibraryDigest: library.sha256,
+            wireDelaySamples: [
+                .init(pathLengthDBU: 0, delayPS: 0),
+                .init(pathLengthDBU: 20_000, delayPS: 40),
+            ],
+            cellDelays: [.init(master: "CLKBUF_X1", delayPS: 5)]
+        )
+        let modelData = try PhysicalDesignJSONCodec().encode(model)
+        let modelArtifact = try await store.registerInput(
+            modelData,
+            relativePath: "inputs/clock-timing-model.json",
+            kind: try ArtifactKind(rawValue: "timing.characterization"),
+            format: .json
+        )
+        let modelReference = PhysicalDesignClockTimingModelReference(
+            modelArtifact: modelArtifact,
+            pdkManifestArtifact: pdk,
+            rcModelArtifact: rc,
+            cellLibraryArtifact: library,
+            processID: "fixture-130nm",
+            pdkVersion: "1",
+            cornerID: "typical"
+        )
+        var request = PhysicalDesignFixtureFactory.request(
+            stage: .clockTreeSynthesis,
+            snapshot: PhysicalDesignFixtureFactory.snapshot()
+        )
+        request.inputs = [modelArtifact, pdk, rc, library]
+        request.pdk = PDKReference(
+            manifest: pdk,
+            processID: "fixture-130nm",
+            version: "1",
+            digest: pdk.sha256
+        )
+        request.executionIntent = .characterizedTiming
+        request.clockTimingModel = modelReference
+
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+
+        #expect(result.status == .completed)
+        #expect(result.payload.claims.timing == .verified)
+        #expect(result.payload.claims.production == .blocked)
+        let revision = try #require(result.payload.physicalDesign)
+        let data = try #require(await store.data(at: revision.layoutArtifact.path))
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let estimate = try #require(output.clockTrees.first?.timingEstimate)
+        #expect(estimate.cornerID == "typical")
+        #expect(estimate.estimatedLatencyPS > 0)
+        #expect(estimate.modelDigest == modelArtifact.sha256)
+    }
+
+    @Test("execution intent does not encode flow authority")
+    func executionIntentDoesNotEncodeFlowAuthority() throws {
+        let data = try #require("\"productionEligible\"".data(using: .utf8))
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(PhysicalDesignExecutionIntent.self, from: data)
+        }
     }
 
     @Test("routing records layer, spacing and antenna evidence")
@@ -680,7 +762,7 @@ struct NativeExecutionTests {
         #expect(result.artifacts.isEmpty)
     }
 
-    @Test("opaque GDSII input is blocked until an external adapter is qualified")
+    @Test("opaque GDSII input is blocked until a dedicated decoder is available")
     func gdsInputIsBlocked() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
         let engine = PhysicalDesignEngine(artifactStore: store)

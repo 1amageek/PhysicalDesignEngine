@@ -1,109 +1,98 @@
 # PhysicalDesignEngine
 
-Floorplan, placement, CTS, routing, ECO, antenna repair and DFM mutation contracts.
+Protocol-first floorplan, placement, clock-tree, routing, ECO, antenna-repair, and DFM contracts for Swift.
 
 ## Status
 
-The package provides a deterministic native backend over the canonical `PhysicalDesignSnapshot` JSON IR. It accepts canonical JSON and the supported DEF interchange subset, emits immutable JSON and DEF revisions, records line/section-aware parser diagnostics, and persists physical implementation proof evidence. Process-specific qualification and GDSII/OASIS stream-out remain explicit external boundaries.
+The package contains a deterministic native geometry backend over `PhysicalDesignSnapshot`. It is suitable for reproducible development, review, and smoke testing. It is not a production place-and-route implementation and cannot promote itself to production eligibility.
+
+```mermaid
+flowchart LR
+  Request["PhysicalDesignRequest"] --> Native["Native geometry backend"]
+  Native --> Revision["JSON / DEF / diff / manifest"]
+  Native --> Claims["Geometry verified\nTiming blocked or characterized\nProduction blocked"]
+  TQ["ToolQualification process evidence"] --> Qualified["Future qualified backend"]
+  Oracle["Independent raw oracle result"] --> Qualified
+```
 
 ## Products
 
 | Product | Responsibility |
 |---|---|
-| `PhysicalDesignCore` | Canonical snapshot, request, immutable layout reference and run manifest |
-| `FloorplanEngine` | Floorplan and power planning |
-| `PlacementEngine` | Global and detailed placement |
-| `CTSEngine` | Clock-tree synthesis |
-| `RoutingEngine` | Global and detailed routing |
-| `PhysicalECO` | Timing, DRC and antenna repair |
-| `PhysicalDFM` | Fill, redundant via and manufacturability mutation |
-| `PhysicalDesignEngine` | Umbrella API |
-| `PhysicalDesignCLISupport` / `physical-design` | Deterministic JSON CLI |
+| `PhysicalDesignCore` | Canonical snapshot, request/result, artifact I/O, timing characterization, production-evidence consumer |
+| `FloorplanEngine` | Floorplan and power planning protocol |
+| `PlacementEngine` | Global and detailed placement protocol |
+| `CTSEngine` | Clock-tree synthesis protocol |
+| `RoutingEngine` | Global and detailed routing protocol |
+| `PhysicalECO` | Physical ECO protocol |
+| `PhysicalDFM` | DFM mutation protocol |
+| `PhysicalDesignEngine` | Native stage dispatcher |
+| `PhysicalDesignCLISupport` / `physical-design` | Structured JSON CLI |
 
-## Contract
+## Execution contract
 
-Every executing product uses:
+Every stage executor conforms directly to the `CircuiteFoundation.Engine` contract and returns `PhysicalDesignResult`. Results expose Foundation `ArtifactReference`, `DesignDiagnostic`, and `ExecutionProvenance` values without a compatibility envelope or bridge layer.
 
-- a `Codable`, `Hashable`, `Sendable` request conforming to `PhysicalDesignRequest`;
-- `PhysicalDesignResult` for status, diagnostics, artifacts and execution metadata;
-- protocol-first dependency injection;
-- immutable `ArtifactReference` inputs and outputs;
-- explicit blocked, failed and cancelled states.
+`PhysicalDesignRequest.executionIntent` distinguishes three meanings:
 
-Native execution additionally uses:
+| Intent | Native support | Meaning |
+|---|---:|---|
+| `geometrySmoke` | Yes | Deterministic geometry construction and native invariant checks |
+| `characterizedTiming` | CTS only | Clock timing derived from a retained PDK/RC/Liberty/corner model |
+| `productionEligible` | No | Always blocked by the native backend |
 
-- `PhysicalDesignSnapshot` as the canonical, UI-independent physical state;
-- `PhysicalDesignArtifactStore` for dependency-injected immutable artifact I/O;
-- `PhysicalDesignDiffBuilder` for reviewable `PhysicalDesignDesignDiff` artifacts;
-- `PhysicalDesignConfiguration` for typed, deterministic stage controls.
+Geometry remains in database units. `shortestPathLengthDBU`, `longestPathLengthDBU`, route constraints, and placement wirelength objectives never contain picoseconds. Clock latency and skew are emitted only as `PhysicalDesignClockTimingEstimate` after exact model, PDK, RC, cell-library, and corner artifacts have been re-read and verified. Missing characterization still permits geometry smoke output, but timing and production claims remain blocked.
 
-### CircuiteFoundation boundary
+## Artifacts and trust
 
-`CircuiteFoundation` is the shared cross-engine vocabulary and is the direct
-dependency of `PhysicalDesignCore`. Physical design uses Foundation artifact,
-diagnostic and provenance types directly; run lifecycle remains outside this
-package in DesignFlowKernel.
+Completed native mutations emit immutable artifacts:
 
-```mermaid
-flowchart LR
-  Foundation["CircuiteFoundation\nEngine / Artifact / Evidence"]
-  Boundary["PhysicalDesignStageExecuting\nPhysicalDesignResult"]
-  Native["NativePhysicalDesignExecutor"]
-  Foundation --> Boundary
-  Boundary --> Native
-```
+| Artifact | Format | Purpose |
+|---|---|---|
+| `revision.json` | JSON | Canonical physical snapshot |
+| `revision.def` | DEF | Supported standard interchange subset |
+| `design-diff.json` | JSON | Human/Agent review surface |
+| `run-manifest.json` | JSON | Input, configuration, implementation, and revision binding |
 
-`PhysicalDesignStageExecuting` returns only immutable artifacts with verified
-SHA-256 and byte-count metadata, structured `DesignDiagnostic` values and
-`ExecutionProvenance`. `PhysicalDesignFoundationEvidence` is the standalone
-evidence view for coordinators and agents. Missing integrity metadata is a
-typed error; it is never guessed or silently repaired.
+Both artifact stores verify byte count and SHA-256. The filesystem store enforces a canonical workspace root, rejects absolute paths and symlink escapes, writes through a unique temporary file, and never replaces an immutable path.
 
-Artifact paths are immutable. Both artifact stores reject an existing path,
-and the filesystem store commits through a collision-safe temporary-file move.
-Approval resume uses `validateResumeAgainstCurrentArtifacts` to re-read the
-manifest and every referenced artifact immediately before resume, including
-the embedded manifest and digest map.
+Production trust is not issued or evaluated by this package. The engine emits
+byte-bound run, corpus, implementation, and correlation artifacts;
+ToolQualification consumes those raw records. Human approval, flow transition,
+resume, and release policy remain outside the engine. A characterized CTS result
+is not production qualification.
 
-The native backend supports canonical JSON and DEF input and emits canonical JSON plus deterministic DEF. The supported DEF subset covers design units, die area, rows, components, top-level pins, net connections, routed segments, placement blockages and power structures. Power planning materializes declared power-net source/sink connectivity, rings, straps, rails and checked vias. CTS materializes clock branch routes and vias in addition to buffer cells and constraints. Unsupported opaque layout formats return `blocked` with a structured diagnostic; no native result claims DRC, LVS, PEX, timing, GDSII, OASIS, or foundry qualification.
+`PhysicalDesignMaskDataEncoder` is only a foreign-format serialization seam for GDSII/OASIS implementations. It does not carry a qualification boolean or approve its own output. ToolQualification and the host flow decide whether a concrete encoder may be used.
 
-Native M3 execution records tracks, power domains, IO pads, placement legalization proof, CTS branch connectivity and routing evidence in `PhysicalDesignSnapshot.implementationState`. M4 repair stages additionally persist verified repair proofs. Placement, routing and repair verification fail closed on physical conflicts; timing objectives and antenna risk remain review metrics for independent signoff oracles.
+## Native limitations
 
-M5 provides `PhysicalDesignReviewGating` for human-in-the-loop control. It builds a Codable review packet from a completed immutable run manifest, rechecks every referenced artifact digest, evaluates an approval or rejection decision, and validates resume identity against the same run, stage, manifest, proposed revision, base revision and decision scope. The async resume gate revalidates current artifact bytes and the embedded manifest after approval. Rejected, stale or tampered revisions return structured blocked diagnostics; the native backend never mutates an existing immutable revision during review.
-
-GDSII/OASIS integration is protocol-first through `PhysicalDesignMaskDataAdapter`. `PhysicalDesignMaskDataAdapterGate` rejects adapters without process qualification, so an external implementation remains blocked until its qualification evidence is supplied.
-
-## Xcircuite integration
-
-Xcircuite owns the closure loop. Physical products emit immutable layout revisions; Xcircuite sends them to DRC, LVS, PEX and Timing, then constructs typed repair requests. Xcircuite persists the review packet and approval record in its run ledger, while `PhysicalDesignReviewGate` remains the native identity and artifact-integrity gate used before resume.
-
-The library does not depend on the Xcircuite runtime. Xcircuite composes the
-public protocols with DesignFlowKernel and owns concrete artifact persistence;
-the engine itself has no runtime adapter.
-
-## Build
-
-```bash
-swift build
-```
+The native backend does not claim foundry-rule correctness, signoff timing, DRC, LVS, PEX, EM/IR, or tapeout stream-out readiness. Native placement, routing, ECO, antenna, and DFM checks are deterministic construction checks and review candidates. Independent engines remain authoritative.
 
 ## CLI
+
+From the repository root:
 
 ```bash
 swift run physical-design --request Fixtures/positive-floorplan-request.json --project-root .
 swift run physical-design --request Fixtures/negative-missing-snapshot-request.json --project-root .
 ```
 
-The command emits one `PhysicalDesignResult` JSON value. Successful runs write `revision.json`, `revision.def`, `design-diff.json`, and `run-manifest.json` under `runs/<run-id>/physical-design/<stage>/`.
+The CLI emits one structured `PhysicalDesignResult` JSON value.
 
-## Test
+## Build and test
 
 ```bash
-perl -e 'alarm 30; exec @ARGV' swift test
+perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
+  -scheme PhysicalDesignEngine-Package \
+  -destination 'platform=macOS' \
+  build CODE_SIGNING_ALLOWED=NO
+
+perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
+  -scheme PhysicalDesignEngine-Package \
+  -destination 'platform=macOS' \
+  test CODE_SIGNING_ALLOWED=NO
 ```
 
-The current native regression suite covers JSON compatibility, DEF round trips, retained DEF fixtures, line/section diagnostics, DEF source provenance, all declared native stages, blocked prerequisites, stage boundaries, Foundation artifact/evidence conversion, artifact immutability, approval/resume identity, current-byte revalidation, physical connectivity mutations, overflow-safe validation and CLI error output. The 37-test suite passes with a timeout; the positive fixture completes with four immutable artifacts and the negative fixture is blocked with `physical_snapshot_missing`.
+The regression suite covers all native stages, dimensional CTS behavior, characterized timing, native production blocking, ToolQualification evidence consumption, independent oracle correlation, immutable artifact verification, symlink escape rejection, review/resume integrity, DEF interchange, and CLI errors.
 
-See [MILESTONES.md](MILESTONES.md) for the release/readiness path. M1 through the native M5 approval/resume slice are complete; M6, retained corpus and oracle correlation, is next.
-
-See `DESIGN.md`, `INTERFACES.md`, `IMPLEMENTATION_PLAN.md`, and `CAPABILITY.md` for the boundary and qualification status.
+See `DESIGN.md`, `INTERFACES.md`, `CAPABILITY.md`, and `GOAL_STATUS.md` for exact responsibility and maturity boundaries.

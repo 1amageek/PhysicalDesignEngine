@@ -57,7 +57,7 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
         public var blockageConflictCount: Int
         public var blockedCellCount: Int
         public var utilization: Double
-        public var timingObjective: Double
+        public var wirelengthObjectiveDBU: Double
         public var congestionObjective: Double
 
         public init(
@@ -68,7 +68,7 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
             blockageConflictCount: Int,
             blockedCellCount: Int,
             utilization: Double,
-            timingObjective: Double,
+            wirelengthObjectiveDBU: Double,
             congestionObjective: Double
         ) {
             self.cellCount = cellCount
@@ -78,7 +78,7 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
             self.blockageConflictCount = blockageConflictCount
             self.blockedCellCount = blockedCellCount
             self.utilization = utilization
-            self.timingObjective = timingObjective
+            self.wirelengthObjectiveDBU = wirelengthObjectiveDBU
             self.congestionObjective = congestionObjective
         }
     }
@@ -90,7 +90,6 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
         public var width: Int64
         public var spacing: Int64
         public var maximumLength: Int64?
-        public var maximumTransitionPS: Int64?
 
         public init(
             id: String,
@@ -98,8 +97,7 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
             layer: Int,
             width: Int64,
             spacing: Int64,
-            maximumLength: Int64? = nil,
-            maximumTransitionPS: Int64? = nil
+            maximumLength: Int64? = nil
         ) {
             self.id = id
             self.netID = netID
@@ -107,7 +105,6 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
             self.width = width
             self.spacing = spacing
             self.maximumLength = maximumLength
-            self.maximumTransitionPS = maximumTransitionPS
         }
     }
 

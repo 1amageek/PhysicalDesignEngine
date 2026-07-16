@@ -1,42 +1,49 @@
 # PhysicalDesignEngine Implementation Plan
 
-## Order
+## Delivered foundation
 
-1. Immutable physical transaction, provenance manifest and resume identity
-2. Standard DEF interchange and parser diagnostics
-3. Floorplan, IO and power-domain model
-4. Placement with timing/congestion objectives
-5. CTS materialization and clock constraints
-6. Global/detailed routing with rule-aware diagnostics
-7. ECO and antenna repair closure
-8. DFM mutation and density evidence
-9. Human approval and resume identity for immutable revisions
-10. Retained corpus, oracle correlation and process qualification
+1. Direct CircuiteFoundation `Engine` conformance and Foundation result/evidence types
+2. Immutable artifact store with digest/byte verification and symlink-safe workspace containment
+3. Canonical JSON snapshot and supported DEF parser/writer
+4. Deterministic native geometry for declared stages
+5. Reviewable design diff, implementation proof, and run manifest
+6. Geometry/timing/production intent and claim separation
+7. PDK/RC/Liberty/corner-bound CTS timing model
+8. ToolQualification process-evidence consumer with physical oracle cross-binding
+9. Foreign mask-data encoder protocol without self-qualification
 
-## First implementation slice
+## Native completion gate
 
-- Implement the canonical-snapshot native backend for all declared physical stages.
-- Add deterministic positive and negative fixtures.
-- Add JSON request/result round-trip and stage regression tests.
-- Add a deterministic JSON CLI surface.
-- Add a headless Xcircuite adapter test with artifact integrity verification.
-- Keep process qualification and reference-oracle correlation as explicit evidence gates.
+The native backend is complete only for its declared geometry-smoke scope. It must:
 
-## Completion gates
+- remain deterministic for the same canonical inputs and seed;
+- keep DBU geometry separate from PS timing;
+- block timing when characterization is absent;
+- block every native production-eligible request;
+- emit immutable artifacts and structured diagnostics;
+- remain independently executable through typed API and CLI.
 
-- Public APIs remain protocol-first and Sendable.
-- Every unsupported semantic produces a structured blocked result.
-- Native and external backends produce the same result schema.
-- No UI type enters a public contract.
-- No result claims foundry qualification without process-scoped oracle evidence.
-- Xcircuite can execute, persist, review and resume the stage without circuit-studio.
+## Production backend gate
 
-## Delivered implementation slice
+A future production backend may be composed only when all of these are retained and verified:
 
-The native backend now covers floorplan, connected power planning, placement, CTS route materialization, global and detailed routing, timing/DRC ECO actions, antenna repair, fill insertion, redundant-via insertion and hotspot repair. Every completed mutation creates a new snapshot digest and design diff. Missing canonical state, unsupported layout formats, invalid geometry, missing clock/connectivity, integrity failures and unavailable repair targets return structured `blocked` results.
+| Evidence | Owner |
+|---|---|
+| Tool/oracle executable, process profile, PDK, rule deck, corpus, oracle, and health evidence | ToolQualification |
+| Physical stage/corner/RC/Liberty correlation and separate backend/oracle outputs | PhysicalDesignEngine domain evidence |
+| Flow transition, human approval, resume, release policy | DesignFlowKernel |
+| Workspace persistence | Xcircuite |
 
-Remaining release gates are process-specific corpus retention, reference-oracle correlation, qualification evidence, and a qualified GDSII/OASIS stream-out adapter.
+No PhysicalDesignEngine type may issue its own production qualification or elevate a native result from a caller-provided boolean/string.
 
-M5 is delivered in `PhysicalDesignReviewGating`: human approval, rejection, stale-base detection and resume identity are bound to immutable run manifests and artifact digests. Xcircuite remains responsible for persisting the packet/approval ledger and invoking the native gate during flow resume.
+## Remaining implementation work
 
-The next implementation slice is M6 in `MILESTONES.md`: retain a corpus of positive, negative and boundary cases, then correlate native results with declared reference oracles.
+- Add a real placement/routing backend as an independent protocol implementation.
+- Retain process-specific physical corpus, oracle and health result artifacts produced by actual tools for ToolQualification reconstruction.
+- Implement concrete GDSII/OASIS encoders through a mask-data library and qualify those implementations in ToolQualification.
+- Integrate DRC/LVS/PEX/Timing feedback through the host flow without treating native proxy checks as signoff.
+- Add end-to-end Xcircuite/DesignFlowKernel fixtures once the external backend exists.
+
+## Verification
+
+Every change requires timeout-bounded Xcode build/test, structured negative tests, immutable artifact verification, updated capability documentation, and explicit production-blocking behavior when evidence is incomplete.

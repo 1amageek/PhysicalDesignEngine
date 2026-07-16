@@ -15,13 +15,15 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     private let defWriter: PhysicalDesignDEFWriter
     private let defParser: PhysicalDesignDEFParser
     private let hasher: SHA256ContentDigester
+    private let timingModelLoader: any PhysicalDesignClockTimingModelLoading
 
     public init(
         expectedStage: PhysicalDesignStage? = nil,
         allowedStages: Set<PhysicalDesignStage>? = nil,
         artifactStore: any PhysicalDesignArtifactStore,
         implementationID: String = "physical-design-native",
-        implementationVersion: String = "1.0.0"
+        implementationVersion: String = "1.0.0",
+        timingModelLoader: any PhysicalDesignClockTimingModelLoading = LocalPhysicalDesignClockTimingModelLoader()
     ) {
         self.expectedStage = expectedStage
         self.allowedStages = allowedStages ?? expectedStage.map { [$0] }
@@ -34,6 +36,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         self.defWriter = PhysicalDesignDEFWriter()
         self.defParser = PhysicalDesignDEFParser()
         self.hasher = SHA256ContentDigester()
+        self.timingModelLoader = timingModelLoader
     }
 
     public func execute(
@@ -70,8 +73,14 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         do {
             try Task.checkCancellation()
             let loaded = try await loadSnapshot(from: request)
+            let timingModel = try await loadClockTimingModel(from: request)
             try Task.checkCancellation()
-            let outcome = await mutationEngine.apply(request, to: loaded.snapshot)
+            let outcome = await mutationEngine.apply(
+                request,
+                to: loaded.snapshot,
+                clockTimingModel: timingModel,
+                clockTimingModelReference: request.clockTimingModel
+            )
             switch outcome.status {
             case .blocked, .cancelled:
                 return try envelope(
@@ -82,7 +91,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                         physicalDesign: request.inputLayout,
                         changedObjectCount: 0,
                         candidateActions: outcome.candidateActions,
-                        metrics: outcome.metrics
+                        metrics: outcome.metrics,
+                        claims: outcome.claims
                     ),
                     startedAt: startedAt,
                     seed: request.configuration.deterministicSeed
@@ -144,6 +154,20 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 startedAt: startedAt,
                 seed: request.configuration.deterministicSeed
             )
+        } catch let error as PhysicalDesignClockTimingModelError {
+            return try envelope(
+                request: request,
+                status: .blocked,
+                diagnostics: [diagnostic(
+                    severity: .error,
+                    code: "clock_timing_model_invalid",
+                    message: error.localizedDescription,
+                    actions: ["repair_clock_timing_model_and_source_artifacts"]
+                )],
+                payload: emptyPayload,
+                startedAt: startedAt,
+                seed: request.configuration.deterministicSeed
+            )
         } catch let error as PhysicalDesignStoreError {
             let isInputFailure: Bool
             switch error {
@@ -182,6 +206,18 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 seed: request.configuration.deterministicSeed
             )
         }
+    }
+
+    private func loadClockTimingModel(
+        from request: PhysicalDesignRequest
+    ) async throws -> PhysicalDesignClockTimingModel? {
+        guard let reference = request.clockTimingModel else { return nil }
+        guard reference.processID == request.pdk.processID,
+              reference.pdkVersion == request.pdk.version,
+              reference.pdkManifestArtifact == request.pdk.manifest else {
+            throw PhysicalDesignClockTimingModelError.sourceArtifactMismatch("selected PDK")
+        }
+        return try await timingModelLoader.load(reference, from: artifactStore)
     }
 
     private func loadSnapshot(from request: PhysicalDesignRequest) async throws -> LoadedSnapshot {
@@ -330,7 +366,10 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             sourceLayoutDigest: source.sourceLayoutDigest,
             sourceParserID: source.sourceParserID,
             sourceParserVersion: source.sourceParserVersion,
-            implementationConfiguration: request.configuration
+            implementationConfiguration: request.configuration,
+            executionIntent: request.executionIntent,
+            clockTimingModel: request.clockTimingModel,
+            claims: outcome.claims
         )
         let manifestDiagnostics = manifest.validationDiagnostics()
         guard manifestDiagnostics.isEmpty else {
@@ -356,7 +395,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             candidateActions: outcome.candidateActions,
             designDiff: diffReference,
             metrics: outcome.metrics,
-            runManifest: manifestReference
+            runManifest: manifestReference,
+            claims: outcome.claims
         )
         return try envelope(
             request: request,
@@ -373,6 +413,35 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         var diagnostics: [DesignDiagnostic] = []
         if request.schemaVersion != PhysicalDesignRequest.currentSchemaVersion {
             diagnostics.append(diagnostic(severity: .error, code: "unsupported_request_schema", message: "Request schema version \(request.schemaVersion) is not supported.", actions: ["upgrade_the_request_schema"]))
+        }
+        if request.executionIntent == .characterizedTiming {
+            if request.stage != .clockTreeSynthesis {
+                diagnostics.append(diagnostic(
+                    severity: .error,
+                    code: "native_characterized_timing_stage_unsupported",
+                    message: "The native backend supports characterized timing only for its CTS geometry; placement and routing remain geometry smoke capabilities.",
+                    actions: ["select_geometry_smoke", "use_a_qualified_timing_driven_backend"]
+                ))
+            }
+            if request.clockTimingModel == nil {
+                diagnostics.append(diagnostic(
+                    severity: .error,
+                    code: "clock_timing_model_required",
+                    message: "Characterized CTS requires a PDK/RC/cell/corner-bound clock timing model.",
+                    actions: ["provide_clock_timing_model"]
+                ))
+            }
+        }
+        if let timingReference = request.clockTimingModel {
+            let timingArtifacts = [timingReference.modelArtifact] + timingReference.sourceArtifacts
+            if !Set(timingArtifacts).isSubset(of: Set(request.inputs)) {
+                diagnostics.append(diagnostic(
+                    severity: .error,
+                    code: "clock_timing_inputs_missing",
+                    message: "Every timing characterization artifact must be retained in request inputs.",
+                    actions: ["add_timing_model_pdk_rc_and_cell_library_to_inputs"]
+                ))
+            }
         }
         if request.runID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(diagnostic(severity: .error, code: "run_id_missing", message: "A non-empty run ID is required for immutable artifact provenance.", actions: ["set_run_id"]))
@@ -406,7 +475,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             diagnostics.append(diagnostic(severity: .error, code: "ambiguous_input_state", message: "Provide either inputLayout or initialSnapshot, not both.", actions: ["choose_one_canonical_input_state"]))
         }
         if let inputLayout = request.inputLayout, inputLayout.layoutArtifact.format != .json && inputLayout.layoutArtifact.format != .def {
-            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts canonical JSON and the supported DEF subset; \(inputLayout.layoutArtifact.format.rawValue) requires an external adapter.", actions: ["convert_to_canonical_json_or_def", "use_a_qualified_external_adapter"]))
+            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts canonical JSON and the supported DEF subset; \(inputLayout.layoutArtifact.format.rawValue) requires a dedicated foreign-format decoder.", actions: ["convert_to_canonical_json_or_def", "use_a_qualified_mask_data_decoder"]))
         }
         if let inputLayout = request.inputLayout {
             diagnostics.append(contentsOf: inputLayout.validationDiagnostics().map {
@@ -447,7 +516,12 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     }
 
     private var emptyPayload: PhysicalDesignPayload {
-        PhysicalDesignPayload(physicalDesign: nil, changedObjectCount: 0, candidateActions: [])
+        PhysicalDesignPayload(
+            physicalDesign: nil,
+            changedObjectCount: 0,
+            candidateActions: [],
+            claims: .blocked
+        )
     }
 
     private func changedObjectCount(before: PhysicalDesignSnapshot, after: PhysicalDesignSnapshot) -> Int {
@@ -477,16 +551,30 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         startedAt: Date,
         seed: UInt64? = nil
     ) throws -> PhysicalDesignResult {
-        PhysicalDesignResult(
+        let configurationData = try codec.encode(request.configuration)
+        let configurationDigest = try hasher.digest(data: configurationData, using: .sha256)
+        let designRevision = try ContentDigest(
+            algorithm: .sha256,
+            hexadecimalValue: request.design.designDigest
+        )
+        let producer = try ProducerIdentity(
+            kind: .engine,
+            identifier: implementationID,
+            version: implementationVersion
+        )
+        return PhysicalDesignResult(
             schemaVersion: PhysicalDesignRequest.currentSchemaVersion,
             runID: request.runID,
             status: status,
             diagnostics: diagnostics,
             artifacts: artifacts,
-            metadata: try ExecutionProvenance(
-                engineID: request.stage.engineID,
-                implementationID: implementationID,
-                implementationVersion: implementationVersion,
+            provenance: try ExecutionProvenance(
+                producer: producer,
+                inputs: request.inputs,
+                invocation: try ExecutionInvocation.inProcess(entryPoint: implementationID),
+                configurationDigest: configurationDigest,
+                designRevision: designRevision,
+                randomSeed: seed,
                 startedAt: startedAt,
                 completedAt: Date()
             ),

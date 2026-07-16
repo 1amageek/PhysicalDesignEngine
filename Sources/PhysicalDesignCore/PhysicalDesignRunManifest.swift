@@ -5,7 +5,7 @@ import TimingCore
 import CircuiteFoundation
 
 public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
@@ -26,6 +26,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var sourceParserID: String?
     public var sourceParserVersion: String?
     public var implementationConfiguration: PhysicalDesignConfiguration?
+    public var executionIntent: PhysicalDesignExecutionIntent
+    public var clockTimingModel: PhysicalDesignClockTimingModelReference?
+    public var claims: PhysicalDesignCapabilityClaims
     public var createdAt: Date
     public var completedAt: Date
 
@@ -49,6 +52,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         case sourceParserID
         case sourceParserVersion
         case implementationConfiguration
+        case executionIntent
+        case clockTimingModel
+        case claims
         case createdAt
         case completedAt
     }
@@ -73,7 +79,10 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         sourceLayoutDigest: String? = nil,
         sourceParserID: String? = nil,
         sourceParserVersion: String? = nil,
-        implementationConfiguration: PhysicalDesignConfiguration? = nil
+        implementationConfiguration: PhysicalDesignConfiguration? = nil,
+        executionIntent: PhysicalDesignExecutionIntent,
+        clockTimingModel: PhysicalDesignClockTimingModelReference? = nil,
+        claims: PhysicalDesignCapabilityClaims
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -94,6 +103,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         self.sourceParserID = sourceParserID
         self.sourceParserVersion = sourceParserVersion
         self.implementationConfiguration = implementationConfiguration
+        self.executionIntent = executionIntent
+        self.clockTimingModel = clockTimingModel
+        self.claims = claims
         self.createdAt = createdAt
         self.completedAt = completedAt
     }
@@ -119,6 +131,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         sourceParserID = try container.decodeIfPresent(String.self, forKey: .sourceParserID)
         sourceParserVersion = try container.decodeIfPresent(String.self, forKey: .sourceParserVersion)
         implementationConfiguration = try container.decodeIfPresent(PhysicalDesignConfiguration.self, forKey: .implementationConfiguration)
+        executionIntent = try container.decode(PhysicalDesignExecutionIntent.self, forKey: .executionIntent)
+        clockTimingModel = try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel)
+        claims = try container.decode(PhysicalDesignCapabilityClaims.self, forKey: .claims)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         completedAt = try container.decode(Date.self, forKey: .completedAt)
     }
@@ -166,6 +181,12 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         }
         if status == .completed && designDiff == nil {
             diagnostics.append("completed manifest has no design diff")
+        }
+        if status == .completed && claims.geometry != .verified {
+            diagnostics.append("completed manifest must retain a verified geometry claim")
+        }
+        if claims.timing == .verified && clockTimingModel == nil {
+            diagnostics.append("verified timing claim requires a retained clock timing model")
         }
         if status == .completed && artifacts.count != 3 {
             diagnostics.append("completed manifest must contain the JSON revision, DEF revision and design diff artifacts")

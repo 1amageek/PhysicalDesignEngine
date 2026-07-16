@@ -1,6 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "runID": "fixture-floorplan-001",
+  "executionIntent": "geometrySmoke",
   "inputs": [],
   "design": {
     "artifact": { "path": "inputs/mapped-design.json", "kind": "netlist", "format": "JSON" },

@@ -10,9 +10,13 @@ import Testing
 
 @Suite("PhysicalDesignEngine contract")
 struct ContractTests {
-    @Test("contract version starts at one")
+    @Test("contract version reflects the typed trust boundary")
     func contractVersion() {
-        #expect(PhysicalDesignEngineAPI.contractVersion == 1)
+        #expect(PhysicalDesignEngineAPI.contractVersion == 2)
+        #expect(PhysicalDesignEngineAPI.nativeCapability.supportedExecutionIntents == [
+            .geometrySmoke,
+            .characterizedTiming,
+        ])
+        #expect(PhysicalDesignEngineAPI.nativeCapability.supportedExecutionIntents == [.geometrySmoke, .characterizedTiming])
     }
 }
-

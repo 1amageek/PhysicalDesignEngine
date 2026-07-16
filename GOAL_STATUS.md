@@ -2,84 +2,53 @@
 
 ## Current state
 
-**Canonical native backend implemented. Process qualification and foundry-facing external boundaries remain intentionally unclaimed.**
-
-Milestone status: M0 complete, M1 immutable run transaction complete, M2 supported DEF interchange complete, M3 native rule-aware implementation complete, M4 native repair/DFM closure complete, M5 native approval/resume boundary complete, M6 corpus and oracle correlation next.
+**The deterministic native geometry backend and its trust boundaries are implemented. Production place-and-route remains intentionally unavailable.**
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
-| Responsibility boundary | Complete | README.md and DESIGN.md |
-| CircuiteFoundation dependency and evidence boundary | Complete | `PhysicalDesignStageExecuting`, `PhysicalDesignResult`, `PhysicalDesignFoundationEvidence` |
-| Public package products | Implemented for native scope | Package.swift and native products |
-| Shared Foundation request/result contract | Implemented for native scope | Public Swift protocols and payloads |
-| Contract build | Passed | swift build |
-| Contract test | Passed | timeout-bounded `swift test` (37 tests) |
-| Domain implementation | Smoke-checked | `NativePhysicalDesignExecutor` and stage regression tests |
-| CLI implementation | Complete | `physical-design` executable and JSON fixtures |
-| Fixture corpus | Smoke-checked | `Fixtures/` positive and negative requests |
-| Oracle correlation | Not started | No retained comparison evidence |
-| Process qualification | Not started | No PDK-scoped qualification record |
-| Host flow composition | Pending host integration | DesignFlowKernel/Xcircuite owns persistence and scheduling |
-| End-to-end flow evidence | Smoke-checked | Native floorplan persists and verifies immutable artifacts; review gate verifies immutable manifest identity before resume |
-| Release readiness | Blocked | Process qualification, retained corpus and oracle correlation are absent |
+| Direct Foundation contract | Complete | Direct `Engine`, artifact, diagnostic, provenance, and evidence conformance |
+| Immutable artifact safety | Complete | Digest/byte verification, immutable paths, canonical root, symlink rejection |
+| Canonical JSON / DEF | Complete for supported subset | Parser/writer and retained fixture tests |
+| Native geometry stages | Smoke scope complete | Stage regression and physical invariant tests |
+| CTS dimensional correctness | Complete | DBU path lengths and characterization-only PS estimates |
+| Characterization integrity | Complete | Exact PDK/RC/Liberty/corner artifact loader and monotonic model validation |
+| Native production blocking | Complete | `productionEligible` requests fail closed |
+| ToolQualification consumption | Contract complete | Canonical process evidence and independent physical correlation validator |
+| Physical process corpus | Not supplied | No real PDK/tool corpus artifacts in this repository |
+| Production backend | Not implemented | Native backend is heuristic geometry only |
+| GDSII/OASIS implementation | Not implemented | Serialization protocol only |
+| Release readiness | Blocked | Requires real backend, retained corpus, independent oracle, signoff, and host policy |
 
 ## Function status
 
-| Function | Contract | Implementation | Validation corpus | Qualification |
-|---|---|---|---|---|
-| Floorplan and IO planning | Contract defined | Native canonical backend | Fixture smoke test | Not process-qualified |
-| Power planning | Contract defined | Native canonical backend | Stage regression | Not process-qualified |
-| Placement | Contract defined | Blockage-aware legalizer with placement proof and objective metrics | Placement proof regression | Not process-qualified |
-| Clock-tree synthesis | Contract defined | Materialized clock buffers, branch nets and route constraints | CTS materialization regression | Not process-qualified |
-| Routing | Contract defined | Directional layers, bend vias, blockage/spacing checks and antenna evidence | Routing evidence/blockage regression | Not process-qualified |
-| Physical ECO | Contract defined | Typed native actions | Stage regression | Not process-qualified |
-| Antenna repair | Contract defined | Native repair candidates | Stage regression | External DRC required |
-| Physical DFM | Contract defined | Native fill/via/hotspot candidates | Stage regression | External DRC required |
-| Immutable revisions | Contract defined | JSON/DEF/diff/run-manifest artifacts | Integrity gate test | Complete for native scope |
-| Repair/DFM closure | Contract defined | Rule-aware ECO, antenna, fill, via and hotspot candidates with repair proofs | Strategy and DFM proof regression | Complete for native scope |
-| DEF interchange | Contract defined | Native parser/writer with structured diagnostics and source provenance | Round-trip, retained fixture and DEF input tests | Complete for supported subset |
-| GDSII/OASIS adapter boundary | Protocol defined | Qualification-gated external adapter protocol | Gate contract pending external implementation | Blocked until qualified |
-| Approval and resume identity | Contract defined | Immutable review packet, decision and current-byte revalidation gate | 37-test native regression suite | Native boundary complete; ledger persistence owned by Xcircuite |
-| CircuiteFoundation projection | Contract defined | Direct Foundation result/evidence types and stable design identity | Foundation integration regression | Complete for native scope |
+| Function | Native implementation | Timing meaning | Production status |
+|---|---|---|---|
+| Floorplan / power planning | Deterministic geometry | No timing claim | Blocked |
+| Placement | Row legalizer and wirelength/congestion proof | DBU proxy only | Blocked |
+| CTS | Buffers, branch nets, routes, vias, route constraints | PS only with exact characterization | Blocked |
+| Global/detailed routing | Manhattan geometry and native conflict checks | No signoff timing claim | Blocked |
+| Physical ECO | Typed reviewable mutations | Requires independent Timing/DRC feedback | Blocked |
+| Antenna / DFM | Repair candidates and native proof | No signoff claim | Blocked |
+| JSON / DEF artifacts | Immutable and verified | Not applicable | Complete for interchange subset |
+| GDSII / OASIS | Protocol only | Not applicable | Blocked until implementation and TQ evidence |
 
-## Goal progression
+## Trust progression
 
-```text
-contract recovery
-      ↓
-CircuiteFoundation engine/evidence boundary
-      ↓
-immutable run transaction
-      ↓
-standard layout interchange
-      ↓
-physical implementation algorithms
-      ↓
-repair and DFM closure
-      ↓
-approval and resume
-      ↓
-corpus validation
-      ↓
-reference-oracle correlation
-      ↓
-process-scoped qualification
-      ↓
-Xcircuite integration and repair loop
-      ↓
-release-profile eligibility
+```mermaid
+flowchart LR
+  G["Native geometry smoke"] --> C["Characterized CTS timing"]
+  C --> Q["ToolQualification process evidence"]
+  Q --> O["Independent raw oracle result"]
+  O --> F["DesignFlowKernel policy / approval"]
+  F --> R["Release eligibility"]
 ```
 
-## Completion definition
+No arrow is implicit. In particular, characterized timing does not imply process qualification, and process qualification does not itself approve a design run or release.
 
-The package goal is complete only when every P0 function has a concrete backend, structured failure behavior, retained corpus, reference correlation where an oracle exists, process-scoped qualification where required, a deterministic CLI and a passing Xcircuite headless integration test.
+## Verified regression state
 
-## Current blockers
+- Xcode package build passes under a 30-second timeout.
+- 40 tests pass after removal of the obsolete self-qualification mask gate.
+- Positive and negative CLI fixtures use request schema version 2 and explicit execution intent.
 
-- No process-specific corpus or reference-oracle correlation has been retained.
-- No PDK-scoped process qualification record exists.
-- GDSII and OASIS stream-out require a qualified external adapter.
-- Native repair candidates still require independent DRC/LVS/PEX/Timing verification.
-- Xcircuite must persist the native review packet and approval decision in its run ledger and call the native resume gate before continuing a physical stage.
-
-This file must be updated by implementation agents whenever a maturity gate changes. A source file or type name alone is never evidence of implementation or qualification.
+This file must remain evidence-based. A type name or successful smoke fixture is not production qualification.

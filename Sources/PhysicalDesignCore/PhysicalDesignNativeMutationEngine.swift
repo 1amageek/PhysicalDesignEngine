@@ -8,19 +8,22 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         public var diagnostics: [DesignDiagnostic]
         public var candidateActions: [String]
         public var metrics: [PhysicalDesignMetric]
+        public var claims: PhysicalDesignCapabilityClaims
 
         public init(
             snapshot: PhysicalDesignSnapshot?,
             status: PhysicalDesignExecutionStatus,
             diagnostics: [DesignDiagnostic] = [],
             candidateActions: [String] = [],
-            metrics: [PhysicalDesignMetric] = []
+            metrics: [PhysicalDesignMetric] = [],
+            claims: PhysicalDesignCapabilityClaims = .blocked
         ) {
             self.snapshot = snapshot
             self.status = status
             self.diagnostics = diagnostics
             self.candidateActions = candidateActions
             self.metrics = metrics
+            self.claims = claims
         }
     }
 
@@ -28,7 +31,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     public func apply(
         _ request: PhysicalDesignRequest,
-        to input: PhysicalDesignSnapshot
+        to input: PhysicalDesignSnapshot,
+        clockTimingModel: PhysicalDesignClockTimingModel? = nil,
+        clockTimingModelReference: PhysicalDesignClockTimingModelReference? = nil
     ) async -> Outcome {
         if Task.isCancelled {
             return Outcome(
@@ -70,7 +75,12 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .placement:
             outcome = placement(input, configuration: request.configuration)
         case .clockTreeSynthesis:
-            outcome = clockTreeSynthesis(input, configuration: request.configuration)
+            outcome = clockTreeSynthesis(
+                input,
+                configuration: request.configuration,
+                timingModel: clockTimingModel,
+                timingModelReference: clockTimingModelReference
+            )
         case .globalRouting:
             outcome = routing(input, configuration: request.configuration, mode: "global")
         case .detailedRouting:
@@ -489,7 +499,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         } else {
             utilization = 0
         }
-        let timingObjective = estimatedWirelength(output)
+        let wirelengthObjectiveDBU = estimatedWirelength(output)
         let congestionObjective = maximumRowUtilization(output)
         let legalCellCount = max(0, output.cells.count - overlapCount - outsideCoreCount)
         implementationState.placementProof = PhysicalDesignImplementationState.PlacementProof(
@@ -500,7 +510,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             blockageConflictCount: blockageConflictCount,
             blockedCellCount: blockedCellCount,
             utilization: utilization,
-            timingObjective: timingObjective,
+            wirelengthObjectiveDBU: wirelengthObjectiveDBU,
             congestionObjective: congestionObjective
         )
         output.implementationState = implementationState
@@ -532,8 +542,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     unit: "ratio"
                 ),
                 PhysicalDesignMetric(
-                    name: "placementTimingObjective",
-                    value: timingObjective,
+                    name: "placementWirelengthObjective",
+                    value: wirelengthObjectiveDBU,
                     unit: "database-units"
                 ),
                 PhysicalDesignMetric(
@@ -547,7 +557,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func clockTreeSynthesis(
         _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
+        configuration: PhysicalDesignConfiguration,
+        timingModel: PhysicalDesignClockTimingModel?,
+        timingModelReference: PhysicalDesignClockTimingModelReference?
     ) -> Outcome {
         let clockNets = input.nets.filter(\.isClock).sorted { $0.id < $1.id }
         guard !clockNets.isEmpty else {
@@ -569,7 +581,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
-        var skewDiagnostics: [DesignDiagnostic] = []
+        var timingDiagnostics: [DesignDiagnostic] = []
         for net in clockNets {
             guard net.pinIDs.count >= 2 else {
                 return blocked(
@@ -596,12 +608,14 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             var parentPinIDs: [String] = [source.id]
             var bufferCellIDs: [String] = []
             var sinkPathLengths: [Int64] = []
+            var sinkBufferMasters: [[String]] = []
             var bufferIndex = 0
             for (sinkIndex, sink) in sinks.enumerated() {
                 let distance = distances[sinkIndex]
-                guard distance > implementationConstraints.clockTargetSkewPS else {
+                guard distance > implementationConstraints.clockBufferDistanceThresholdDBU else {
                     parentPinIDs.append(sink.id)
                     sinkPathLengths.append(distance)
+                    sinkBufferMasters.append([])
                     continue
                 }
                 let targetY = midpoint(source.y, sink.y)
@@ -673,19 +687,45 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     manhattan(source.x, source.y, x, y + row.height / 2)
                         + manhattan(x + width, y + row.height / 2, sink.x, sink.y)
                 )
+                sinkBufferMasters.append([implementationConstraints.clockBufferMaster])
                 implementationState.clockRouteConstraints.append(PhysicalDesignImplementationState.ClockRouteConstraint(
                     id: "clock_route_\(branchNetID)",
                     netID: branchNetID,
                     layer: implementationConstraints.clockRouteLayer,
                     width: implementationConstraints.routeWidth,
                     spacing: implementationConstraints.routeSpacing,
-                    maximumLength: max(1, implementationConstraints.clockTargetSkewPS * 4),
-                    maximumTransitionPS: implementationConstraints.clockMaximumTransitionPS
+                    maximumLength: implementationConstraints.clockRouteMaximumLengthDBU
                 ))
                 bufferIndex += 1
             }
             if let netIndex = output.nets.firstIndex(where: { $0.id == net.id }) {
                 output.nets[netIndex].pinIDs = parentPinIDs.sorted()
+            }
+            let timingEstimate: PhysicalDesignClockTimingEstimate?
+            if let timingModel, let timingModelReference {
+                do {
+                    let delays = try zip(sinkPathLengths, sinkBufferMasters).map { length, masters in
+                        try timingModel.delayPS(pathLengthDBU: length, bufferMasters: masters)
+                    }
+                    timingEstimate = PhysicalDesignClockTimingEstimate(
+                        cornerID: timingModel.cornerID,
+                        estimatedSkewPS: (delays.max() ?? 0) - (delays.min() ?? 0),
+                        estimatedLatencyPS: delays.max() ?? 0,
+                        modelDigest: timingModelReference.modelArtifact.sha256,
+                        pdkManifestDigest: timingModelReference.pdkManifestArtifact.sha256,
+                        rcModelDigest: timingModelReference.rcModelArtifact.sha256,
+                        cellLibraryDigest: timingModelReference.cellLibraryArtifact.sha256
+                    )
+                } catch {
+                    return blocked(
+                        code: "cts_timing_characterization_insufficient",
+                        message: error.localizedDescription,
+                        entity: id,
+                        actions: ["extend_the_characterized_path_range", "provide_complete_clock_cell_characterization"]
+                    )
+                }
+            } else {
+                timingEstimate = nil
             }
             output.clockTrees.append(
                 PhysicalDesignSnapshot.ClockTree(
@@ -694,28 +734,18 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     sourcePinID: source.id,
                     sinkPinIDs: sinks.map(\.id),
                     bufferCellIDs: bufferCellIDs,
-                    estimatedSkewPS: (sinkPathLengths.max() ?? 0) - (sinkPathLengths.min() ?? 0),
-                    estimatedLatencyPS: sinkPathLengths.max() ?? 0
+                    shortestPathLengthDBU: sinkPathLengths.min() ?? 0,
+                    longestPathLengthDBU: sinkPathLengths.max() ?? 0,
+                    timingEstimate: timingEstimate
                 )
             )
-            if let tree = output.clockTrees.last,
-               tree.estimatedSkewPS > implementationConstraints.clockTargetSkewPS {
-                skewDiagnostics.append(diagnostic(
-                    severity: .warning,
-                    code: "cts_target_skew_unmet",
-                    message: "Clock tree \(tree.id) has estimated skew \(tree.estimatedSkewPS) ps above the target \(implementationConstraints.clockTargetSkewPS) ps.",
-                    entity: tree.id,
-                    actions: ["run_timing_analysis", "use_a_qualified_external_cts"]
-                ))
-            }
             implementationState.clockRouteConstraints.append(PhysicalDesignImplementationState.ClockRouteConstraint(
                 id: "clock_route_\(net.id)",
                 netID: net.id,
                 layer: implementationConstraints.clockRouteLayer,
                 width: implementationConstraints.routeWidth,
                 spacing: implementationConstraints.routeSpacing,
-                maximumLength: max(1, implementationConstraints.clockTargetSkewPS * 4),
-                maximumTransitionPS: implementationConstraints.clockMaximumTransitionPS
+                maximumLength: implementationConstraints.clockRouteMaximumLengthDBU
             ))
         }
         let clockTreeIDs = Set(output.clockTrees.map(\.netID))
@@ -751,13 +781,32 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         output.vias.append(contentsOf: materializedClockVias.filter { !existingViaIDs.contains($0.id) })
         output.implementationState = implementationState
         output.metadata["clockTreeStatus"] = "constructed"
+        let timingClaim: PhysicalDesignClaimStatus
+        if timingModel != nil {
+            timingClaim = .verified
+            output.metadata["clockTimingStatus"] = "characterized"
+        } else {
+            timingClaim = .blocked
+            output.metadata["clockTimingStatus"] = "blocked_missing_characterization"
+            timingDiagnostics.append(diagnostic(
+                severity: .warning,
+                code: "cts_timing_characterization_missing",
+                message: "Clock geometry was constructed, but no PDK/RC/cell/corner-bound timing model was supplied; timing and production claims are blocked.",
+                actions: ["provide_clock_timing_model", "run_an_independent_timing_oracle"]
+            ))
+        }
         return completed(
             output,
-            diagnostics: skewDiagnostics,
+            diagnostics: timingDiagnostics,
             actions: ["run_detailed_routing", "run_timing_analysis"],
             metrics: metrics(for: output) + [
                 PhysicalDesignMetric(name: "clockTreeCount", value: Double(output.clockTrees.count), unit: "trees")
-            ]
+            ],
+            claims: PhysicalDesignCapabilityClaims(
+                geometry: .verified,
+                timing: timingClaim,
+                production: .blocked
+            )
         )
     }
 
@@ -2264,13 +2313,25 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         diagnostics: [DesignDiagnostic] = [],
         actions: [String],
         metrics: [PhysicalDesignMetric],
-        note: String? = nil
+        note: String? = nil,
+        claims: PhysicalDesignCapabilityClaims = PhysicalDesignCapabilityClaims(
+            geometry: .verified,
+            timing: .notApplicable,
+            production: .blocked
+        )
     ) -> Outcome {
         var allDiagnostics = diagnostics
         if let note {
             allDiagnostics.append(diagnostic(severity: .information, code: "execution_note", message: note, actions: []))
         }
-        return Outcome(snapshot: snapshot, status: .completed, diagnostics: allDiagnostics, candidateActions: actions, metrics: metrics)
+        return Outcome(
+            snapshot: snapshot,
+            status: .completed,
+            diagnostics: allDiagnostics,
+            candidateActions: actions,
+            metrics: metrics,
+            claims: claims
+        )
     }
 
     private func cancelled(actions: [String]) -> Outcome {

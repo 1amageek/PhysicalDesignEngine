@@ -19,7 +19,7 @@ public struct PhysicalDesignResult: Sendable, Hashable, Codable,
         status: PhysicalDesignExecutionStatus,
         diagnostics: [DesignDiagnostic] = [],
         artifacts: [ArtifactReference] = [],
-        metadata: ExecutionProvenance,
+        provenance: ExecutionProvenance,
         payload: PhysicalDesignPayload
     ) {
         self.schemaVersion = schemaVersion
@@ -27,7 +27,7 @@ public struct PhysicalDesignResult: Sendable, Hashable, Codable,
         self.status = status
         self.diagnostics = diagnostics
         self.artifacts = artifacts
-        self.provenance = metadata
+        self.provenance = provenance
         self.payload = payload
     }
 

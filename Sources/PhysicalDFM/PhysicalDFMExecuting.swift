@@ -2,9 +2,5 @@ import Foundation
 import CircuiteFoundation
 import PhysicalDesignCore
 
-public protocol PhysicalDFMExecuting: Sendable {
-    func execute(
-        _ request: PhysicalDesignRequest
-    ) async throws -> PhysicalDesignResult
-}
-
+public protocol PhysicalDFMExecuting: Engine
+where Request == PhysicalDesignRequest, Output == PhysicalDesignResult {}

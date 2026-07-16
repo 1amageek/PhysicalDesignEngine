@@ -1,18 +1,6 @@
 # PhysicalDesignEngine Interface Contract
 
-## Common shape
-
-```swift
-public protocol DomainExecuting: Sendable {
-    func execute(
-        _ request: DomainRequest
-    ) async throws -> PhysicalDesignResult
-}
-```
-
-Requests carry a schema version, run ID and typed Foundation artifact references. Payloads contain domain metrics only; diagnostics, artifacts and provenance are fields of `PhysicalDesignResult`.
-
-## CircuiteFoundation boundary
+## Engine boundary
 
 ```swift
 public protocol PhysicalDesignStageExecuting: Engine
@@ -20,95 +8,91 @@ where Request == PhysicalDesignRequest,
       Output == PhysicalDesignResult {}
 ```
 
-`PhysicalDesignStageExecuting` directly refines the Foundation `Engine`
-contract. Each result includes immutable artifact references, diagnostics and
-execution provenance; no compatibility envelope or adapter is required.
+`FloorplanExecuting`, `PlacementExecuting`, `CTSExecuting`, `RoutingExecuting`, `PhysicalECOExecuting`, and `PhysicalDFMExecuting` refine `Engine` directly with the same request and result types. No compatibility envelope or bridge layer is required.
 
-`PhysicalDesignFoundationEvidence` provides the same evidence and diagnostic
-surface independently of the execution result. `PhysicalDesignRequest` also
-exposes a stable root-cell `DesignObjectReference`.
+`PhysicalDesignResult` directly conforms to `ArtifactProducing`, `DiagnosticReporting`, and `EvidenceProviding`. Its Foundation fields are:
 
-## Products
+- `[ArtifactReference]` for immutable outputs;
+- `[DesignDiagnostic]` for structured failures and limitations;
+- `ExecutionProvenance` for producer, invocation, inputs, configuration digest, design revision, seed, and timing;
+- `PhysicalDesignPayload` for domain data and capability claims.
 
-### PhysicalDesignCore
+## Request
 
-Shared physical-design request, canonical snapshot, immutable layout reference, artifact store, metrics and design-diff contract.
+`PhysicalDesignRequest` schema version 2 requires `executionIntent` and carries:
 
-### FloorplanEngine
+| Field | Meaning |
+|---|---|
+| `inputs` | Exact retained execution inputs |
+| `design` | Mapped logic design identity |
+| `constraints` | Timing constraint artifact and modes |
+| `pdk` | Exact PDK manifest, process, version, and digest |
+| `initialSnapshot` / `inputLayout` | Exactly one canonical physical input |
+| `configuration` | Deterministic geometry controls and seed |
+| `clockTimingModel` | Optional PDK/RC/Liberty/corner characterization binding |
+| `productionEvidence` | Optional ToolQualification and physical-correlation artifact references |
 
-Floorplan and power planning.
+Older request and payload schemas are not decoded through compatibility defaults.
 
-### PlacementEngine
+## Claims
 
-Global and detailed placement.
+`PhysicalDesignCapabilityClaims` reports independent geometry, timing, and production claim states. The native backend emits:
 
-### CTSEngine
+| Situation | Geometry | Timing | Production |
+|---|---|---|---|
+| Ordinary geometry stage | verified | not applicable | blocked |
+| CTS without characterization | verified | blocked | blocked |
+| CTS with verified characterization | verified | verified | blocked |
+| Native production request | blocked | blocked | blocked |
 
-Clock-tree synthesis.
+## Clock timing model
 
-### RoutingEngine
+`PhysicalDesignClockTimingModelReference` binds the model JSON, PDK manifest, RC model, Liberty library, process/version, and corner. `LocalPhysicalDesignClockTimingModelLoader` re-reads all four artifacts and verifies their exact digest and byte count before decoding.
 
-Global and detailed routing.
+`PhysicalDesignSnapshot.ClockTree` stores path lengths in DBU. Optional `PhysicalDesignClockTimingEstimate` stores latency/skew in PS with model and source digests. Geometry fields are never repurposed as time.
 
-### PhysicalECO
-
-Timing, DRC and antenna repair.
-
-### PhysicalDFM
-
-Fill, redundant via and manufacturability mutation.
-
-### PhysicalDesignEngine
-
-Umbrella API. `PhysicalDesignEngine` dispatches the request stage to the deterministic native implementation and returns `PhysicalDesignResult`.
-
-### Canonical input and output
-
-`PhysicalDesignRequest` accepts either `initialSnapshot` or `inputLayout`, never both. Native execution reads canonical JSON or the supported DEF subset. A completed mutation emits:
-
-| Artifact | Format | Purpose |
-|---|---|---|
-| `revision.json` | JSON | Canonical immutable physical snapshot |
-| `revision.def` | DEF | Standard layout handoff for supported native output |
-| `design-diff.json` | JSON | `PhysicalDesignDesignDiff` for human review and Agent resume |
-| `run-manifest.json` | JSON | Provenance binding for the complete physical-design transaction |
-
-Each output reference records role, format, digest and byte count. Run identity
-is carried by the containing manifest and execution provenance.
-
-`PhysicalDesignMaskDataAdapter` is the protocol boundary for future GDSII/OASIS adapters. `PhysicalDesignMaskDataAdapterGate` requires a matching format and explicit process qualification before invoking an adapter.
-
-`PhysicalDesignSnapshot.implementationState` is the canonical evidence surface for M3. It carries generated tracks, power domains, pads, placement proof, clock route constraints and routing evidence. These fields are included in JSON revisions and `PhysicalDesignDesignDiff`; the run manifest also records the implementation configuration used to produce them.
-
-M4 repair requests use `PhysicalDesignConfiguration.repairConstraints`. A completed repair appends `PhysicalDesignImplementationState.RepairProof`; when verification is required and native post-repair checks find a violation, the executor returns `blocked` and writes no immutable revision.
-
-### Review and resume boundary
-
-`PhysicalDesignReviewGating` is the protocol-first approval boundary for immutable native results:
+## Production-observation boundary
 
 ```mermaid
 flowchart LR
-  Manifest["Completed run manifest"] --> Packet["Review packet"]
-  Packet --> Decision["Approval or rejection decision"]
-  Decision -->|approved| Resume["Resume validation"]
-  Decision -->|rejected| Blocked["Rejected / blocked"]
-  Resume -->|same identities and digests| Ready["Ready to resume"]
-  Resume -->|stale or mismatched| Blocked
+  Run["Physical design run artifacts"] --> TQ["ToolQualification"]
+  Oracle["Independent implementation observations"] --> TQ
+  TQ --> Flow["DesignFlowKernel policy"]
 ```
 
-`PhysicalDesignReviewGate.prepareReview` reads the manifest and all manifest artifacts through the injected `PhysicalDesignArtifactStore`. It verifies artifact bytes, SHA-256 digests, byte counts, the proposed layout digest and the design-diff binding before returning `PhysicalDesignReviewPacket`. `evaluate` returns `approved`, `rejected` or `blocked`. `validateResume` returns `readyToResume` only when the approval is bound to the same run ID, stage, manifest digest, proposed layout digest, optional base layout digest and complete decision scope. The packet and decision are Codable artifacts; a host workspace may persist them through its run ledger.
+Raw observations retain:
 
+- distinct backend and oracle executable identities and bytes;
+- exact PDK/process/deck binding;
+- retained, byte-verified corpus inputs and separate backend/oracle outputs;
+- a correlation artifact retained in ToolQualification oracle evidence;
+- exact RC/Liberty/corner binding when a clock timing model is requested.
+
+ToolQualification verifies and evaluates those inputs. PhysicalDesignEngine does
+not consume or issue a trust verdict, approve a run, or authorize release.
+
+## Canonical outputs
+
+A completed native mutation emits `revision.json`, `revision.def`, `design-diff.json`, and `run-manifest.json`. Every reference includes a workspace-relative location, role, kind, format, SHA-256 digest, and byte count. The run manifest binds request intent, timing-model reference, claims, implementation configuration, base/proposed revisions, and design diff.
+
+## Mask-data encoding
+
+`PhysicalDesignMaskDataEncoder` is the foreign serialization protocol for a concrete GDSII/OASIS library:
+
+```swift
+public protocol PhysicalDesignMaskDataEncoder: Sendable {
+    var supportedFormat: ArtifactFormat { get }
+    var implementationID: String { get }
+    func encode(_ snapshot: PhysicalDesignSnapshot) async throws -> Data
+}
+```
+
+The protocol contains no qualification state. ToolQualification and host policy validate a concrete encoder before invocation.
 
 ## Error contract
 
-- Throw only when execution cannot produce a valid result envelope.
-- Represent design findings and failed checks as typed diagnostics and a completed domain payload.
-- Represent missing prerequisites or insufficient semantics as `blocked`.
-- Preserve cancellation as `cancelled`.
-- Do not swallow parser, process or persistence failures.
-
-## Composition
-
-Xcircuite invokes `PhysicalDesignStageExecuting` directly and persists returned
-artifacts in its workspace store. DesignFlowKernel owns flow status, approval,
-resume and scheduling; ToolQualification owns capability and trust decisions.
+- Missing semantics or insufficient trust returns a `blocked` result with typed diagnostics.
+- Persistence failure returns `failed` only when a valid result cannot be committed.
+- Cancellation remains `cancelled`.
+- Model, production-evidence, artifact-store, and review/resume failures use typed errors.
+- Errors are never suppressed with `try?`.

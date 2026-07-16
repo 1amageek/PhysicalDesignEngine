@@ -5,7 +5,7 @@ import TimingCore
 import PDKCore
 
 public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
@@ -18,19 +18,8 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
     public var stage: PhysicalDesignStage
     public var configuration: PhysicalDesignConfiguration
     public var initialSnapshot: PhysicalDesignSnapshot?
-
-    private enum CodingKeys: String, CodingKey {
-        case schemaVersion
-        case runID
-        case inputs
-        case design
-        case constraints
-        case pdk
-        case inputLayout
-        case stage
-        case configuration
-        case initialSnapshot
-    }
+    public var executionIntent: PhysicalDesignExecutionIntent
+    public var clockTimingModel: PhysicalDesignClockTimingModelReference?
 
     public init(
         runID: String,
@@ -41,7 +30,9 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         inputLayout: PhysicalDesignReference? = nil,
         stage: PhysicalDesignStage = .floorplan,
         configuration: PhysicalDesignConfiguration = .default,
-        initialSnapshot: PhysicalDesignSnapshot? = nil
+        initialSnapshot: PhysicalDesignSnapshot? = nil,
+        executionIntent: PhysicalDesignExecutionIntent = .geometrySmoke,
+        clockTimingModel: PhysicalDesignClockTimingModelReference? = nil
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -53,19 +44,8 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         self.stage = stage
         self.configuration = configuration
         self.initialSnapshot = initialSnapshot
+        self.executionIntent = executionIntent
+        self.clockTimingModel = clockTimingModel
     }
 
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
-        runID = try container.decode(String.self, forKey: .runID)
-        inputs = try container.decode([ArtifactReference].self, forKey: .inputs)
-        design = try container.decode(LogicDesignReference.self, forKey: .design)
-        constraints = try container.decode(TimingConstraintReference.self, forKey: .constraints)
-        pdk = try container.decode(PDKReference.self, forKey: .pdk)
-        inputLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .inputLayout)
-        stage = try container.decodeIfPresent(PhysicalDesignStage.self, forKey: .stage) ?? .floorplan
-        configuration = try container.decodeIfPresent(PhysicalDesignConfiguration.self, forKey: .configuration) ?? .default
-        initialSnapshot = try container.decodeIfPresent(PhysicalDesignSnapshot.self, forKey: .initialSnapshot)
-    }
 }

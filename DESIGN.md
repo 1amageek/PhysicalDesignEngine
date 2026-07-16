@@ -2,48 +2,69 @@
 
 ## Purpose
 
-Floorplan, placement, CTS, routing, ECO, antenna repair and DFM mutation contracts.
+PhysicalDesignEngine owns typed physical-design state, stage protocols, deterministic native geometry mutations, and evidence needed to review those mutations. It remains usable without UI state or the Xcircuite runtime.
 
 ## Responsibility boundary
 
-This package owns the schemas and engine protocols listed in its public products. It must remain usable without UI state and without the Xcircuite runtime.
-
-## Non-responsibilities
-
-- Final DRC, density or antenna verdicts
-- Parasitic extraction
-- Tapeout stream-out approval
-
-## Dependency direction
-
 ```mermaid
 flowchart TD
-  Standard["Standard artifacts / canonical references"] --> Foundation["CircuiteFoundation\nshared typed vocabulary"]
-  Foundation --> Native["PhysicalDesignStageExecuting\nNative or external-tool backends"]
-  Native --> Runtime["DesignFlowKernel flow\nand Xcircuite workspace"]
-  Runtime --> Package[".xcircuite artifacts"]
+  F["CircuiteFoundation\nartifact / diagnostic / provenance"] --> P["PhysicalDesignEngine\nphysical state and stage execution"]
+  T["ToolQualification\nprocess trust evidence"] --> P
+  P --> K["DesignFlowKernel\napproval / resume / flow policy"]
+  P --> X["Xcircuite\nworkspace persistence and composition"]
 ```
 
-`CircuiteFoundation` is the dependency floor for cross-engine concepts. Engine,
-artifact, diagnostic and evidence contracts are expressed through Foundation
-types; run lifecycle and workspace persistence remain in their owning packages.
+PhysicalDesignEngine owns:
 
-Backends may depend on lower-level data packages. This package must never import `Xcircuite` or `circuit-studio`.
+- canonical `PhysicalDesignSnapshot` geometry and implementation proof state;
+- direct `Engine`-conforming stage protocols;
+- immutable JSON/DEF/diff/manifest output;
+- PDK/RC/Liberty/corner-bound clock timing estimates;
+- physical oracle-correlation records consumed with ToolQualification evidence.
 
-## Trust model
+It does not own:
 
-Kernel availability, corpus validation, oracle correlation, process-scoped qualification and release approval are distinct states. The package reports capability and evidence; Xcircuite and ToolQualification apply flow policy.
+- tool qualification or production eligibility issuance;
+- flow approval, release policy, or run lifecycle;
+- final DRC, LVS, PEX, timing, density, antenna, EM/IR, or tapeout verdicts;
+- a concrete GDSII/OASIS implementation.
 
-## Artifact requirements
+## Three execution meanings
 
-All outputs are immutable run artifacts with role, format, digest and the input design/PDK revision needed to reproduce the result.
+| Layer | Inputs | Output claim |
+|---|---|---|
+| Geometry smoke | Canonical snapshot and deterministic configuration | Geometry invariants only |
+| Characterized CTS | Geometry plus exact PDK/RC/Liberty/corner model artifacts | Clock timing estimate for that retained model |
+| Production backend | Canonical ToolQualification process evidence rebuilt from raw corpus/oracle/health results | Eligibility may be evaluated by host policy; native backend remains blocked |
 
-The filesystem artifact store uses `ArtifactLocation` for workspace-relative
-resolution and creates a new path with a collision-safe temporary-file move.
-An existing path is never replaced. Artifact references are created directly
-with verified digest and byte-count metadata.
+`characterizedTiming` and `productionEligible` are intentionally separate. A valid RC/cell model can support a timing estimate without proving the placement/routing algorithm, rule deck, executable, corpus, or oracle correlation.
 
-Human approval is a second integrity boundary: resume first validates the
-decision identity, then re-reads the current manifest and all artifacts and
-compares the embedded manifest, proposed/base revisions, diff, digest map and
-decision scope with the reviewed packet.
+## Dimensional model
+
+Geometry fields use database units (`DBU`). Time fields use picoseconds (`PS`) and appear only in `PhysicalDesignClockTimingEstimate`.
+
+```mermaid
+flowchart LR
+  Geometry["Clock path length (DBU)"] --> Model["PDK + RC + Liberty + corner model"]
+  Cells["Retained buffer masters"] --> Model
+  Model --> Time["Latency / skew (PS)"]
+```
+
+The native CTS algorithm never compares DBU distance with a picosecond target and never derives time by copying a path length. Wire-delay samples must increase in path length without decreasing delay. Interpolation is bounded to the retained characterization range; extrapolation and missing cell delays are typed errors.
+
+## Production trust boundary
+
+PhysicalDesignEngine emits revisions, diffs, implementation identity, and raw
+correlation artifacts. ToolQualification reads those immutable artifacts and
+owns tool trust. The package neither reconstructs a trust record nor evaluates
+approval or release policy.
+
+## Artifact safety
+
+All artifact locations are workspace-relative. The filesystem store resolves the configured root canonically, checks each parent and leaf against that root, rejects symlink traversal, verifies byte count and SHA-256 on read, and uses immutable destination paths on write.
+
+Review/resume helpers in this package validate physical revision identity and current bytes. DesignFlowKernel remains the owner of the approval decision and lifecycle transition that consumes those checks.
+
+## Foreign format boundary
+
+`PhysicalDesignMaskDataEncoder` is a serialization protocol for concrete mask-data libraries. Implementations conform directly. Qualification is evaluated by ToolQualification and host flow policy; the encoder protocol contains no qualification state or self-approval gate.

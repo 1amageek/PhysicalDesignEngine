@@ -2,9 +2,5 @@ import Foundation
 import CircuiteFoundation
 import PhysicalDesignCore
 
-public protocol FloorplanExecuting: Sendable {
-    func execute(
-        _ request: PhysicalDesignRequest
-    ) async throws -> PhysicalDesignResult
-}
-
+public protocol FloorplanExecuting: Engine
+where Request == PhysicalDesignRequest, Output == PhysicalDesignResult {}

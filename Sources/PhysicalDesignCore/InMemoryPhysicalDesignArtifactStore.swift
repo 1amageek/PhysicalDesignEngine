@@ -9,6 +9,35 @@ public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
         self.hasher = hasher
     }
 
+    public func registerInput(
+        _ data: Data,
+        relativePath: String,
+        kind: ArtifactKind,
+        format: ArtifactFormat
+    ) throws -> ArtifactReference {
+        let location: ArtifactLocation
+        do {
+            location = try ArtifactLocation(workspaceRelativePath: relativePath)
+        } catch {
+            throw PhysicalDesignStoreError.invalidPath(relativePath)
+        }
+        guard dataByPath[relativePath] == nil else {
+            throw PhysicalDesignStoreError.pathAlreadyExists(relativePath)
+        }
+        let digest = try hasher.digest(data: data, using: .sha256)
+        dataByPath[relativePath] = data
+        return ArtifactReference(
+            locator: ArtifactLocator(
+                location: location,
+                role: .input,
+                kind: kind,
+                format: format
+            ),
+            digest: digest,
+            byteCount: UInt64(data.count)
+        )
+    }
+
     public func read(_ reference: ArtifactReference) async throws -> Data {
         guard let data = dataByPath[reference.path] else {
             throw PhysicalDesignStoreError.readFailed("artifact does not exist: \(reference.path)")

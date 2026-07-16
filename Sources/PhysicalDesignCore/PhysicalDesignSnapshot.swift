@@ -227,8 +227,9 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var sourcePinID: String
         public var sinkPinIDs: [String]
         public var bufferCellIDs: [String]
-        public var estimatedSkewPS: Int64
-        public var estimatedLatencyPS: Int64
+        public var shortestPathLengthDBU: Int64
+        public var longestPathLengthDBU: Int64
+        public var timingEstimate: PhysicalDesignClockTimingEstimate?
 
         public init(
             id: String,
@@ -236,16 +237,18 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             sourcePinID: String,
             sinkPinIDs: [String],
             bufferCellIDs: [String] = [],
-            estimatedSkewPS: Int64 = 0,
-            estimatedLatencyPS: Int64 = 0
+            shortestPathLengthDBU: Int64 = 0,
+            longestPathLengthDBU: Int64 = 0,
+            timingEstimate: PhysicalDesignClockTimingEstimate? = nil
         ) {
             self.id = id
             self.netID = netID
             self.sourcePinID = sourcePinID
             self.sinkPinIDs = sinkPinIDs
             self.bufferCellIDs = bufferCellIDs
-            self.estimatedSkewPS = estimatedSkewPS
-            self.estimatedLatencyPS = estimatedLatencyPS
+            self.shortestPathLengthDBU = shortestPathLengthDBU
+            self.longestPathLengthDBU = longestPathLengthDBU
+            self.timingEstimate = timingEstimate
         }
     }
 
@@ -594,8 +597,17 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
                     continue
                 }
             }
-            if tree.estimatedSkewPS < 0 || tree.estimatedLatencyPS < 0 {
-                diagnostics.append("clock tree \(tree.id) has negative timing estimates")
+            if tree.shortestPathLengthDBU < 0
+                || tree.longestPathLengthDBU < tree.shortestPathLengthDBU {
+                diagnostics.append("clock tree \(tree.id) has invalid path-length geometry")
+            }
+            if let estimate = tree.timingEstimate,
+               estimate.cornerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !estimate.estimatedSkewPS.isFinite
+                || !estimate.estimatedLatencyPS.isFinite
+                || estimate.estimatedSkewPS < 0
+                || estimate.estimatedLatencyPS < 0 {
+                diagnostics.append("clock tree \(tree.id) has an invalid characterized timing estimate")
             }
         }
         if let implementationState {
@@ -631,7 +643,6 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
                 }
                 if constraint.layer <= 0 || constraint.width <= 0 || constraint.spacing < 0
                     || constraint.maximumLength.map({ $0 <= 0 }) == true
-                    || constraint.maximumTransitionPS.map({ $0 <= 0 }) == true
                     || !netIDs.contains(constraint.netID) {
                     diagnostics.append("clock route constraint \(constraint.id) is invalid")
                 }
@@ -660,7 +671,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
                 }
                 if proof.cellCount != cells.count || proof.legalCellCount > proof.cellCount
                     || !proof.utilization.isFinite || proof.utilization < 0
-                    || !proof.timingObjective.isFinite || proof.timingObjective < 0
+                    || !proof.wirelengthObjectiveDBU.isFinite || proof.wirelengthObjectiveDBU < 0
                     || !proof.congestionObjective.isFinite || proof.congestionObjective < 0 {
                     diagnostics.append("placement proof utilization is invalid")
                 }

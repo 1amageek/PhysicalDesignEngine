@@ -6,7 +6,7 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
     private let hasher: SHA256ContentDigester
 
     public init(projectRoot: URL, hasher: SHA256ContentDigester = SHA256ContentDigester()) {
-        self.projectRoot = projectRoot.standardizedFileURL
+        self.projectRoot = projectRoot.standardizedFileURL.resolvingSymlinksInPath()
         self.hasher = hasher
     }
 
@@ -15,7 +15,7 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
         let url: URL
         do {
             location = try ArtifactLocation(workspaceRelativePath: reference.path)
-            url = try location.resolvedFileURL(relativeTo: projectRoot)
+            url = try validatedURL(for: location, allowMissingLeaf: false)
         } catch {
             throw PhysicalDesignStoreError.invalidPath(reference.path)
         }
@@ -48,7 +48,7 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
         let url: URL
         do {
             location = try ArtifactLocation(workspaceRelativePath: relativePath)
-            url = try location.resolvedFileURL(relativeTo: projectRoot)
+            url = try validatedURL(for: location, allowMissingLeaf: true)
         } catch {
             throw PhysicalDesignStoreError.invalidPath(relativePath)
         }
@@ -64,6 +64,7 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
+            _ = try validatedURL(for: location, allowMissingLeaf: true)
             try data.write(to: temporaryURL, options: .atomic)
             do {
                 try FileManager.default.moveItem(at: temporaryURL, to: url)
@@ -111,6 +112,33 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
     private func cleanupTemporaryFile(at url: URL) throws {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         try FileManager.default.removeItem(at: url)
+    }
+
+    private func validatedURL(
+        for location: ArtifactLocation,
+        allowMissingLeaf: Bool
+    ) throws -> URL {
+        let lexicalURL = try location.resolvedFileURL(relativeTo: projectRoot).standardizedFileURL
+        let parentURL = lexicalURL.deletingLastPathComponent().resolvingSymlinksInPath()
+        try requireContained(parentURL)
+        guard parentURL.path == lexicalURL.deletingLastPathComponent().standardizedFileURL.path else {
+            throw PhysicalDesignStoreError.invalidPath(location.value)
+        }
+        if !allowMissingLeaf || FileManager.default.fileExists(atPath: lexicalURL.path) {
+            let resolvedURL = lexicalURL.resolvingSymlinksInPath()
+            try requireContained(resolvedURL)
+            guard resolvedURL.path == lexicalURL.path else {
+                throw PhysicalDesignStoreError.invalidPath(location.value)
+            }
+        }
+        return lexicalURL
+    }
+
+    private func requireContained(_ url: URL) throws {
+        let rootPath = projectRoot.path.hasSuffix("/") ? projectRoot.path : projectRoot.path + "/"
+        guard url == projectRoot || url.path.hasPrefix(rootPath) else {
+            throw PhysicalDesignStoreError.invalidPath(url.path)
+        }
     }
 
     private func artifactID(

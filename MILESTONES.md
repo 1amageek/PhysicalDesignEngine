@@ -1,127 +1,49 @@
-# PhysicalDesignEngine milestone plan
-
-The package goal is a trustworthy physical-design substrate, not a collection of stage-shaped mocks. Milestones are ordered by the dependencies required for reproducibility and qualification.
+# PhysicalDesignEngine milestones
 
 ```mermaid
 flowchart LR
-  M0[Contract recovery] --> M05[CircuiteFoundation boundary]
-  M05 --> M1[Immutable run transaction]
-  M1 --> M2[Standard layout interchange]
-  M2 --> M3[Physical implementation algorithms]
-  M3 --> M4[Repair and DFM closure]
-  M4 --> M5[Approval/resume composition]
-  M5 --> M6[Retained corpus and oracle correlation]
-  M6 --> M7[Process qualification and release profile]
+  M0["Direct Foundation contract"] --> M1["Immutable artifacts"]
+  M1 --> M2["JSON / DEF interchange"]
+  M2 --> M3["Native geometry smoke"]
+  M3 --> M4["Characterized CTS"]
+  M4 --> M5["TQ evidence consumer"]
+  M5 --> M6["Real backend and corpus"]
+  M6 --> M7["Host policy and release"]
 ```
 
-## M0 — Contract recovery and honest capability map
+## M0–M3 — Complete for declared native scope
 
-Status: complete.
+- Stage protocols conform directly to `CircuiteFoundation.Engine`.
+- Results use Foundation artifacts, diagnostics, provenance, and evidence directly.
+- JSON/DEF/diff/manifest artifacts are immutable and re-verifiable.
+- Filesystem paths are workspace-relative and reject symlink escapes.
+- All declared native stages have deterministic geometry behavior and typed blocked failures.
 
-Acceptance criteria:
+## M4 — Complete for characterized CTS contract
 
-- Read the package goal, boundaries and required developer surfaces.
-- Identify scaffolded, smoke-checked, qualified and blocked capabilities separately.
-- Preserve the boundary that DRC, LVS, PEX and Timing remain independent oracles.
+- Clock geometry uses DBU-only fields and constraints.
+- Timing uses PS-only estimates derived from exact PDK/RC/Liberty/corner artifacts.
+- Missing or invalid characterization blocks timing without converting geometry into time.
+- Characterized timing does not change the production claim.
 
-Evidence: `GOAL_STATUS.md`, `CAPABILITY.md`, package and Xcircuite contract tests.
+## M5 — Complete as a trust consumer
 
-## M0.5 — CircuiteFoundation engine and evidence boundary
+- PhysicalDesignEngine consumes canonical ToolQualification process evidence.
+- Backend and oracle executables must be independent.
+- A canonical ToolQualification oracle result derives agreement from raw outcomes and metric comparisons, while the physical consumer cross-binds the qualified stage, request scope and separate backend/oracle outputs.
+- The native backend still blocks production intent.
 
-Status: complete for the additive migration slice.
+## M6 — Required
 
-Acceptance criteria:
+- Implement a real placement/routing backend behind the existing stage protocols.
+- Retain positive, negative, boundary, and regression corpora for concrete PDK profiles.
+- Produce actual backend/oracle output artifacts and correlation records.
+- Implement and qualify concrete GDSII/OASIS encoders.
 
-- Depend directly on `CircuiteFoundation` from `PhysicalDesignCore`.
-- Expose a Foundation `Engine` seam and a standalone evidence projection.
-- Convert only artifact references with verified digest and byte-count metadata.
-- Map native diagnostics and execution provenance to Foundation values without
-  creating a new orchestration wrapper.
-- Keep run lifecycle and workspace persistence outside the engine package.
+## M7 — Required
 
-Evidence: `PhysicalDesignResult.swift`, `PhysicalDesignStageExecuting.swift`,
-`PhysicalDesignFoundationEvidence.swift`, and the Foundation integration suite.
+- Compose ToolQualification evidence with DesignFlowKernel approval/resume/release policy.
+- Run independent DRC/LVS/PEX/Timing and downstream signoff engines.
+- Demonstrate reproducible Xcircuite workspace recovery and human review.
 
-## M1 — Immutable physical-design run transaction
-
-Status: complete for the native canonical-snapshot scope.
-
-Acceptance criteria:
-
-- Every completed mutation binds design digest, timing constraints, PDK process/version/digest, base revision, proposed revision, diff, seed and implementation identity.
-- The binding is persisted as a JSON artifact and included in the result envelope.
-- The manifest validates its cross-reference invariants and is integrity-gated by Xcircuite.
-- Older schema-version-one requests and payloads remain decodable.
-
-Evidence: `PhysicalDesignRunManifest`, `run-manifest.json` output, timeout-bounded native regression tests, and Xcircuite adapter integrity tests.
-
-## M2 — Standard layout interchange
-
-Status: complete for the supported native DEF subset; GDSII/OASIS remain qualified external boundaries.
-
-Acceptance criteria:
-
-- Parse and validate the supported DEF subset into the canonical snapshot with line/section diagnostics.
-- Export deterministic DEF with rows, components, pins, nets, blockages and power structures.
-- Define protocol-first GDSII/OASIS adapters; the adapter gate returns an explicit qualification error until a qualified implementation is available.
-- Preserve source format, digest and parser version in the run manifest.
-
-Evidence: `PhysicalDesignDEFParser`, `PhysicalDesignDEFWriter`, `PhysicalDesignMaskDataAdapter`, `Fixtures/positive-interchange.def`, DEF round-trip/diagnostic/provenance tests, and the native capability declaration.
-
-## M3 — Physical implementation algorithms
-
-Status: complete for the deterministic native rule-aware slice; process qualification and oracle correlation remain open.
-
-Acceptance criteria:
-
-- Floorplan supports hierarchy, IO pins/pads, blockages, rows, tracks and power domains; power planning materializes declared power connectivity, rings, straps, rails and checked vias.
-- Placement consumes timing and congestion objectives and reports legal-placement proof data.
-- CTS materializes buffers, branch connectivity, clock routes/vias and route constraints, not only estimated tree records.
-- Routing accounts for core boundaries, blockages, layer direction, non-degenerate vias, via spacing, route spacing and antenna risk with structured failure diagnostics.
-
-Evidence: `PhysicalDesignImplementationState`, `PhysicalDesignImplementationConstraints`, native floorplan/placement/CTS/routing paths, implementation proof and routing regression tests, and immutable diff/run-manifest persistence.
-
-## M4 — Repair and DFM closure
-
-Status: complete for the native rule-aware repair slice; external oracle recheck and process qualification remain open.
-
-Acceptance criteria:
-
-- ECO actions are typed, scoped, diffed and independently rechecked by the relevant oracle; buffer insertion must split and reroute both native net branches.
-- Antenna repair supports reroute, jumper and protection-device strategies without claiming a DRC verdict.
-- Fill, redundant-via and hotspot operations are window/rule aware and produce reviewable candidates.
-
-Evidence: `PhysicalDesignRepairConstraints`, `PhysicalDesignAntennaRepairStrategy`, `PhysicalDesignImplementationState.RepairProof`, repair strategy regression tests, and fail-closed native verification diagnostics.
-
-## M5 — Xcircuite approval and resume flow
-
-Status: complete for the native immutable-manifest review boundary; Xcircuite ledger persistence remains owned by the sibling runtime.
-
-Acceptance criteria:
-
-- A run can pause at a human approval boundary with immutable artifacts and a decision packet.
-- Resume verifies the same base revision, manifest, embedded manifest, every
-  referenced artifact's current bytes/digest and approval scope before continuing.
-- Rejected or stale revisions fail closed and leave the prior immutable revision untouched.
-
-Evidence: `PhysicalDesignReviewGating`, `PhysicalDesignReviewPacket`, `PhysicalDesignReviewDecision`, `PhysicalDesignResumeRequest`, artifact revalidation in `PhysicalDesignReviewGate`, and approval/rejection/stale-resume regression tests.
-
-## M6 — Retained corpus and reference-oracle correlation
-
-Status: planned.
-
-Acceptance criteria:
-
-- Retain positive, negative, boundary and regression cases per PDK profile.
-- Compare native/external results against a declared reference oracle with tolerances and evidence artifacts.
-- Track unsupported semantics and corpus coverage explicitly.
-
-## M7 — Process qualification and release profile
-
-Status: planned.
-
-Acceptance criteria:
-
-- Tool binary/implementation/deck/process qualification is recorded separately from execution capability.
-- Required gates are evaluated by ToolQualification and ReleaseEngine.
-- Release readiness is denied until all required evidence is complete, consistent and reviewable.
+Production readiness remains blocked until M6 and M7 are evidenced by actual artifacts; source-level protocol presence is insufficient.
