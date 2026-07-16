@@ -216,7 +216,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
             if artifact.path.hasPrefix("/") {
                 diagnostics.append("artifact \(artifact.path) is not project-relative")
             }
-            if artifact.sha256.isEmpty {
+            if artifact.digest.algorithm != .sha256
+                || artifact.digest.hexadecimalValue.isEmpty {
                 diagnostics.append("artifact \(artifact.path) has no SHA-256 digest")
             }
             if artifact.byteCount == 0 {

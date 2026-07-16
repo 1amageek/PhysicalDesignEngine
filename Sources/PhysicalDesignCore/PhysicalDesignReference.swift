@@ -30,7 +30,8 @@ public struct PhysicalDesignReference: Sendable, Hashable, Codable {
         if layoutArtifact.format != .json && layoutArtifact.format != .def {
             diagnostics.append("physical design reference format is unsupported by the native backend")
         }
-        if layoutArtifact.sha256.isEmpty {
+        if layoutArtifact.digest.algorithm != .sha256
+            || layoutArtifact.digest.hexadecimalValue.isEmpty {
             diagnostics.append("physical design artifact SHA-256 digest is missing")
         }
         if layoutArtifact.byteCount == 0 {

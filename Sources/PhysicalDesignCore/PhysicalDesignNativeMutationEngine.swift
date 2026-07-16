@@ -711,10 +711,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                         cornerID: timingModel.cornerID,
                         estimatedSkewPS: (delays.max() ?? 0) - (delays.min() ?? 0),
                         estimatedLatencyPS: delays.max() ?? 0,
-                        modelDigest: timingModelReference.modelArtifact.sha256,
-                        pdkManifestDigest: timingModelReference.pdkManifestArtifact.sha256,
-                        rcModelDigest: timingModelReference.rcModelArtifact.sha256,
-                        cellLibraryDigest: timingModelReference.cellLibraryArtifact.sha256
+                        modelDigest: timingModelReference.modelArtifact.digest.hexadecimalValue,
+                        pdkManifestDigest: timingModelReference.pdkManifestArtifact.digest.hexadecimalValue,
+                        rcModelDigest: timingModelReference.rcModelArtifact.digest.hexadecimalValue,
+                        cellLibraryDigest: timingModelReference.cellLibraryArtifact.digest.hexadecimalValue
                     )
                 } catch {
                     return blocked(

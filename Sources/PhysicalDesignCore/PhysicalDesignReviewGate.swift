@@ -23,7 +23,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
         } catch {
             throw PhysicalDesignReviewGateError.artifactReadFailed(error.localizedDescription)
         }
-        let expectedManifestDigest = manifestReference.sha256
+        let expectedManifestDigest = manifestReference.digest.hexadecimalValue
         let expectedManifestByteCount = manifestReference.byteCount
         guard !expectedManifestDigest.isEmpty else {
             throw PhysicalDesignReviewGateError.artifactReadFailed(
@@ -67,7 +67,7 @@ public struct PhysicalDesignReviewGate: PhysicalDesignReviewGating {
             } catch {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(error.localizedDescription)
             }
-            let expectedDigest = artifact.sha256
+            let expectedDigest = artifact.digest.hexadecimalValue
             let expectedByteCount = artifact.byteCount
             guard !expectedDigest.isEmpty else {
                 throw PhysicalDesignReviewGateError.artifactReadFailed(

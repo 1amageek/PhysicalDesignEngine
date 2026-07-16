@@ -57,7 +57,9 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         if proposedLayout.layoutDigest.isEmpty { diagnostics.append("review packet proposed layout digest is empty") }
         if decisionScope.isEmpty { diagnostics.append("review packet decision scope is empty") }
         if Set(decisionScope).count != decisionScope.count { diagnostics.append("review packet decision scope is not unique") }
-        if manifestReference.sha256.isEmpty || manifestReference.byteCount == 0 {
+        if manifestReference.digest.algorithm != .sha256
+            || manifestReference.digest.hexadecimalValue.isEmpty
+            || manifestReference.byteCount == 0 {
             diagnostics.append("review packet manifest reference lacks complete integrity metadata")
         }
         let manifestArtifactPaths = Set(manifest.artifacts.map(\.path))
@@ -69,7 +71,8 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
                 diagnostics.append("review packet is missing the verified digest for \(artifact.path)")
                 continue
             }
-            if artifact.sha256 != digest {
+            if artifact.digest.algorithm != .sha256
+                || artifact.digest.hexadecimalValue != digest {
                 diagnostics.append("review packet digest does not match the manifest reference for \(artifact.path)")
             }
             if artifact.byteCount == 0 {

@@ -228,7 +228,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             guard reference.layoutArtifact.format == .json || reference.layoutArtifact.format == .def else {
                 throw PhysicalDesignStoreError.readFailed("native backend accepts canonical JSON or supported DEF layout artifacts only")
             }
-            let expectedArtifactDigest = reference.layoutArtifact.sha256
+            let expectedArtifactDigest = reference.layoutArtifact.digest.hexadecimalValue
             let expectedArtifactByteCount = reference.layoutArtifact.byteCount
             guard !expectedArtifactDigest.isEmpty,
                   !reference.layoutDigest.isEmpty else {
@@ -323,7 +323,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let physicalReference = PhysicalDesignReference(
             layoutArtifact: snapshotReference,
             topCell: output.topCell,
-            layoutDigest: snapshotReference.sha256
+            layoutDigest: snapshotReference.digest.hexadecimalValue
         )
         let diff = try diffBuilder.build(
             runID: request.runID,
@@ -506,7 +506,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid byte count")
         }
         let expectedDigest = try hasher.digest(data: expectedData, using: reference.digest.algorithm).hexadecimalValue
-        guard reference.sha256 == expectedDigest else {
+        guard reference.digest.algorithm == .sha256,
+              reference.digest.hexadecimalValue == expectedDigest else {
             throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid SHA-256 digest")
         }
         let persistedData = try await artifactStore.read(reference)
