@@ -158,7 +158,9 @@ public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactRevie
             )
             var differences: [String] = []
             if currentPacket.manifestReference != packet.manifestReference { differences.append("manifest_reference") }
-            if currentPacket.manifest != packet.manifest { differences.append("manifest") }
+            if currentPacket.manifest != packet.manifest {
+                differences.append(contentsOf: manifestDifferences(packet.manifest, currentPacket.manifest))
+            }
             if currentPacket.runID != packet.runID { differences.append("run_id") }
             if currentPacket.stage != packet.stage { differences.append("stage") }
             if currentPacket.manifestDigest != packet.manifestDigest { differences.append("manifest_digest") }
@@ -195,5 +197,38 @@ public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactRevie
             summary: summary,
             suggestedActions: actions.map { SuggestedAction(code: $0, summary: $0) }
         )
+    }
+
+    private func manifestDifferences(
+        _ expected: PhysicalDesignRunManifest,
+        _ current: PhysicalDesignRunManifest
+    ) -> [String] {
+        var differences: [String] = []
+        if expected.schemaVersion != current.schemaVersion { differences.append("manifest.schema_version") }
+        if expected.runID != current.runID { differences.append("manifest.run_id") }
+        if expected.stage != current.stage { differences.append("manifest.stage") }
+        if expected.status != current.status { differences.append("manifest.status") }
+        if expected.design != current.design { differences.append("manifest.design") }
+        if expected.constraints != current.constraints { differences.append("manifest.constraints") }
+        if expected.requestedModeIDs != current.requestedModeIDs { differences.append("manifest.requested_mode_ids") }
+        if expected.pdk != current.pdk { differences.append("manifest.pdk") }
+        if expected.baseLayout != current.baseLayout { differences.append("manifest.base_layout") }
+        if expected.proposedLayout != current.proposedLayout { differences.append("manifest.proposed_layout") }
+        if expected.designDiff != current.designDiff { differences.append("manifest.design_diff") }
+        if expected.artifacts != current.artifacts { differences.append("manifest.artifacts") }
+        if expected.implementationID != current.implementationID { differences.append("manifest.implementation_id") }
+        if expected.implementationVersion != current.implementationVersion { differences.append("manifest.implementation_version") }
+        if expected.deterministicSeed != current.deterministicSeed { differences.append("manifest.deterministic_seed") }
+        if expected.sourceLayoutFormat != current.sourceLayoutFormat { differences.append("manifest.source_layout_format") }
+        if expected.sourceLayoutDigest != current.sourceLayoutDigest { differences.append("manifest.source_layout_digest") }
+        if expected.sourceParserID != current.sourceParserID { differences.append("manifest.source_parser_id") }
+        if expected.sourceParserVersion != current.sourceParserVersion { differences.append("manifest.source_parser_version") }
+        if expected.implementationConfiguration != current.implementationConfiguration { differences.append("manifest.implementation_configuration") }
+        if expected.executionIntent != current.executionIntent { differences.append("manifest.execution_intent") }
+        if expected.clockTimingModel != current.clockTimingModel { differences.append("manifest.clock_timing_model") }
+        if expected.claims != current.claims { differences.append("manifest.claims") }
+        if expected.createdAt != current.createdAt { differences.append("manifest.created_at") }
+        if expected.completedAt != current.completedAt { differences.append("manifest.completed_at") }
+        return differences
     }
 }
