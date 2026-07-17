@@ -91,7 +91,7 @@ GitHub revision. This repository does not require an umbrella checkout.
 | Dependency | Local sibling | Remote fallback revision |
 |---|---|---|
 | CircuiteFoundation | `../CircuiteFoundation` | `7abcac83517935c9b9f7553d7016d62cffde259d` |
-| LogicDesign | `../LogicDesign` | `66dc625904fe1da52a1d01454c1c7759eea8f138` |
+| LogicDesign | `../LogicDesign` | `b9aa25b0b78e6168befa25df3bfe8309bd020a6d` |
 | PDKKit | `../PDKKit` | `b62c5ad7e5819a24977038c2133856caed52f481` |
 
 ```bash
