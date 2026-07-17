@@ -1,7 +1,6 @@
 import Foundation
 import CircuiteFoundation
 import LogicIR
-import TimingCore
 import PDKCore
 @testable import PhysicalDesignCore
 

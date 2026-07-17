@@ -170,7 +170,7 @@ public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactRevie
             guard differences.isEmpty else {
                 return [diagnostic(
                     code: "physical_design_review_artifacts_stale",
-                    summary: "Reviewed physical-design artifacts changed after packet creation: (differences.joined(separator: ", ")).",
+                    summary: "Reviewed physical-design artifacts changed after packet creation: " + differences.joined(separator: ", ") + ".",
                     actions: ["prepare_a_new_physical_design_review_packet"]
                 )]
             }
