@@ -22,7 +22,7 @@ let timingEngineDependency: Package.Dependency = FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("TimingEngine/Package.swift").path
 )
     ? .package(path: "../TimingEngine")
-    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "0fecd6f568c7c21ec98ddc3b96aad8eacac44c8c")
+    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "9189b6dba804191d664eeae334fc429fa74ba421")
 
 let pdkKitDependency: Package.Dependency = FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("PDKKit/Package.swift").path
