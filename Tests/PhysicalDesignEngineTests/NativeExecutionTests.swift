@@ -54,6 +54,13 @@ struct NativeExecutionTests {
         #expect(result.artifacts.map(\.format) == [.json, .def, .json, .json])
         #expect(result.payload.changedObjectCount > 0)
         #expect(result.payload.physicalDesign?.layoutDigest.isEmpty == false)
+        let evidenceID = result.evidence.id
+        #expect(result.evidence.id == evidenceID)
+        let decodedResult = try PhysicalDesignJSONCodec().decode(
+            PhysicalDesignResult.self,
+            from: PhysicalDesignJSONCodec().encode(result)
+        )
+        #expect(decodedResult.evidence.id == evidenceID)
 
         let revisionReference = try #require(result.payload.physicalDesign?.layoutArtifact)
         let revisionData = try #require(await store.data(at: revisionReference.path))

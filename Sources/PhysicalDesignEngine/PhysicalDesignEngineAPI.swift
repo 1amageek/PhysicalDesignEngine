@@ -16,7 +16,7 @@ public enum PhysicalDesignEngineAPI {
             "DRC, LVS, PEX and timing remain independent verification oracles.",
             "Placement and routing are geometry-smoke heuristics, not production implementation.",
             "CTS timing requires PDK/RC/cell/corner-bound characterization artifacts.",
-            "GDSII and OASIS stream-out require a process-qualified mask-data encoder."
+            "GDSII and OASIS stream-out require a dedicated process-qualified mask-data exporter."
         ],
         supportedExecutionIntents: [.geometrySmoke, .characterizedTiming]
     )

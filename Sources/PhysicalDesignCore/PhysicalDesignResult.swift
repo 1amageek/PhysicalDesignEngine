@@ -12,6 +12,7 @@ public struct PhysicalDesignResult: Sendable, Hashable, Codable,
     public let artifacts: [ArtifactReference]
     public let provenance: ExecutionProvenance
     public let payload: PhysicalDesignPayload
+    public let evidence: EvidenceManifest
 
     public init(
         schemaVersion: Int,
@@ -29,9 +30,6 @@ public struct PhysicalDesignResult: Sendable, Hashable, Codable,
         self.artifacts = artifacts
         self.provenance = provenance
         self.payload = payload
-    }
-
-    public var evidence: EvidenceManifest {
-        EvidenceManifest(provenance: provenance, artifacts: artifacts)
+        self.evidence = EvidenceManifest(provenance: provenance, artifacts: artifacts)
     }
 }

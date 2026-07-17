@@ -25,10 +25,12 @@ Placement wirelength, congestion, antenna ratio, and native repair metrics are r
 |---|---:|---:|---|
 | Canonical JSON | Yes | Yes | Native canonical state |
 | Supported DEF subset | Yes | Yes | Deterministic parser/writer with diagnostics |
-| GDSII | No | No | `PhysicalDesignMaskDataEncoder` protocol only |
-| OASIS | No | No | `PhysicalDesignMaskDataEncoder` protocol only |
+| GDSII | No | No | Dedicated standard mask-data library required |
+| OASIS | No | No | Dedicated standard mask-data library required |
 
-The encoder protocol is a foreign serialization boundary. It contains no local qualification state. A concrete implementation must be qualified through ToolQualification and selected by host policy.
+PhysicalDesignEngine exposes no GDSII/OASIS serialization seam. The host flow
+composes a dedicated standard mask-data library and qualifies the concrete
+exporter through ToolQualification before release policy accepts its output.
 
 ## Production eligibility
 

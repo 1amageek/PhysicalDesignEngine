@@ -67,4 +67,8 @@ Artifact review validation in this package prepares an immutable review packet a
 
 ## Foreign format boundary
 
-`PhysicalDesignMaskDataEncoder` is a serialization protocol for concrete mask-data libraries. Implementations conform directly. Qualification is evaluated by ToolQualification and host flow policy; the encoder protocol contains no qualification state or self-approval gate.
+PhysicalDesignEngine emits canonical JSON and its supported DEF subset. A host
+composes those results with a dedicated standard mask-data library for
+GDSII/OASIS stream-out. The exporter contract and implementation belong to
+that library; ToolQualification and host release policy evaluate the concrete
+toolchain.

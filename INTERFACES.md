@@ -77,17 +77,10 @@ A completed native mutation emits `revision.json`, `revision.def`, `design-diff.
 
 ## Mask-data encoding
 
-`PhysicalDesignMaskDataEncoder` is the foreign serialization protocol for a concrete GDSII/OASIS library:
-
-```swift
-public protocol PhysicalDesignMaskDataEncoder: Sendable {
-    var supportedFormat: ArtifactFormat { get }
-    var implementationID: String { get }
-    func encode(_ snapshot: PhysicalDesignSnapshot) async throws -> Data
-}
-```
-
-The protocol contains no qualification state. ToolQualification and host policy validate a concrete encoder before invocation.
+PhysicalDesignEngine exposes no speculative GDSII/OASIS encoder protocol. A
+host passes the canonical physical result to a dedicated standard mask-data
+library, retains the resulting artifact through CircuiteFoundation, and asks
+ToolQualification and release policy to evaluate the concrete exporter.
 
 ## Error contract
 

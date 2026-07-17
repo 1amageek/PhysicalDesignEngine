@@ -10,7 +10,7 @@
 6. Geometry/timing/production intent and claim separation
 7. PDK/RC/Liberty/corner-bound CTS timing model
 8. ToolQualification process-evidence consumer with physical oracle cross-binding
-9. Foreign mask-data encoder protocol without self-qualification
+9. Explicit ownership boundary for standard mask-data export
 
 ## Native completion gate
 
@@ -40,7 +40,9 @@ No PhysicalDesignEngine type may issue its own production qualification or eleva
 
 - Add a real placement/routing backend as an independent protocol implementation.
 - Retain process-specific physical corpus, oracle and health result artifacts produced by actual tools for ToolQualification reconstruction.
-- Implement concrete GDSII/OASIS encoders through a mask-data library and qualify those implementations in ToolQualification.
+- Compose canonical physical artifacts with a dedicated standard mask-data
+  library in the host flow and qualify the concrete exporter in
+  ToolQualification.
 - Integrate DRC/LVS/PEX/Timing feedback through the host flow without treating native proxy checks as signoff.
 - Add end-to-end Xcircuite/DesignFlowKernel fixtures once the external backend exists.
 

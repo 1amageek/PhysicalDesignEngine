@@ -62,7 +62,10 @@ ToolQualification consumes those raw records. Human approval, flow transition,
 resume, and release policy remain outside the engine. A characterized CTS result
 is not production qualification.
 
-`PhysicalDesignMaskDataEncoder` is only a foreign-format serialization seam for GDSII/OASIS implementations. It does not carry a qualification boolean or approve its own output. ToolQualification and the host flow decide whether a concrete encoder may be used.
+GDSII/OASIS stream-out is not part of this package's public execution
+contract. A host composes the canonical physical result with a dedicated
+standard mask-data library and evaluates that concrete exporter through
+ToolQualification and release policy.
 
 ## Native limitations
 
@@ -87,9 +90,9 @@ GitHub revision. This repository does not require an umbrella checkout.
 
 | Dependency | Local sibling | Remote fallback revision |
 |---|---|---|
-| CircuiteFoundation | `../CircuiteFoundation` | `2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac` |
-| LogicDesign | `../LogicDesign` | `09768ed203d97d1d0f79f786f9988fcb2cd39155` |
-| PDKKit | `../PDKKit` | `28f3b83304ad2bbb0c2e0269d26616081d90d992` |
+| CircuiteFoundation | `../CircuiteFoundation` | `7abcac83517935c9b9f7553d7016d62cffde259d` |
+| LogicDesign | `../LogicDesign` | `66dc625904fe1da52a1d01454c1c7759eea8f138` |
+| PDKKit | `../PDKKit` | `b62c5ad7e5819a24977038c2133856caed52f481` |
 
 ```bash
 perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \

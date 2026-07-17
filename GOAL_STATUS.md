@@ -16,7 +16,7 @@
 | ToolQualification consumption | Contract complete | Canonical process evidence and independent physical correlation validator |
 | Physical process corpus | Not supplied | No real PDK/tool corpus artifacts in this repository |
 | Production backend | Not implemented | Native backend is heuristic geometry only |
-| GDSII/OASIS implementation | Not implemented | Serialization protocol only |
+| GDSII/OASIS implementation | External responsibility | Dedicated standard mask-data library and host composition required |
 | Release readiness | Blocked | Requires real backend, retained corpus, independent oracle, signoff, and host policy |
 
 ## Function status
@@ -30,7 +30,7 @@
 | Physical ECO | Typed reviewable mutations | Requires independent Timing/DRC feedback | Blocked |
 | Antenna / DFM | Repair candidates and native proof | No signoff claim | Blocked |
 | JSON / DEF artifacts | Immutable and verified | Not applicable | Complete for interchange subset |
-| GDSII / OASIS | Protocol only | Not applicable | Blocked until implementation and TQ evidence |
+| GDSII / OASIS | Not exposed | Not applicable | Dedicated exporter and TQ evidence required |
 
 ## Trust progression
 
@@ -49,6 +49,6 @@ No arrow is implicit. In particular, characterized timing does not imply process
 
 - Xcode package build passes under a 30-second timeout.
 - 43 tests pass after removal of the obsolete self-qualification mask gate and request-boundary hardening.
-- Positive and negative CLI fixtures use request schema version 2 and explicit execution intent.
+- Positive and negative CLI fixtures use request schema version 3 and explicit execution intent.
 
 This file must remain evidence-based. A type name or successful smoke fixture is not production qualification.
