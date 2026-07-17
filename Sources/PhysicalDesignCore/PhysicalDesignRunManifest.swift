@@ -163,6 +163,18 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if requestedModeIDs.isEmpty {
             diagnostics.append("requested timing mode IDs are empty")
         }
+        let normalizedModeIDs = requestedModeIDs.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if normalizedModeIDs.contains(where: \.isEmpty) {
+            diagnostics.append("requested timing mode IDs contain a blank identifier")
+        }
+        if Set(normalizedModeIDs).count != normalizedModeIDs.count {
+            diagnostics.append("requested timing mode IDs are not unique")
+        }
+        if constraints.kind != .constraint || constraints.format != .sdc {
+            diagnostics.append("constraints are not a canonical SDC artifact")
+        }
         diagnostics.append(contentsOf: LogicDesignProvenanceValidation.issues(for: design)
             .filter { $0.code != "design_digest_missing" }
             .map { "design provenance: \($0.message)" })

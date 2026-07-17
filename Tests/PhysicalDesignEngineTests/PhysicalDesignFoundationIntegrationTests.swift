@@ -21,7 +21,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         #expect(result.runID == request.runID)
         #expect(result.artifacts.count == 4)
         #expect(result.evidence.artifacts == result.artifacts)
-        #expect(result.evidence.provenance.inputs.isEmpty)
+        #expect(result.evidence.provenance.inputs == request.inputs)
         #expect(result.diagnostics.allSatisfy { $0.code.rawValue.hasPrefix("physical-design.") })
 
     }

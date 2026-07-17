@@ -48,7 +48,7 @@ No arrow is implicit. In particular, characterized timing does not imply process
 ## Verified regression state
 
 - Xcode package build passes under a 30-second timeout.
-- 40 tests pass after removal of the obsolete self-qualification mask gate.
+- 43 tests pass after removal of the obsolete self-qualification mask gate and request-boundary hardening.
 - Positive and negative CLI fixtures use request schema version 2 and explicit execution intent.
 
 This file must remain evidence-based. A type name or successful smoke fixture is not production qualification.

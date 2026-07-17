@@ -479,12 +479,41 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 actions: ["provide_a_constraint_artifact"]
             ))
         }
-        if request.requestedModeIDs.isEmpty {
+        if request.constraints.format != .sdc {
             diagnostics.append(diagnostic(
                 severity: .error,
-                code: "timing_mode_missing",
-                message: "At least one timing mode is required for physical implementation.",
-                actions: ["declare_timing_modes"]
+                code: "physical_constraints_format_invalid",
+                message: "Physical implementation constraints must use the SDC format.",
+                actions: ["provide_sdc_constraints"]
+            ))
+        }
+        let normalizedModeIDs = request.requestedModeIDs.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if normalizedModeIDs.contains(where: \.isEmpty) {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "timing_mode_id_invalid",
+                message: "Timing mode identifiers must not be blank.",
+                actions: ["repair_timing_mode_ids"]
+            ))
+        }
+        if Set(normalizedModeIDs).count != normalizedModeIDs.count {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "timing_mode_id_duplicate",
+                message: "Timing mode identifiers must be unique.",
+                actions: ["deduplicate_timing_mode_ids"]
+            ))
+        }
+        let requiredInputs = [request.design.artifact, request.constraints, request.pdk.manifest]
+            + (request.inputLayout.map { [$0.layoutArtifact] } ?? [])
+        if !Set(requiredInputs).isSubset(of: Set(request.inputs)) {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "physical_design_inputs_incomplete",
+                message: "Design, constraints, PDK, and referenced input layout artifacts must be retained in request inputs.",
+                actions: ["retain_all_physical_design_prerequisites"]
             ))
         }
         if request.pdk.processID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || request.pdk.version.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || request.pdk.digest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -512,10 +541,6 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let artifactReferences = request.inputs + [request.design.artifact, request.constraints, request.pdk.manifest]
         for reference in artifactReferences where reference.path.hasPrefix("/") {
             diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(reference.path)", entity: reference.path, actions: ["use_project_relative_artifact_paths"]))
-        }
-        let artifactPaths = artifactReferences.map(\.path)
-        for path in artifactPaths where path.hasPrefix("/") {
-            diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(path)", entity: path, actions: ["use_project_relative_artifact_paths"]))
         }
         return diagnostics
     }

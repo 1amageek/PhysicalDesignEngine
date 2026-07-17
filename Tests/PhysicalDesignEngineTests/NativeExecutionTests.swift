@@ -285,6 +285,7 @@ struct NativeExecutionTests {
             topCell: sourceSnapshot.topCell,
             layoutDigest: sourceReference.digest.hexadecimalValue
         )
+        request.inputs.append(sourceReference)
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
 
@@ -421,7 +422,7 @@ struct NativeExecutionTests {
             stage: .clockTreeSynthesis,
             snapshot: PhysicalDesignFixtureFactory.snapshot()
         )
-        request.inputs = [modelArtifact, pdk, rc, library]
+        request.inputs += [modelArtifact, pdk, rc, library]
         request.pdk = PDKReference(
             manifest: pdk,
             processID: "fixture-130nm",
@@ -651,6 +652,30 @@ struct NativeExecutionTests {
         #expect(result.diagnostics.contains { $0.code.rawValue == "unsupported_layout_format" })
     }
 
+    @Test("request validation rejects ambiguous timing modes and non-SDC constraints")
+    func requestValidationRejectsAmbiguousTimingInputs() async throws {
+        var request = PhysicalDesignFixtureFactory.request(
+            stage: .floorplan,
+            snapshot: PhysicalDesignFixtureFactory.snapshot()
+        )
+        request.requestedModeIDs = [" ", "func", "func"]
+        request.constraints = PhysicalDesignFixtureFactory.artifact(
+            path: "inputs/constraints.json",
+            kind: .constraint,
+            format: .json
+        )
+
+        let result = try await PhysicalDesignEngine(
+            artifactStore: InMemoryPhysicalDesignArtifactStore()
+        ).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.diagnostics.contains { $0.code.rawValue == "timing_mode_id_invalid" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "timing_mode_id_duplicate" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "physical_constraints_format_invalid" })
+        #expect(result.diagnostics.contains { $0.code.rawValue == "physical_design_inputs_incomplete" })
+    }
+
     @Test("input artifact integrity failure is blocked before mutation")
     func inputArtifactIntegrityFailureIsBlocked() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
@@ -675,6 +700,7 @@ struct NativeExecutionTests {
             topCell: "fixture_top",
             layoutDigest: storedReference.digest.hexadecimalValue
         )
+        request.inputs.append(tamperedArtifact)
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
 

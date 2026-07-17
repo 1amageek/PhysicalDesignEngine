@@ -37,7 +37,6 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
-        self.inputs = inputs
         self.design = design
         self.constraints = constraints
         self.requestedModeIDs = requestedModeIDs
@@ -48,6 +47,57 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         self.initialSnapshot = initialSnapshot
         self.executionIntent = executionIntent
         self.clockTimingModel = clockTimingModel
+        let timingArtifacts = clockTimingModel.map { [$0.modelArtifact] + $0.sourceArtifacts } ?? []
+        let prerequisites = [design.artifact, constraints, pdk.manifest]
+            + (inputLayout.map { [$0.layoutArtifact] } ?? [])
+            + timingArtifacts
+            + inputs
+        var retainedInputs: [ArtifactReference] = []
+        for artifact in prerequisites where !retainedInputs.contains(artifact) {
+            retainedInputs.append(artifact)
+        }
+        self.inputs = retainedInputs
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case runID
+        case inputs
+        case design
+        case constraints
+        case requestedModeIDs
+        case pdk
+        case inputLayout
+        case stage
+        case configuration
+        case initialSnapshot
+        case executionIntent
+        case clockTimingModel
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        guard schemaVersion == Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: container,
+                debugDescription: "Unsupported physical design request schema version \(schemaVersion)."
+            )
+        }
+        self.init(
+            runID: try container.decode(String.self, forKey: .runID),
+            inputs: try container.decode([ArtifactReference].self, forKey: .inputs),
+            design: try container.decode(LogicDesignReference.self, forKey: .design),
+            constraints: try container.decode(ArtifactReference.self, forKey: .constraints),
+            requestedModeIDs: try container.decode([String].self, forKey: .requestedModeIDs),
+            pdk: try container.decode(PDKReference.self, forKey: .pdk),
+            inputLayout: try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .inputLayout),
+            stage: try container.decode(PhysicalDesignStage.self, forKey: .stage),
+            configuration: try container.decode(PhysicalDesignConfiguration.self, forKey: .configuration),
+            initialSnapshot: try container.decodeIfPresent(PhysicalDesignSnapshot.self, forKey: .initialSnapshot),
+            executionIntent: try container.decode(PhysicalDesignExecutionIntent.self, forKey: .executionIntent),
+            clockTimingModel: try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel)
+        )
+    }
 }
