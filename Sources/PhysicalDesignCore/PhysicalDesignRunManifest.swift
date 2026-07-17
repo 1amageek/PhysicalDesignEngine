@@ -1,18 +1,18 @@
 import Foundation
 import LogicIR
 import PDKCore
-import TimingCore
 import CircuiteFoundation
 
 public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var runID: String
     public var stage: PhysicalDesignStage
     public var status: PhysicalDesignExecutionStatus
     public var design: LogicDesignReference
-    public var constraints: TimingConstraintReference
+    public var constraints: ArtifactReference
+    public var requestedModeIDs: [String]
     public var pdk: PDKReference
     public var baseLayout: PhysicalDesignReference?
     public var proposedLayout: PhysicalDesignReference?
@@ -39,6 +39,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         case status
         case design
         case constraints
+        case requestedModeIDs
         case pdk
         case baseLayout
         case proposedLayout
@@ -64,7 +65,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         stage: PhysicalDesignStage,
         status: PhysicalDesignExecutionStatus,
         design: LogicDesignReference,
-        constraints: TimingConstraintReference,
+        constraints: ArtifactReference,
+        requestedModeIDs: [String],
         pdk: PDKReference,
         baseLayout: PhysicalDesignReference?,
         proposedLayout: PhysicalDesignReference?,
@@ -90,6 +92,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         self.status = status
         self.design = design
         self.constraints = constraints
+        self.requestedModeIDs = requestedModeIDs
         self.pdk = pdk
         self.baseLayout = baseLayout
         self.proposedLayout = proposedLayout
@@ -124,7 +127,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         stage = try container.decode(PhysicalDesignStage.self, forKey: .stage)
         status = try container.decode(PhysicalDesignExecutionStatus.self, forKey: .status)
         design = try container.decode(LogicDesignReference.self, forKey: .design)
-        constraints = try container.decode(TimingConstraintReference.self, forKey: .constraints)
+        constraints = try container.decode(ArtifactReference.self, forKey: .constraints)
+        requestedModeIDs = try container.decode([String].self, forKey: .requestedModeIDs)
         pdk = try container.decode(PDKReference.self, forKey: .pdk)
         baseLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .baseLayout)
         proposedLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .proposedLayout)
@@ -155,6 +159,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         }
         if design.designDigest.isEmpty {
             diagnostics.append("design digest is empty")
+        }
+        if requestedModeIDs.isEmpty {
+            diagnostics.append("requested timing mode IDs are empty")
         }
         diagnostics.append(contentsOf: LogicDesignProvenanceValidation.issues(for: design)
             .filter { $0.code != "design_digest_missing" }

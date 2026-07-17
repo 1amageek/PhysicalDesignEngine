@@ -1,19 +1,47 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "runID": "fixture-negative-001",
   "executionIntent": "geometrySmoke",
   "inputs": [],
   "design": {
-    "artifact": { "path": "inputs/mapped-design.json", "kind": "netlist", "format": "JSON" },
+    "artifact": {
+      "id": "mapped-design",
+      "locator": {
+        "location": { "storage": "workspaceRelative", "value": "inputs/mapped-design.json" },
+        "role": "input",
+        "kind": "netlist",
+        "format": "json"
+      },
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "byteCount": 1
+    },
     "topDesignName": "fixture_top",
     "designDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
   "constraints": {
-    "artifact": { "path": "inputs/constraints.sdc", "kind": "constraint", "format": "SDC" },
-    "modeIDs": ["func"]
+    "id": "physical-constraints",
+    "locator": {
+      "location": { "storage": "workspaceRelative", "value": "inputs/constraints.sdc" },
+      "role": "input",
+      "kind": "constraint",
+      "format": "sdc"
+    },
+    "digest": { "algorithm": "sha256", "hexadecimalValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    "byteCount": 1
   },
+  "requestedModeIDs": ["func"],
   "pdk": {
-    "manifest": { "path": "inputs/pdk.json", "kind": "technology", "format": "JSON" },
+    "manifest": {
+      "id": "pdk-manifest",
+      "locator": {
+        "location": { "storage": "workspaceRelative", "value": "inputs/pdk.json" },
+        "role": "input",
+        "kind": "technology",
+        "format": "json"
+      },
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" },
+      "byteCount": 1
+    },
     "processID": "fixture-130nm",
     "version": "1",
     "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"

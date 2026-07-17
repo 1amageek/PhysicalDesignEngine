@@ -61,10 +61,8 @@ enum PhysicalDesignFixtureFactory {
                 topDesignName: "fixture_top",
                 designDigest: designDigest
             ),
-            constraints: TimingConstraintReference(
-                artifact: artifact(path: "inputs/constraints.sdc", kind: .constraint, format: .sdc),
-                modeIDs: ["func"]
-            ),
+            constraints: artifact(path: "inputs/constraints.sdc", kind: .constraint, format: .sdc),
+            requestedModeIDs: ["func"],
             pdk: PDKReference(
                 manifest: artifact(path: "inputs/pdk.json", kind: .technology, format: .json),
                 processID: "fixture-130nm",

@@ -352,6 +352,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             status: .completed,
             design: request.design,
             constraints: request.constraints,
+            requestedModeIDs: request.requestedModeIDs,
             pdk: request.pdk,
             baseLayout: request.inputLayout,
             proposedLayout: physicalReference,
@@ -462,8 +463,29 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 actions: ["repair_design_provenance", "recreate_design_handoff"]
             )
         })
-        if request.constraints.modeIDs.isEmpty {
-            diagnostics.append(diagnostic(severity: .error, code: "timing_mode_missing", message: "At least one timing mode is required for physical implementation.", actions: ["declare_timing_modes"]))
+        if request.requestedModeIDs.isEmpty {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "timing_mode_missing",
+                message: "At least one timing mode is required for physical implementation.",
+                actions: ["declare_timing_modes"]
+            ))
+        }
+        if request.constraints.kind != .constraint {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "physical_constraints_artifact_invalid",
+                message: "Physical implementation constraints must be represented by a constraint artifact.",
+                actions: ["provide_a_constraint_artifact"]
+            ))
+        }
+        if request.requestedModeIDs.isEmpty {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "timing_mode_missing",
+                message: "At least one timing mode is required for physical implementation.",
+                actions: ["declare_timing_modes"]
+            ))
         }
         if request.pdk.processID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || request.pdk.version.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || request.pdk.digest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(diagnostic(severity: .error, code: "pdk_provenance_missing", message: "PDK process, version and digest are required.", actions: ["provide_pdk_provenance"]))
@@ -487,11 +509,11 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 )
             })
         }
-        let artifactReferences = request.inputs + [request.pdk.manifest]
+        let artifactReferences = request.inputs + [request.design.artifact, request.constraints, request.pdk.manifest]
         for reference in artifactReferences where reference.path.hasPrefix("/") {
             diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(reference.path)", entity: reference.path, actions: ["use_project_relative_artifact_paths"]))
         }
-        let artifactPaths = request.inputs.map(\.path) + [request.design.artifact.path, request.constraints.artifact.path, request.pdk.manifest.path]
+        let artifactPaths = artifactReferences.map(\.path)
         for path in artifactPaths where path.hasPrefix("/") {
             diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(path)", entity: path, actions: ["use_project_relative_artifact_paths"]))
         }

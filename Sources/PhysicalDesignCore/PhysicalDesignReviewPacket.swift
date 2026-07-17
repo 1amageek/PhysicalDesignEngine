@@ -2,7 +2,7 @@ import Foundation
 import CircuiteFoundation
 
 public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
@@ -14,7 +14,7 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
     public var proposedLayout: PhysicalDesignReference
     public var designDiff: ArtifactReference
     public var artifactDigests: [String: String]
-    public var decisionScope: [String]
+    public var reviewScope: [String]
     public var createdAt: Date
 
     public init(
@@ -27,7 +27,7 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         proposedLayout: PhysicalDesignReference,
         designDiff: ArtifactReference,
         artifactDigests: [String: String],
-        decisionScope: [String],
+        reviewScope: [String],
         createdAt: Date = Date()
     ) {
         self.schemaVersion = Self.currentSchemaVersion
@@ -40,7 +40,7 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         self.proposedLayout = proposedLayout
         self.designDiff = designDiff
         self.artifactDigests = artifactDigests
-        self.decisionScope = decisionScope
+        self.reviewScope = reviewScope
         self.createdAt = Self.canonicalTimestamp(createdAt)
     }
 
@@ -55,8 +55,11 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         }
         if manifestDigest.isEmpty { diagnostics.append("review packet manifest digest is empty") }
         if proposedLayout.layoutDigest.isEmpty { diagnostics.append("review packet proposed layout digest is empty") }
-        if decisionScope.isEmpty { diagnostics.append("review packet decision scope is empty") }
-        if Set(decisionScope).count != decisionScope.count { diagnostics.append("review packet decision scope is not unique") }
+        if reviewScope.isEmpty { diagnostics.append("review packet review scope is empty") }
+        if Set(reviewScope).count != reviewScope.count { diagnostics.append("review packet review scope is not unique") }
+        if reviewScope.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            diagnostics.append("review packet review scope contains an empty value")
+        }
         if manifestReference.digest.algorithm != .sha256
             || manifestReference.digest.hexadecimalValue.isEmpty
             || manifestReference.byteCount == 0 {

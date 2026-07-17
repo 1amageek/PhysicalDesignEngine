@@ -1,18 +1,18 @@
 import Foundation
 import CircuiteFoundation
 import LogicIR
-import TimingCore
 import PDKCore
 
 public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var runID: String
     public var inputs: [ArtifactReference]
 
     public var design: LogicDesignReference
-    public var constraints: TimingConstraintReference
+    public var constraints: ArtifactReference
+    public var requestedModeIDs: [String]
     public var pdk: PDKReference
     public var inputLayout: PhysicalDesignReference?
     public var stage: PhysicalDesignStage
@@ -25,7 +25,8 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         runID: String,
         inputs: [ArtifactReference],
         design: LogicDesignReference,
-        constraints: TimingConstraintReference,
+        constraints: ArtifactReference,
+        requestedModeIDs: [String],
         pdk: PDKReference,
         inputLayout: PhysicalDesignReference? = nil,
         stage: PhysicalDesignStage = .floorplan,
@@ -39,6 +40,7 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         self.inputs = inputs
         self.design = design
         self.constraints = constraints
+        self.requestedModeIDs = requestedModeIDs
         self.pdk = pdk
         self.inputLayout = inputLayout
         self.stage = stage

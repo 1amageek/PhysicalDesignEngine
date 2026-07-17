@@ -88,9 +88,8 @@ GitHub revision. This repository does not require an umbrella checkout.
 | Dependency | Local sibling | Remote fallback revision |
 |---|---|---|
 | CircuiteFoundation | `../CircuiteFoundation` | `2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac` |
-| LogicDesign | `../LogicDesign` | `8e0c8c2c63152aa45bf12d943fa034bb1aba0f1e` |
-| TimingEngine | `../TimingEngine` | `5b2f711d355af8a204819c6ed33f98ef722e379c` |
-| PDKKit | `../PDKKit` | `aa145dfaa67454c44ac7767c37a28ab7f4b1d2e2` |
+| LogicDesign | `../LogicDesign` | `09768ed203d97d1d0f79f786f9988fcb2cd39155` |
+| PDKKit | `../PDKKit` | `28f3b83304ad2bbb0c2e0269d26616081d90d992` |
 
 ```bash
 perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
@@ -104,6 +103,6 @@ perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
   test CODE_SIGNING_ALLOWED=NO
 ```
 
-The regression suite covers all native stages, dimensional CTS behavior, characterized timing, native production blocking, ToolQualification evidence consumption, independent oracle correlation, immutable artifact verification, symlink escape rejection, review/resume integrity, DEF interchange, and CLI errors.
+The regression suite covers all native stages, dimensional CTS behavior, characterized timing, native production blocking, ToolQualification evidence consumption, independent oracle correlation, immutable artifact verification, symlink escape rejection, review packet artifact integrity, DEF interchange, and CLI errors.
 
 See `DESIGN.md`, `INTERFACES.md`, `CAPABILITY.md`, and `GOAL_STATUS.md` for exact responsibility and maturity boundaries.

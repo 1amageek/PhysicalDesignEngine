@@ -63,7 +63,7 @@ approval or release policy.
 
 All artifact locations are workspace-relative. The filesystem store resolves the configured root canonically, checks each parent and leaf against that root, rejects symlink traversal, verifies byte count and SHA-256 on read, and uses immutable destination paths on write.
 
-Review/resume helpers in this package validate physical revision identity and current bytes. DesignFlowKernel remains the owner of the approval decision and lifecycle transition that consumes those checks.
+Artifact review validation in this package prepares an immutable review packet and revalidates its current bytes. DesignFlowKernel owns approval decisions, resume, and lifecycle transitions.
 
 ## Foreign format boundary
 

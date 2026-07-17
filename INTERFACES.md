@@ -19,18 +19,18 @@ where Request == PhysicalDesignRequest,
 
 ## Request
 
-`PhysicalDesignRequest` schema version 2 requires `executionIntent` and carries:
+`PhysicalDesignRequest` schema version 3 requires `executionIntent` and carries:
 
 | Field | Meaning |
 |---|---|
 | `inputs` | Exact retained execution inputs |
 | `design` | Mapped logic design identity |
-| `constraints` | Timing constraint artifact and modes |
+| `constraints` | Timing constraint artifact |
+| `requestedModeIDs` | Explicit timing modes used by physical implementation |
 | `pdk` | Exact PDK manifest, process, version, and digest |
 | `initialSnapshot` / `inputLayout` | Exactly one canonical physical input |
 | `configuration` | Deterministic geometry controls and seed |
 | `clockTimingModel` | Optional PDK/RC/Liberty/corner characterization binding |
-| `productionEvidence` | Optional ToolQualification and physical-correlation artifact references |
 
 Older request and payload schemas are not decoded through compatibility defaults.
 
@@ -94,5 +94,5 @@ The protocol contains no qualification state. ToolQualification and host policy 
 - Missing semantics or insufficient trust returns a `blocked` result with typed diagnostics.
 - Persistence failure returns `failed` only when a valid result cannot be committed.
 - Cancellation remains `cancelled`.
-- Model, production-evidence, artifact-store, and review/resume failures use typed errors.
+- Model, production-evidence, artifact-store, and review-artifact failures use typed errors.
 - Errors are never suppressed with `try?`.
