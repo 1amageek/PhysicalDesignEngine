@@ -13,10 +13,11 @@ struct ContractTests {
     @Test("contract version reflects the typed trust boundary")
     func contractVersion() {
         #expect(PhysicalDesignEngineAPI.contractVersion == 2)
+        #expect(PhysicalDesignEngineAPI.nativeCapability.contractVersion == PhysicalDesignEngineAPI.contractVersion)
+        #expect(PhysicalDesignEngineAPI.nativeCapability.features == PhysicalDesignStage.allCases.map(\.rawValue))
         #expect(PhysicalDesignEngineAPI.nativeCapability.supportedExecutionIntents == [
             .geometrySmoke,
             .characterizedTiming,
         ])
-        #expect(PhysicalDesignEngineAPI.nativeCapability.supportedExecutionIntents == [.geometrySmoke, .characterizedTiming])
     }
 }

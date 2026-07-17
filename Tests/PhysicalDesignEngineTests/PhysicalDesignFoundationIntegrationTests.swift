@@ -37,6 +37,44 @@ struct PhysicalDesignFoundationIntegrationTests {
         #expect(request.initialSnapshot?.topCell == "fixture_top")
     }
 
+    @Test("legacy request schemas are rejected at the native execution boundary")
+    func legacyRequestSchemasAreRejected() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let engine = PhysicalDesignEngine(artifactStore: store)
+        var request = PhysicalDesignFixtureFactory.request(
+            stage: .floorplan,
+            snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+        )
+        request.schemaVersion = PhysicalDesignRequest.currentSchemaVersion - 1
+
+        let result = try await engine.execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.artifacts.isEmpty)
+        #expect(result.payload.runManifest == nil)
+        #expect(result.diagnostics.contains { $0.code.rawValue == "unsupported_request_schema" })
+    }
+
+    @Test("legacy run manifests are not decoded through compatibility defaults")
+    func legacyRunManifestsAreRejected() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let engine = PhysicalDesignEngine(artifactStore: store)
+        let request = PhysicalDesignFixtureFactory.request(
+            stage: .floorplan,
+            snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
+        )
+        let result = try await engine.execute(request)
+        let manifestReference = try #require(result.payload.runManifest)
+        let manifestData = try #require(await store.data(at: manifestReference.path))
+        var manifest = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: manifestData)
+        manifest.schemaVersion = PhysicalDesignRunManifest.currentSchemaVersion - 1
+        let legacyManifestData = try PhysicalDesignJSONCodec().encode(manifest)
+
+        #expect(throws: DecodingError.self) {
+            _ = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: legacyManifestData)
+        }
+    }
+
     @Test("artifact stores refuse to overwrite an immutable path")
     func artifactStoreIsImmutable() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
