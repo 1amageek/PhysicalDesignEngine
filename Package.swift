@@ -5,26 +5,29 @@ import Foundation
 let workspaceRoot = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()
     .deletingLastPathComponent()
+let isLSIWorkspace = FileManager.default.fileExists(
+    atPath: workspaceRoot.appendingPathComponent("docs/workspace-packages.json").path
+)
 
-let circuiteFoundationDependency: Package.Dependency = FileManager.default.fileExists(
+let circuiteFoundationDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("CircuiteFoundation/Package.swift").path
 )
     ? .package(path: "../CircuiteFoundation")
     : .package(url: "https://github.com/1amageek/CircuiteFoundation.git", revision: "2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac")
 
-let logicDesignDependency: Package.Dependency = FileManager.default.fileExists(
+let logicDesignDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("LogicDesign/Package.swift").path
 )
     ? .package(path: "../LogicDesign")
     : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "cc39c974bf14624e6ce29fd8722620385fde0762")
 
-let timingEngineDependency: Package.Dependency = FileManager.default.fileExists(
+let timingEngineDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("TimingEngine/Package.swift").path
 )
     ? .package(path: "../TimingEngine")
     : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "9189b6dba804191d664eeae334fc429fa74ba421")
 
-let pdkKitDependency: Package.Dependency = FileManager.default.fileExists(
+let pdkKitDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("PDKKit/Package.swift").path
 )
     ? .package(path: "../PDKKit")
