@@ -2374,13 +2374,26 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func metrics(for snapshot: PhysicalDesignSnapshot) -> [PhysicalDesignMetric] {
         let placedCount = snapshot.cells.filter(\.placed).count
+        let fillArea = snapshot.fills.reduce(0.0) {
+            $0 + Double($1.geometry.width) * Double($1.geometry.height)
+        }
+        let coreArea = snapshot.core.map {
+            Double($0.width) * Double($0.height)
+        } ?? 0
+        let fillDensity = coreArea > 0 ? fillArea / coreArea : 0
         return [
             PhysicalDesignMetric(name: "cellCount", value: Double(snapshot.cells.count), unit: "cells"),
             PhysicalDesignMetric(name: "placedCellCount", value: Double(placedCount), unit: "cells"),
             PhysicalDesignMetric(name: "netCount", value: Double(snapshot.nets.count), unit: "nets"),
             PhysicalDesignMetric(name: "routeCount", value: Double(snapshot.routes.count), unit: "routes"),
             PhysicalDesignMetric(name: "viaCount", value: Double(snapshot.vias.count), unit: "vias"),
-            PhysicalDesignMetric(name: "fillCount", value: Double(snapshot.fills.count), unit: "fills")
+            PhysicalDesignMetric(name: "fillCount", value: Double(snapshot.fills.count), unit: "fills"),
+            PhysicalDesignMetric(name: "fillDensity", value: fillDensity, unit: "ratio"),
+            PhysicalDesignMetric(
+                name: "unresolvedHotspotCount",
+                value: Double(snapshot.hotspots.filter { !$0.resolved }.count),
+                unit: "hotspots"
+            )
         ]
     }
 

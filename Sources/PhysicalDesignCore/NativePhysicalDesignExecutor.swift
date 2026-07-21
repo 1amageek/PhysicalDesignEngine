@@ -415,6 +415,14 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         if request.schemaVersion != PhysicalDesignRequest.currentSchemaVersion {
             diagnostics.append(diagnostic(severity: .error, code: "unsupported_request_schema", message: "Request schema version \(request.schemaVersion) is not supported.", actions: ["upgrade_the_request_schema"]))
         }
+        if request.executionIntent == .productionImplementation {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "native_production_implementation_unsupported",
+                message: "The native geometry backend cannot execute a production physical implementation request.",
+                actions: ["configure_the_openroad_backend", "provide_exact_pdk_and_tool_artifacts"]
+            ))
+        }
         if request.executionIntent == .characterizedTiming {
             if request.stage != .clockTreeSynthesis {
                 diagnostics.append(diagnostic(

@@ -5,14 +5,14 @@ import PhysicalDesignEngine
 public struct PhysicalDesignCLICommand: Sendable {
     public init() {}
 
-    public func run(
+    public func invoke(
         arguments: [String],
         currentDirectory: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-    ) async -> String {
+    ) async -> PhysicalDesignCLIInvocationResult {
         do {
             let options = try parse(arguments: arguments, currentDirectory: currentDirectory)
             if options.help {
-                return Self.helpText
+                return PhysicalDesignCLIInvocationResult(output: Self.helpText, exitCode: 0)
             }
             let requestData: Data
             if let requestPath = options.requestPath {
@@ -25,11 +25,20 @@ public struct PhysicalDesignCLICommand: Sendable {
             let store = FileSystemPhysicalDesignArtifactStore(projectRoot: options.projectRoot)
             let engine = PhysicalDesignEngine(artifactStore: store)
             let result = try await engine.execute(request)
-            return String(decoding: try codec.encode(result), as: UTF8.self)
+            return PhysicalDesignCLIInvocationResult(
+                output: String(decoding: try codec.encode(result), as: UTF8.self),
+                exitCode: result.status == .completed ? 0 : 1
+            )
         } catch let error as PhysicalDesignCLIError {
-            return encodeError(error.code, message: error.localizedDescription, actions: error.actions)
+            return PhysicalDesignCLIInvocationResult(
+                output: encodeError(error.code, message: error.localizedDescription, actions: error.actions),
+                exitCode: 2
+            )
         } catch {
-            return encodeError("cli_execution_failed", message: error.localizedDescription, actions: ["inspect_request_and_project_root"])
+            return PhysicalDesignCLIInvocationResult(
+                output: encodeError("cli_execution_failed", message: error.localizedDescription, actions: ["inspect_request_and_project_root"]),
+                exitCode: 1
+            )
         }
     }
 
@@ -38,7 +47,8 @@ public struct PhysicalDesignCLICommand: Sendable {
         physical-design [--request <path>] [--project-root <path>]
 
         Reads a PhysicalDesignRequest JSON document from --request or stdin and emits one JSON result envelope.
-        Native execution writes immutable artifacts under runs/<run-id>/physical-design/.
+        Execution intent selects the native geometry or OpenROAD process backend.
+        Immutable artifacts are written under runs/<run-id>/physical-design/.
         """
     }
 

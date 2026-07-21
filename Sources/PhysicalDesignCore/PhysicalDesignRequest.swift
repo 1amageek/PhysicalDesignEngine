@@ -4,7 +4,7 @@ import LogicIR
 import PDKCore
 
 public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 3
+    public static let currentSchemaVersion = 4
 
     public var schemaVersion: Int
     public var runID: String
@@ -20,6 +20,7 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
     public var initialSnapshot: PhysicalDesignSnapshot?
     public var executionIntent: PhysicalDesignExecutionIntent
     public var clockTimingModel: PhysicalDesignClockTimingModelReference?
+    public var productionConfiguration: PhysicalDesignProductionConfiguration?
 
     public init(
         runID: String,
@@ -33,7 +34,8 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         configuration: PhysicalDesignConfiguration = .default,
         initialSnapshot: PhysicalDesignSnapshot? = nil,
         executionIntent: PhysicalDesignExecutionIntent = .geometrySmoke,
-        clockTimingModel: PhysicalDesignClockTimingModelReference? = nil
+        clockTimingModel: PhysicalDesignClockTimingModelReference? = nil,
+        productionConfiguration: PhysicalDesignProductionConfiguration? = nil
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -47,10 +49,13 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         self.initialSnapshot = initialSnapshot
         self.executionIntent = executionIntent
         self.clockTimingModel = clockTimingModel
+        self.productionConfiguration = productionConfiguration
         let timingArtifacts = clockTimingModel.map { [$0.modelArtifact] + $0.sourceArtifacts } ?? []
+        let productionArtifacts = productionConfiguration?.inputArtifacts ?? []
         let prerequisites = [design.artifact, constraints, pdk.manifest]
             + (inputLayout.map { [$0.layoutArtifact] } ?? [])
             + timingArtifacts
+            + productionArtifacts
             + inputs
         var retainedInputs: [ArtifactReference] = []
         for artifact in prerequisites where !retainedInputs.contains(artifact) {
@@ -73,6 +78,7 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         case initialSnapshot
         case executionIntent
         case clockTimingModel
+        case productionConfiguration
     }
 
     public init(from decoder: Decoder) throws {
@@ -97,7 +103,8 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
             configuration: try container.decode(PhysicalDesignConfiguration.self, forKey: .configuration),
             initialSnapshot: try container.decodeIfPresent(PhysicalDesignSnapshot.self, forKey: .initialSnapshot),
             executionIntent: try container.decode(PhysicalDesignExecutionIntent.self, forKey: .executionIntent),
-            clockTimingModel: try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel)
+            clockTimingModel: try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel),
+            productionConfiguration: try container.decodeIfPresent(PhysicalDesignProductionConfiguration.self, forKey: .productionConfiguration)
         )
     }
 }

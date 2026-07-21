@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 4,
+  "runID": "fixture-openroad-unavailable-001",
+  "executionIntent": "productionImplementation",
+  "inputs": [],
+  "design": {
+    "artifact": {
+      "id": "mapped-design",
+      "locator": {
+        "location": { "storage": "workspaceRelative", "value": "inputs/mapped-design.json" },
+        "role": "input", "kind": "netlist", "format": "json"
+      },
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      "byteCount": 1
+    },
+    "topDesignName": "fixture_top",
+    "designDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "constraints": {
+    "id": "physical-constraints",
+    "locator": {
+      "location": { "storage": "workspaceRelative", "value": "inputs/constraints.sdc" },
+      "role": "input", "kind": "constraint", "format": "sdc"
+    },
+    "digest": { "algorithm": "sha256", "hexadecimalValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    "byteCount": 1
+  },
+  "requestedModeIDs": ["func"],
+  "pdk": {
+    "manifest": {
+      "id": "pdk-manifest",
+      "locator": {
+        "location": { "storage": "workspaceRelative", "value": "inputs/pdk.json" },
+        "role": "input", "kind": "technology", "format": "json"
+      },
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" },
+      "byteCount": 1
+    },
+    "processID": "fixture-130nm",
+    "version": "1",
+    "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "stage": "floorplan",
+  "configuration": {
+    "dieWidth": 100000, "dieHeight": 100000, "coreMargin": 10000,
+    "rowHeight": 1000, "siteWidth": 100, "placementSpacing": 20,
+    "preferredRoutingLayers": [2, 3, 4], "maximumRoutingLayer": 5,
+    "targetUtilization": 0.7, "powerNetNames": ["VDD", "VSS"],
+    "maximumAntennaRatio": 300, "fillWindowSize": 5000, "fillSpacing": 500,
+    "ecoAction": "resize_cell", "ecoDeltaX": 0, "ecoDeltaY": 0,
+    "deterministicSeed": 7
+  },
+  "initialSnapshot": {
+    "schemaVersion": 1, "topCell": "fixture_top", "unitsPerMicron": 1000,
+    "die": null, "core": null, "rows": [], "cells": [], "pins": [], "nets": [],
+    "blockages": [], "powerStructures": [], "clockTrees": [], "routes": [], "vias": [],
+    "fills": [], "hotspots": [], "antennaRepairs": [], "metadata": {}
+  },
+  "productionConfiguration": {
+    "backendID": "openroad",
+    "executable": {
+      "path": "/opt/openroad/bin/openroad",
+      "toolID": "openroad",
+      "expectedVersion": "2.0",
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" },
+      "byteCount": 1
+    },
+    "versionArguments": ["-version"],
+    "technologyLEFs": [
+      {
+        "id": "technology-lef",
+        "locator": {
+          "location": { "storage": "workspaceRelative", "value": "inputs/technology.lef" },
+          "role": "input", "kind": "technology", "format": "lef"
+        },
+        "digest": { "algorithm": "sha256", "hexadecimalValue": "1111111111111111111111111111111111111111111111111111111111111111" },
+        "byteCount": 1
+      }
+    ],
+    "cellLEFs": [
+      {
+        "id": "cell-lef",
+        "locator": {
+          "location": { "storage": "workspaceRelative", "value": "inputs/cells.lef" },
+          "role": "input", "kind": "technology", "format": "lef"
+        },
+        "digest": { "algorithm": "sha256", "hexadecimalValue": "2222222222222222222222222222222222222222222222222222222222222222" },
+        "byteCount": 1
+      }
+    ],
+    "libertyLibraries": [
+      {
+        "id": "timing-library",
+        "locator": {
+          "location": { "storage": "workspaceRelative", "value": "inputs/cells.lib" },
+          "role": "input", "kind": "timing-library", "format": "liberty"
+        },
+        "digest": { "algorithm": "sha256", "hexadecimalValue": "3333333333333333333333333333333333333333333333333333333333333333" },
+        "byteCount": 1
+      }
+    ],
+    "synthesizedNetlist": {
+      "id": "synthesized-netlist",
+      "locator": {
+        "location": { "storage": "workspaceRelative", "value": "inputs/design.v" },
+        "role": "input", "kind": "netlist", "format": "verilog"
+      },
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "4444444444444444444444444444444444444444444444444444444444444444" },
+      "byteCount": 1
+    },
+    "rcSetupScript": {
+      "id": "rc-setup",
+      "locator": {
+        "location": { "storage": "workspaceRelative", "value": "inputs/rc-setup.tcl" },
+        "role": "input", "kind": "constraint", "format": "text"
+      },
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "5555555555555555555555555555555555555555555555555555555555555555" },
+      "byteCount": 1
+    },
+    "stageScript": {
+      "id": "stage-script",
+      "locator": {
+        "location": { "storage": "workspaceRelative", "value": "inputs/floorplan.tcl" },
+        "role": "input", "kind": "constraint", "format": "text"
+      },
+      "digest": { "algorithm": "sha256", "hexadecimalValue": "6666666666666666666666666666666666666666666666666666666666666666" },
+      "byteCount": 1
+    },
+    "cornerID": "tt",
+    "timeoutSeconds": 300
+  }
+}

@@ -4,15 +4,17 @@ Protocol-first floorplan, placement, clock-tree, routing, ECO, antenna-repair, a
 
 ## Status
 
-The package contains a deterministic native geometry backend over `PhysicalDesignSnapshot`. It is suitable for reproducible development, review, and smoke testing. It is not a production place-and-route implementation and cannot promote itself to production eligibility.
+The package contains a deterministic native geometry backend and a directly conforming OpenROAD process backend. The OpenROAD backend executes a retained stage script against exact Verilog, SDC, LEF, Liberty, RC setup, PDK, and executable identities. It never promotes its own output to production eligibility.
 
 ```mermaid
 flowchart LR
   Request["PhysicalDesignRequest"] --> Native["Native geometry backend"]
   Native --> Revision["JSON / DEF / diff / manifest"]
   Native --> Claims["Geometry verified\nTiming blocked or characterized\nProduction blocked"]
-  TQ["ToolQualification process evidence"] --> Qualified["Future qualified backend"]
+  Production["OpenROAD process backend"] --> Evidence["DEF / logs / process evidence"]
+  TQ["ToolQualification process evidence"] --> Qualified["Qualified flow decision"]
   Oracle["Independent raw oracle result"] --> Qualified
+  Evidence --> TQ
 ```
 
 ## Products
@@ -26,7 +28,8 @@ flowchart LR
 | `RoutingEngine` | Global and detailed routing protocol |
 | `PhysicalECO` | Physical ECO protocol |
 | `PhysicalDFM` | DFM mutation protocol |
-| `PhysicalDesignEngine` | Native stage dispatcher |
+| `OpenROADPhysicalDesign` | Exact-input external OpenROAD process execution |
+| `PhysicalDesignEngine` | Intent-based native/OpenROAD stage dispatcher |
 | `PhysicalDesignCLISupport` / `physical-design` | Structured JSON CLI |
 
 ## Execution contract
@@ -39,7 +42,7 @@ Every stage executor conforms directly to the `CircuiteFoundation.Engine` contra
 |---|---:|---|
 | `geometrySmoke` | Yes | Deterministic geometry construction and native invariant checks |
 | `characterizedTiming` | CTS only | Clock timing derived from a retained PDK/RC/Liberty/corner model |
-| `productionEligible` | No | Always blocked by the native backend |
+| `productionImplementation` | OpenROAD only | Executes the configured tool; production claim remains blocked pending independent qualification |
 
 Geometry remains in database units. `shortestPathLengthDBU`, `longestPathLengthDBU`, route constraints, and placement wirelength objectives never contain picoseconds. Clock latency and skew are emitted only as `PhysicalDesignClockTimingEstimate` after exact model, PDK, RC, cell-library, and corner artifacts have been re-read and verified. Missing characterization still permits geometry smoke output, but timing and production claims remain blocked.
 
@@ -71,6 +74,14 @@ ToolQualification and release policy.
 
 The native backend does not claim foundry-rule correctness, signoff timing, DRC, LVS, PEX, EM/IR, or tapeout stream-out readiness. Native placement, routing, ECO, antenna, and DFM checks are deterministic construction checks and review candidates. Independent engines remain authoritative.
 
+## OpenROAD process backend
+
+`PhysicalDesignProductionConfiguration` binds the executable path, expected executable SHA-256 and byte count, version probe, technology and cell LEFs, Liberty libraries, synthesized Verilog, SDC, RC setup script, stage script, PDK identity, corner, and timeout. Every artifact is re-read through `PhysicalDesignArtifactStore`; the executable is verified before and after execution.
+
+The backend runs in an isolated directory with a deterministic non-secret environment. Timeout and cancellation terminate the complete process group through `SignoffToolSupport`. A successful process emits canonical DEF/JSON, design diff, stdout, stderr, generated Tcl, process evidence, and run manifest artifacts. A missing executable or view is blocked; non-zero exit, timeout, missing DEF, and persistence failure are typed failures.
+
+OpenROAD is not installed by this package. Availability of an executable and PDK views makes the backend callable, not qualified. ToolQualification, an independent physical oracle, flow policy, and human approval remain required.
+
 ## CLI
 
 From the repository root:
@@ -78,6 +89,7 @@ From the repository root:
 ```bash
 swift run physical-design --request Fixtures/positive-floorplan-request.json --project-root .
 swift run physical-design --request Fixtures/negative-missing-snapshot-request.json --project-root .
+swift run physical-design --request Fixtures/negative-openroad-unavailable-request.json --project-root .
 ```
 
 The CLI emits one structured `PhysicalDesignResult` JSON value.
@@ -106,6 +118,6 @@ perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
   test CODE_SIGNING_ALLOWED=NO
 ```
 
-The regression suite covers all native stages, dimensional CTS behavior, characterized timing, native production blocking, ToolQualification evidence consumption, independent oracle correlation, immutable artifact verification, symlink escape rejection, review packet artifact integrity, DEF interchange, and CLI errors.
+The regression suite covers all native stages, dimensional CTS behavior, characterized timing, native production blocking, the OpenROAD process contract, executable integrity, typed unavailable-tool behavior, raw process evidence, ToolQualification evidence consumption, independent oracle correlation, immutable artifact verification, symlink escape rejection, review packet artifact integrity, DEF interchange, and CLI errors.
 
 See `DESIGN.md`, `INTERFACES.md`, `CAPABILITY.md`, and `GOAL_STATUS.md` for exact responsibility and maturity boundaries.

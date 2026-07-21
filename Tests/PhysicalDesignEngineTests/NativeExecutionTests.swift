@@ -795,9 +795,45 @@ struct NativeExecutionTests {
     @Test("CLI returns a deterministic structured error for invalid options")
     func cliErrorIsStructured() async throws {
         let command = PhysicalDesignCLICommand()
-        let output = await command.run(arguments: ["--unknown"])
-        let decoded = try PhysicalDesignJSONCodec().decode(PhysicalDesignCLIErrorOutput.self, from: Data(output.utf8))
+        let result = await command.invoke(arguments: ["--unknown"])
+        let decoded = try PhysicalDesignJSONCodec().decode(
+            PhysicalDesignCLIErrorOutput.self,
+            from: Data(result.output.utf8)
+        )
+        #expect(result.exitCode != 0)
         #expect(decoded.status == "failed")
         #expect(decoded.code == "unknown_option")
+    }
+
+    @Test("CLI reports a blocked engine result with a nonzero exit code")
+    func cliBlockedResultIsNonzero() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "physical-design-cli-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            do {
+                try FileManager.default.removeItem(at: root)
+            } catch {
+                Issue.record("Failed to remove CLI test directory: \(error)")
+            }
+        }
+
+        let request = PhysicalDesignFixtureFactory.request(stage: .floorplan)
+        let requestURL = root.appending(path: "request.json")
+        let codec = PhysicalDesignJSONCodec()
+        try codec.encode(request).write(to: requestURL, options: .atomic)
+
+        let result = await PhysicalDesignCLICommand().invoke(
+            arguments: [
+                "--request", requestURL.path(percentEncoded: false),
+                "--project-root", root.path(percentEncoded: false)
+            ],
+            currentDirectory: root
+        )
+        let decoded = try codec.decode(PhysicalDesignResult.self, from: Data(result.output.utf8))
+
+        #expect(result.exitCode == 1)
+        #expect(decoded.status == .blocked)
+        #expect(decoded.diagnostics.contains { $0.severity == .error })
     }
 }

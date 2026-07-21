@@ -19,7 +19,7 @@ where Request == PhysicalDesignRequest,
 
 ## Request
 
-`PhysicalDesignRequest` schema version 3 requires `executionIntent` and carries:
+`PhysicalDesignRequest` schema version 4 requires `executionIntent` and carries:
 
 | Field | Meaning |
 |---|---|
@@ -31,8 +31,24 @@ where Request == PhysicalDesignRequest,
 | `initialSnapshot` / `inputLayout` | Exactly one canonical physical input |
 | `configuration` | Deterministic geometry controls and seed |
 | `clockTimingModel` | Optional PDK/RC/Liberty/corner characterization binding |
+| `productionConfiguration` | Optional exact OpenROAD executable and production-view binding |
 
 Older request and payload schemas are not decoded through compatibility defaults.
+
+## OpenROAD execution
+
+`OpenROADPhysicalDesignExecutor` conforms directly to `PhysicalDesignStageExecuting`. `PhysicalDesignProductionConfiguration` requires:
+
+- an executable path with expected SHA-256, byte count, tool ID, and version;
+- technology LEF and cell LEF artifacts;
+- Liberty libraries and a corner ID;
+- a synthesized Verilog/SystemVerilog netlist and canonical SDC;
+- an RC setup Tcl artifact and a stage Tcl artifact;
+- a positive process timeout.
+
+The executor supplies typed Xcircuite context variables to the retained stage script, but does not accept unrecorded command fragments or raw caller environment variables. The executable and all declared artifacts are verified from their bytes. Output is accepted only when the tool exits successfully and emits a canonical, matching-top-cell DEF.
+
+`PhysicalDesignProcessEvidence` retains the external invocation, sanitized environment fingerprint, observed tool version, exact inputs, standard output/error, generated wrapper Tcl, output DEF references, exit code, and timestamps.
 
 ## Claims
 
@@ -89,3 +105,4 @@ ToolQualification and release policy to evaluate the concrete exporter.
 - Cancellation remains `cancelled`.
 - Model, production-evidence, artifact-store, and review-artifact failures use typed errors.
 - Errors are never suppressed with `try?`.
+- An unavailable or digest-mismatched OpenROAD executable is `blocked`; timeout, non-zero process exit, missing output, and persistence faults are `failed`.

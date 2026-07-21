@@ -4,7 +4,7 @@ import PDKCore
 import CircuiteFoundation
 
 public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 3
+    public static let currentSchemaVersion = 4
 
     public var schemaVersion: Int
     public var runID: String
@@ -28,6 +28,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var implementationConfiguration: PhysicalDesignConfiguration?
     public var executionIntent: PhysicalDesignExecutionIntent
     public var clockTimingModel: PhysicalDesignClockTimingModelReference?
+    public var productionConfiguration: PhysicalDesignProductionConfiguration?
+    public var processEvidence: ArtifactReference?
     public var claims: PhysicalDesignCapabilityClaims
     public var createdAt: Date
     public var completedAt: Date
@@ -55,6 +57,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         case implementationConfiguration
         case executionIntent
         case clockTimingModel
+        case productionConfiguration
+        case processEvidence
         case claims
         case createdAt
         case completedAt
@@ -84,6 +88,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         implementationConfiguration: PhysicalDesignConfiguration? = nil,
         executionIntent: PhysicalDesignExecutionIntent,
         clockTimingModel: PhysicalDesignClockTimingModelReference? = nil,
+        productionConfiguration: PhysicalDesignProductionConfiguration? = nil,
+        processEvidence: ArtifactReference? = nil,
         claims: PhysicalDesignCapabilityClaims
     ) {
         self.schemaVersion = Self.currentSchemaVersion
@@ -108,6 +114,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         self.implementationConfiguration = implementationConfiguration
         self.executionIntent = executionIntent
         self.clockTimingModel = clockTimingModel
+        self.productionConfiguration = productionConfiguration
+        self.processEvidence = processEvidence
         self.claims = claims
         self.createdAt = createdAt
         self.completedAt = completedAt
@@ -144,6 +152,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         implementationConfiguration = try container.decodeIfPresent(PhysicalDesignConfiguration.self, forKey: .implementationConfiguration)
         executionIntent = try container.decode(PhysicalDesignExecutionIntent.self, forKey: .executionIntent)
         clockTimingModel = try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel)
+        productionConfiguration = try container.decodeIfPresent(PhysicalDesignProductionConfiguration.self, forKey: .productionConfiguration)
+        processEvidence = try container.decodeIfPresent(ArtifactReference.self, forKey: .processEvidence)
         claims = try container.decode(PhysicalDesignCapabilityClaims.self, forKey: .claims)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         completedAt = try container.decode(Date.self, forKey: .completedAt)
@@ -214,8 +224,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if claims.timing == .verified && clockTimingModel == nil {
             diagnostics.append("verified timing claim requires a retained clock timing model")
         }
-        if status == .completed && artifacts.count != 3 {
-            diagnostics.append("completed manifest must contain the JSON revision, DEF revision and design diff artifacts")
+        if status == .completed && artifacts.count < 3 {
+            diagnostics.append("completed manifest must contain at least the JSON revision, DEF revision and design diff artifacts")
         }
         let artifactPaths = Set(artifacts.map(\.path))
         if artifactPaths.count != artifacts.count {
@@ -226,6 +236,17 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         }
         if let designDiff, !artifactPaths.contains(designDiff.path) {
             diagnostics.append("design diff is not present in the artifact set")
+        }
+        if executionIntent == .productionImplementation {
+            if productionConfiguration == nil {
+                diagnostics.append("production implementation has no retained production configuration")
+            }
+            if processEvidence == nil {
+                diagnostics.append("production implementation has no retained process evidence")
+            }
+        }
+        if let processEvidence, !artifactPaths.contains(processEvidence.path) {
+            diagnostics.append("process evidence is not present in the artifact set")
         }
         let artifactIDs = artifacts.map(\.artifactID)
         if Set(artifactIDs).count != artifactIDs.count {
@@ -239,7 +260,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
                 || artifact.digest.hexadecimalValue.isEmpty {
                 diagnostics.append("artifact \(artifact.path) has no SHA-256 digest")
             }
-            if artifact.byteCount == 0 {
+            if artifact.byteCount == 0 && artifact.kind != .log {
                 diagnostics.append("artifact \(artifact.path) has no valid byte count")
             }
         }

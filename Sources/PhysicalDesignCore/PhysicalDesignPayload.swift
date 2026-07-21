@@ -8,6 +8,7 @@ public struct PhysicalDesignPayload: Sendable, Hashable, Codable {
     public var designDiff: ArtifactReference?
     public var metrics: [PhysicalDesignMetric]
     public var runManifest: ArtifactReference?
+    public var stageCompletionEvidence: ArtifactReference?
     public var claims: PhysicalDesignCapabilityClaims
 
     public init(
@@ -17,6 +18,7 @@ public struct PhysicalDesignPayload: Sendable, Hashable, Codable {
         designDiff: ArtifactReference? = nil,
         metrics: [PhysicalDesignMetric] = [],
         runManifest: ArtifactReference? = nil,
+        stageCompletionEvidence: ArtifactReference? = nil,
         claims: PhysicalDesignCapabilityClaims = .blocked
     ) {
         self.physicalDesign = physicalDesign
@@ -25,6 +27,7 @@ public struct PhysicalDesignPayload: Sendable, Hashable, Codable {
         self.designDiff = designDiff
         self.metrics = metrics
         self.runManifest = runManifest
+        self.stageCompletionEvidence = stageCompletionEvidence
         self.claims = claims
     }
 

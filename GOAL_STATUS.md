@@ -2,7 +2,7 @@
 
 ## Current state
 
-**The deterministic native geometry backend and its trust boundaries are implemented. Production place-and-route remains intentionally unavailable.**
+**The deterministic native backend and a directly conforming OpenROAD process backend are implemented. Installed OpenROAD/PDK qualification and real-process eligibility remain external evidence requirements.**
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -12,12 +12,13 @@
 | Native geometry stages | Smoke scope complete | Stage regression and physical invariant tests |
 | CTS dimensional correctness | Complete | DBU path lengths and characterization-only PS estimates |
 | Characterization integrity | Complete | Exact PDK/RC/Liberty/corner artifact loader and monotonic model validation |
-| Native production blocking | Complete | `productionEligible` requests fail closed |
+| Native production blocking | Complete | `productionImplementation` requests dispatch only to OpenROAD and never fall back to native geometry |
 | ToolQualification consumption | Contract complete | Canonical process evidence and independent physical correlation validator |
 | Physical process corpus | Not supplied | No real PDK/tool corpus artifacts in this repository |
-| Production backend | Not implemented | Native backend is heuristic geometry only |
+| Production process backend | Callable contract complete | Exact executable/views, isolated process, timeout/tree cleanup, DEF/log/evidence retention |
+| Installed OpenROAD + PDK corpus | Not supplied | No local OpenROAD executable or real process corpus is bundled |
 | GDSII/OASIS implementation | External responsibility | Dedicated standard mask-data library and host composition required |
-| Release readiness | Blocked | Requires real backend, retained corpus, independent oracle, signoff, and host policy |
+| Release readiness | Blocked | Requires installed tool, retained real corpus, independent oracle, signoff, and host policy |
 
 ## Function status
 
@@ -31,6 +32,7 @@
 | Antenna / DFM | Repair candidates and native proof | No signoff claim | Blocked |
 | JSON / DEF artifacts | Immutable and verified | Not applicable | Complete for interchange subset |
 | GDSII / OASIS | Not exposed | Not applicable | Dedicated exporter and TQ evidence required |
+| OpenROAD process execution | Exact executable and view binding | Tool output retained as standard DEF | Callable; qualification external |
 
 ## Trust progression
 
@@ -47,8 +49,10 @@ No arrow is implicit. In particular, characterized timing does not imply process
 
 ## Verified regression state
 
-- Xcode package build passes under a 30-second timeout.
-- 42 tests pass after removal of obsolete facade metadata, the self-qualification mask gate, and request-boundary hardening.
-- Positive and negative CLI fixtures use request schema version 3 and explicit execution intent.
+- Xcode package build passes under a timeout-bounded compile gate.
+- The four OpenROAD focused tests pass, covering unavailable tools, successful execution evidence, non-zero exit evidence, and timeout evidence.
+- The prior 42-test native regression baseline remains subject to the workspace-level consolidated matrix after this schema change.
+- Positive and negative CLI fixtures use request schema version 4 and explicit execution intent.
+- The OpenROAD focused suite verifies unavailable-tool blocking, successful process evidence retention, and non-zero exit evidence without claiming tool qualification.
 
 This file must remain evidence-based. A type name or successful smoke fixture is not production qualification.

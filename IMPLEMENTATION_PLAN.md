@@ -11,6 +11,7 @@
 7. PDK/RC/Liberty/corner-bound CTS timing model
 8. ToolQualification process-evidence consumer with physical oracle cross-binding
 9. Explicit ownership boundary for standard mask-data export
+10. Direct OpenROAD process backend with exact executable/view binding, timeout, process-tree cleanup, and raw evidence
 
 ## Native completion gate
 
@@ -36,9 +37,10 @@ A future production backend may be composed only when all of these are retained 
 
 No PhysicalDesignEngine type may issue its own production qualification or elevate a native result from a caller-provided boolean/string.
 
+The callable backend portion is implemented by `OpenROADPhysicalDesignExecutor`. Its successful status means only that the bound process produced a canonical DEF. `PhysicalDesignCapabilityClaims.production` remains blocked until ToolQualification and host flow policy accept independent evidence.
+
 ## Remaining implementation work
 
-- Add a real placement/routing backend as an independent protocol implementation.
 - Retain process-specific physical corpus, oracle and health result artifacts produced by actual tools for ToolQualification reconstruction.
 - Compose canonical physical artifacts with a dedicated standard mask-data
   library in the host flow and qualify the concrete exporter in

@@ -34,7 +34,9 @@ exporter through ToolQualification before release policy accepts its output.
 
 ## Production eligibility
 
-The native implementation supports `geometrySmoke` and CTS `characterizedTiming`; it does not support `productionEligible`.
+The native implementation supports `geometrySmoke` and CTS `characterizedTiming`; it does not support `productionImplementation`.
+
+The OpenROAD implementation supports `productionImplementation` as a callable external process contract. It consumes exact executable, Verilog, SDC, LEF, Liberty, RC setup, PDK, corner, and stage-script identities and emits a standard DEF plus raw evidence. This is tool execution capability, not self-issued production eligibility.
 
 The engine can emit raw corpus, implementation, and correlation artifacts for a
 future external backend. ToolQualification verifies their bytes and evaluates
@@ -43,7 +45,8 @@ trust; the engine does not issue qualification or release approval.
 ```mermaid
 flowchart LR
   Native["Native backend"] -->|always| Blocked["Production blocked"]
-  External["External backend"] --> TQ["ToolQualification evidence"]
+  External["OpenROAD backend"] --> Raw["DEF and raw process evidence"]
+  Raw --> TQ["ToolQualification evidence"]
   TQ --> Correlation["Derived physical oracle result"]
   Correlation --> Policy["DesignFlowKernel policy"]
 ```
