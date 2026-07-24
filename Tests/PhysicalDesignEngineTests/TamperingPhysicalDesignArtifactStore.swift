@@ -22,18 +22,8 @@ actor TamperingPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     }
 
     func write(
-        _ data: Data,
-        relativePath: String,
-        kind: ArtifactKind,
-        format: ArtifactFormat,
-        runID: String
-    ) async throws -> ArtifactReference {
-        try await base.write(
-            data,
-            relativePath: relativePath,
-            kind: kind,
-            format: format,
-            runID: runID
-        )
+        _ artifacts: [PhysicalDesignArtifactWrite]
+    ) async throws -> [ArtifactReference] {
+        try await base.write(artifacts)
     }
 }

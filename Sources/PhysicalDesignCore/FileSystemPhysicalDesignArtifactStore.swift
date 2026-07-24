@@ -4,10 +4,12 @@ import CircuiteFoundation
 public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     public let projectRoot: URL
     private let hasher: SHA256ContentDigester
+    private let referenceBuilder: PhysicalDesignArtifactReferenceBuilder
 
     public init(projectRoot: URL, hasher: SHA256ContentDigester = SHA256ContentDigester()) {
         self.projectRoot = projectRoot.standardizedFileURL.resolvingSymlinksInPath()
         self.hasher = hasher
+        self.referenceBuilder = PhysicalDesignArtifactReferenceBuilder(hasher: hasher)
     }
 
     public func read(_ reference: ArtifactReference) async throws -> Data {
@@ -38,80 +40,191 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
     }
 
     public func write(
-        _ data: Data,
-        relativePath: String,
-        kind: ArtifactKind,
-        format: ArtifactFormat,
-        runID: String
-    ) async throws -> ArtifactReference {
-        let location: ArtifactLocation
-        let url: URL
+        _ artifacts: [PhysicalDesignArtifactWrite]
+    ) async throws -> [ArtifactReference] {
+        var uniquePaths = Set<String>()
+        var prepared: [PreparedWrite] = []
         do {
-            location = try ArtifactLocation(workspaceRelativePath: relativePath)
-            url = try validatedURL(for: location, allowMissingLeaf: true)
-        } catch {
-            throw PhysicalDesignStoreError.invalidPath(relativePath)
-        }
+            for artifact in artifacts {
+                guard uniquePaths.insert(artifact.relativePath).inserted else {
+                    throw PhysicalDesignStoreError.invalidPath(
+                        "duplicate batch path: \(artifact.relativePath)"
+                    )
+                }
+                let location: ArtifactLocation
+                let destination: URL
+                do {
+                    location = try ArtifactLocation(
+                        workspaceRelativePath: artifact.relativePath
+                    )
+                    destination = try validatedURL(
+                        for: location,
+                        allowMissingLeaf: true
+                    )
+                } catch {
+                    throw PhysicalDesignStoreError.invalidPath(artifact.relativePath)
+                }
+                let reference = try referenceBuilder.makeReference(for: artifact)
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    let existing = try Data(contentsOf: destination, options: .mappedIfSafe)
+                    guard existing == artifact.data else {
+                        throw PhysicalDesignStoreError.pathAlreadyExists(
+                            artifact.relativePath
+                        )
+                    }
+                    prepared.append(
+                        PreparedWrite(
+                            artifact: artifact,
+                            destination: destination,
+                            temporary: nil,
+                            reference: reference
+                        )
+                    )
+                    continue
+                }
 
-        let temporaryURL = url
-            .deletingLastPathComponent()
-            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
-        do {
-            guard !FileManager.default.fileExists(atPath: url.path) else {
-                throw PhysicalDesignStoreError.pathAlreadyExists(relativePath)
+                try FileManager.default.createDirectory(
+                    at: destination.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                _ = try validatedURL(for: location, allowMissingLeaf: true)
+                let temporary = destination
+                    .deletingLastPathComponent()
+                    .appendingPathComponent(
+                        ".\(destination.lastPathComponent).\(UUID().uuidString).tmp"
+                    )
+                try artifact.data.write(to: temporary, options: .atomic)
+                prepared.append(
+                    PreparedWrite(
+                        artifact: artifact,
+                        destination: destination,
+                        temporary: temporary,
+                        reference: reference
+                    )
+                )
             }
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            _ = try validatedURL(for: location, allowMissingLeaf: true)
-            try data.write(to: temporaryURL, options: .atomic)
+
+            var committed: [PreparedWrite] = []
             do {
-                try FileManager.default.moveItem(at: temporaryURL, to: url)
+                for item in prepared {
+                    guard let temporary = item.temporary else { continue }
+                    if FileManager.default.fileExists(atPath: item.destination.path) {
+                        let existing = try Data(
+                            contentsOf: item.destination,
+                            options: .mappedIfSafe
+                        )
+                        guard existing == item.artifact.data else {
+                            throw PhysicalDesignStoreError.pathAlreadyExists(
+                                item.artifact.relativePath
+                            )
+                        }
+                        try cleanupTemporaryFile(at: temporary)
+                        continue
+                    }
+                    do {
+                        try FileManager.default.moveItem(
+                            at: temporary,
+                            to: item.destination
+                        )
+                    } catch {
+                        guard FileManager.default.fileExists(
+                            atPath: item.destination.path
+                        ) else {
+                            throw error
+                        }
+                        let existing = try Data(
+                            contentsOf: item.destination,
+                            options: .mappedIfSafe
+                        )
+                        guard existing == item.artifact.data else {
+                            throw PhysicalDesignStoreError.pathAlreadyExists(
+                                item.artifact.relativePath
+                            )
+                        }
+                        try cleanupTemporaryFile(at: temporary)
+                        continue
+                    }
+                    committed.append(item)
+                }
             } catch {
-                if FileManager.default.fileExists(atPath: url.path) {
-                    throw PhysicalDesignStoreError.pathAlreadyExists(relativePath)
+                let cleanupFailures = rollback(
+                    committed: committed,
+                    prepared: prepared
+                )
+                if !cleanupFailures.isEmpty {
+                    throw PhysicalDesignStoreError.writeFailed(
+                        "\(error.localizedDescription); rollback failed: \(cleanupFailures.joined(separator: "; "))"
+                    )
                 }
                 throw error
             }
-            let digest = try hasher.digest(data: data, using: .sha256)
-            let locator = ArtifactLocator(
-                location: location,
-                role: .output,
-                kind: kind,
-                format: format
-            )
-            return ArtifactReference(
-                id: ArtifactID(stableKey: artifactID(for: relativePath, kind: kind, format: format, digest: digest.hexadecimalValue, runID: runID)),
-                locator: locator,
-                digest: digest,
-                byteCount: UInt64(data.count)
-            )
+            return prepared.map(\.reference)
         } catch let error as PhysicalDesignStoreError {
-            do {
-                try cleanupTemporaryFile(at: temporaryURL)
-            } catch {
+            let cleanupFailures = cleanupTemporaryFiles(in: prepared)
+            if !cleanupFailures.isEmpty {
                 throw PhysicalDesignStoreError.writeFailed(
-                    "\(relativePath): \(error.localizedDescription); temporary cleanup also failed"
+                    "\(error.localizedDescription); temporary cleanup failed: \(cleanupFailures.joined(separator: "; "))"
                 )
             }
             throw error
         } catch {
-            let primaryMessage = error.localizedDescription
-            do {
-                try cleanupTemporaryFile(at: temporaryURL)
-            } catch {
-                throw PhysicalDesignStoreError.writeFailed(
-                    "\(relativePath): \(primaryMessage); temporary cleanup also failed: \(error.localizedDescription)"
-                )
-            }
-            throw PhysicalDesignStoreError.writeFailed("\(relativePath): \(primaryMessage)")
+            let cleanupFailures = cleanupTemporaryFiles(in: prepared)
+            let suffix = cleanupFailures.isEmpty
+                ? ""
+                : "; temporary cleanup failed: \(cleanupFailures.joined(separator: "; "))"
+            throw PhysicalDesignStoreError.writeFailed(
+                "\(error.localizedDescription)\(suffix)"
+            )
         }
     }
 
     private func cleanupTemporaryFile(at url: URL) throws {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         try FileManager.default.removeItem(at: url)
+    }
+
+    private func cleanupTemporaryFiles(
+        in prepared: [PreparedWrite]
+    ) -> [String] {
+        var failures: [String] = []
+        for item in prepared {
+            guard let temporary = item.temporary else { continue }
+            do {
+                try cleanupTemporaryFile(at: temporary)
+            } catch {
+                failures.append(
+                    "\(temporary.path): \(error.localizedDescription)"
+                )
+            }
+        }
+        return failures
+    }
+
+    private func rollback(
+        committed: [PreparedWrite],
+        prepared: [PreparedWrite]
+    ) -> [String] {
+        var failures = cleanupTemporaryFiles(in: prepared)
+        for item in committed.reversed() {
+            do {
+                let stored = try Data(
+                    contentsOf: item.destination,
+                    options: .mappedIfSafe
+                )
+                guard stored == item.artifact.data else {
+                    failures.append(
+                        "\(item.destination.path): committed bytes changed before rollback"
+                    )
+                    continue
+                }
+                try FileManager.default.removeItem(at: item.destination)
+            } catch {
+                failures.append(
+                    "\(item.destination.path): \(error.localizedDescription)"
+                )
+            }
+        }
+        return failures
     }
 
     private func validatedURL(
@@ -140,14 +253,11 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
             throw PhysicalDesignStoreError.invalidPath(url.path)
         }
     }
+}
 
-    private func artifactID(
-        for relativePath: String,
-        kind: ArtifactKind,
-        format: ArtifactFormat,
-        digest: String,
-        runID: String
-    ) -> String {
-        "physical-design:\(runID):\(relativePath):\(kind.rawValue):\(format.rawValue):\(digest)"
-    }
+private struct PreparedWrite {
+    let artifact: PhysicalDesignArtifactWrite
+    let destination: URL
+    let temporary: URL?
+    let reference: ArtifactReference
 }

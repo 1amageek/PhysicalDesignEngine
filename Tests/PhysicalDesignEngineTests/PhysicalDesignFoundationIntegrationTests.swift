@@ -136,6 +136,94 @@ struct PhysicalDesignFoundationIntegrationTests {
         }
     }
 
+    @Test("in-memory artifact batches do not expose an earlier write after a later conflict")
+    func inMemoryArtifactBatchIsAtomic() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        _ = try await store.write(
+            Data("retained".utf8),
+            relativePath: "runs/batch/second.json",
+            kind: .report,
+            format: .json,
+            runID: "batch"
+        )
+        let batch = [
+            PhysicalDesignArtifactWrite(
+                data: Data("first".utf8),
+                relativePath: "runs/batch/first.json",
+                kind: .report,
+                format: .json,
+                runID: "batch"
+            ),
+            PhysicalDesignArtifactWrite(
+                data: Data("replacement".utf8),
+                relativePath: "runs/batch/second.json",
+                kind: .report,
+                format: .json,
+                runID: "batch"
+            ),
+        ]
+
+        await #expect(throws: PhysicalDesignStoreError.self) {
+            _ = try await store.write(batch)
+        }
+        #expect(await store.data(at: "runs/batch/first.json") == nil)
+    }
+
+    @Test("filesystem artifact batches remove prepared files after a later conflict")
+    func filesystemArtifactBatchIsAtomic() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "physical-design-batch-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            do {
+                try FileManager.default.removeItem(at: root)
+            } catch {
+                Issue.record(
+                    "Temporary artifact batch cleanup failed: \(error.localizedDescription)"
+                )
+            }
+        }
+        let store = FileSystemPhysicalDesignArtifactStore(projectRoot: root)
+        _ = try await store.write(
+            Data("retained".utf8),
+            relativePath: "runs/batch/second.json",
+            kind: .report,
+            format: .json,
+            runID: "batch"
+        )
+        let batch = [
+            PhysicalDesignArtifactWrite(
+                data: Data("first".utf8),
+                relativePath: "runs/batch/first.json",
+                kind: .report,
+                format: .json,
+                runID: "batch"
+            ),
+            PhysicalDesignArtifactWrite(
+                data: Data("replacement".utf8),
+                relativePath: "runs/batch/second.json",
+                kind: .report,
+                format: .json,
+                runID: "batch"
+            ),
+        ]
+
+        await #expect(throws: PhysicalDesignStoreError.self) {
+            _ = try await store.write(batch)
+        }
+        #expect(!FileManager.default.fileExists(
+            atPath: root.appending(path: "runs/batch/first.json").path
+        ))
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: root.appending(path: "runs/batch"),
+            includingPropertiesForKeys: nil
+        )
+        #expect(!entries.contains { $0.lastPathComponent.hasSuffix(".tmp") })
+    }
+
     @Test("filesystem artifact store rejects a symlink escape")
     func filesystemArtifactStoreRejectsSymlinkEscape() async throws {
         let root = FileManager.default.temporaryDirectory

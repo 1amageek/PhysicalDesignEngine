@@ -594,14 +594,17 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
         startedAt: Date,
         sourceDiagnostics: [PhysicalDesignDEFDiagnostic]
     ) async throws -> PhysicalDesignResult {
+        let completedAt = Date()
+        let referenceBuilder = PhysicalDesignArtifactReferenceBuilder(hasher: hasher)
         let revisionData = try codec.encode(output)
-        let revision = try await writeVerified(
-            revisionData,
-            path: artifactPath(request, name: "revision.json"),
+        let revisionWrite = PhysicalDesignArtifactWrite(
+            data: revisionData,
+            relativePath: artifactPath(request, name: "revision.json"),
             kind: .layout,
             format: .json,
             runID: request.runID
         )
+        let revision = try referenceBuilder.makeReference(for: revisionWrite)
         let physicalReference = PhysicalDesignReference(
             layoutArtifact: revision,
             topCell: output.topCell,
@@ -614,45 +617,66 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
             before: before,
             after: output,
             baseSnapshot: request.inputLayout?.layoutArtifact,
-            proposedSnapshot: revision
+            proposedSnapshot: revision,
+            createdAt: completedAt
         )
-        let diffReference = try await writeVerified(
-            codec.encode(diff),
-            path: artifactPath(request, name: "design-diff.json"),
+        let diffWrite = PhysicalDesignArtifactWrite(
+            data: try codec.encode(diff),
+            relativePath: artifactPath(request, name: "design-diff.json"),
             kind: .designDiff,
             format: .json,
             runID: request.runID
         )
+        let diffReference = try referenceBuilder.makeReference(for: diffWrite)
         let stageCompletion = PhysicalDesignStageCompletionEvidence(
             runID: request.runID,
             stage: request.stage,
             outputLayout: revision,
             metrics: stageMetrics,
-            completedAt: Date()
+            completedAt: completedAt
         )
         guard stageCompletion.isValid else {
             throw OpenROADExecutionError.stageCompletionEvidenceInvalid(
                 "required metrics are missing, duplicated, or non-finite"
             )
         }
-        let stageCompletionReference = try await writeVerified(
-            codec.encode(stageCompletion),
-            path: artifactPath(request, name: "stage-completion.json"),
+        let stageCompletionWrite = PhysicalDesignArtifactWrite(
+            data: try codec.encode(stageCompletion),
+            relativePath: artifactPath(request, name: "stage-completion.json"),
             kind: .evidence,
             format: .json,
             runID: request.runID
         )
-        let processEvidence = try await persistProcessEvidence(
-            request: request,
-            configuration: configuration,
+        let stageCompletionReference = try referenceBuilder.makeReference(
+            for: stageCompletionWrite
+        )
+        let processEvidence = PhysicalDesignProcessEvidence(
+            runID: request.runID,
+            stage: request.stage,
+            backendID: configuration.backendID,
+            executable: configuration.executable,
             observedVersion: observedVersion,
             invocation: invocation,
             environment: environment,
+            inputs: request.inputs,
             outputs: [outputDEF, stageCompletionReference],
-            streams: streams,
+            standardOutput: streams.stdout,
+            standardError: streams.stderr,
+            generatedScript: streams.script,
             termination: .completed,
             exitCode: 0,
-            startedAt: startedAt
+            startedAt: startedAt,
+            completedAt: completedAt
+        )
+        let processEvidenceWrite = PhysicalDesignArtifactWrite(
+            data: try codec.encode(processEvidence),
+            relativePath: artifactPath(request, name: "process-evidence.json"),
+            kind: .evidence,
+            format: .json,
+            runID: request.runID
+        )
+        let processEvidenceReference = try referenceBuilder.makeReference(
+            for: processEvidenceWrite
         )
         let claims = PhysicalDesignCapabilityClaims(
             geometry: .verified,
@@ -660,7 +684,13 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
             production: .blocked
         )
         let manifestArtifacts = streams.references
-            + [outputDEF, revision, diffReference, stageCompletionReference, processEvidence]
+            + [
+                outputDEF,
+                revision,
+                diffReference,
+                stageCompletionReference,
+                processEvidenceReference,
+            ]
         let manifest = PhysicalDesignRunManifest(
             runID: request.runID,
             stage: request.stage,
@@ -677,7 +707,7 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
             implementationVersion: implementationVersion,
             deterministicSeed: request.configuration.deterministicSeed,
             createdAt: startedAt,
-            completedAt: Date(),
+            completedAt: completedAt,
             sourceLayoutFormat: .def,
             sourceLayoutDigest: outputDEF.digest.hexadecimalValue,
             sourceParserID: PhysicalDesignDEFParser.parserID,
@@ -686,7 +716,7 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
             executionIntent: request.executionIntent,
             clockTimingModel: request.clockTimingModel,
             productionConfiguration: configuration,
-            processEvidence: processEvidence,
+            processEvidence: processEvidenceReference,
             claims: claims
         )
         let manifestDiagnostics = manifest.validationDiagnostics()
@@ -695,13 +725,34 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 "OpenROAD run manifest validation failed: \(manifestDiagnostics.joined(separator: "; "))"
             )
         }
-        let manifestReference = try await writeVerified(
-            codec.encode(manifest),
-            path: artifactPath(request, name: "run-manifest.json"),
+        let manifestWrite = PhysicalDesignArtifactWrite(
+            data: try codec.encode(manifest),
+            relativePath: artifactPath(request, name: "run-manifest.json"),
             kind: .report,
             format: .json,
             runID: request.runID
         )
+        let manifestReference = try referenceBuilder.makeReference(for: manifestWrite)
+        let completionWrites = [
+            revisionWrite,
+            diffWrite,
+            stageCompletionWrite,
+            processEvidenceWrite,
+            manifestWrite,
+        ]
+        let expectedReferences = [
+            revision,
+            diffReference,
+            stageCompletionReference,
+            processEvidenceReference,
+            manifestReference,
+        ]
+        let persistedReferences = try await writeVerified(completionWrites)
+        guard persistedReferences == expectedReferences else {
+            throw PhysicalDesignStoreError.writeFailed(
+                "OpenROAD completion transaction returned unexpected artifact references."
+            )
+        }
         let payload = PhysicalDesignPayload(
             physicalDesign: physicalReference,
             changedObjectCount: changedObjectCount(before: before, after: output),
@@ -1059,22 +1110,43 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
         format: ArtifactFormat,
         runID: String
     ) async throws -> ArtifactReference {
-        let reference = try await artifactStore.write(
-            data,
-            relativePath: path,
-            kind: kind,
-            format: format,
-            runID: runID
-        )
-        let expectedDigest = try hasher.digest(data: data, using: .sha256)
-        let persistedData = try await artifactStore.read(reference)
-        guard reference.byteCount == UInt64(data.count),
-              reference.digest.algorithm == .sha256,
-              reference.digest == expectedDigest,
-              persistedData == data else {
-            throw PhysicalDesignStoreError.writeFailed("artifact verification failed: \(path)")
+        let references = try await writeVerified([
+            PhysicalDesignArtifactWrite(
+                data: data,
+                relativePath: path,
+                kind: kind,
+                format: format,
+                runID: runID
+            )
+        ])
+        guard let reference = references.first, references.count == 1 else {
+            throw PhysicalDesignStoreError.writeFailed(
+                "Single artifact persistence returned an invalid reference count."
+            )
         }
         return reference
+    }
+
+    private func writeVerified(
+        _ artifacts: [PhysicalDesignArtifactWrite]
+    ) async throws -> [ArtifactReference] {
+        let referenceBuilder = PhysicalDesignArtifactReferenceBuilder(hasher: hasher)
+        let expectedReferences = try artifacts.map(referenceBuilder.makeReference)
+        let references = try await artifactStore.write(artifacts)
+        guard references == expectedReferences else {
+            throw PhysicalDesignStoreError.writeFailed(
+                "Artifact transaction returned unexpected references."
+            )
+        }
+        for (artifact, reference) in zip(artifacts, references) {
+            let persistedData = try await artifactStore.read(reference)
+            guard persistedData == artifact.data else {
+                throw PhysicalDesignStoreError.writeFailed(
+                    "artifact verification failed: \(artifact.relativePath)"
+                )
+            }
+        }
+        return references
     }
 
     private func result(

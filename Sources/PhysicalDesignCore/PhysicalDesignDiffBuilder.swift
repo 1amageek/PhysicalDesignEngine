@@ -15,7 +15,8 @@ public struct PhysicalDesignDiffBuilder: Sendable {
         before: PhysicalDesignSnapshot?,
         after: PhysicalDesignSnapshot,
         baseSnapshot: ArtifactReference?,
-        proposedSnapshot: ArtifactReference?
+        proposedSnapshot: ArtifactReference?,
+        createdAt: Date = Date()
     ) throws -> PhysicalDesignDesignDiff {
         let changes: [PhysicalDesignDesignDiffChange]
         if let before {
@@ -40,7 +41,7 @@ public struct PhysicalDesignDiffBuilder: Sendable {
             baseSnapshot: baseSnapshot,
             proposedSnapshot: proposedSnapshot,
             changes: changes,
-            createdAt: Date()
+            createdAt: createdAt
         )
     }
 

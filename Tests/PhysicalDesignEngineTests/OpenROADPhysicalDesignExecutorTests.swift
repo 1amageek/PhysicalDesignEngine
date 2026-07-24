@@ -175,6 +175,84 @@ struct OpenROADPhysicalDesignExecutorTests {
         fixture.remove()
     }
 
+    @Test
+    func completionBatchFailureIsRetryableWithTheSameRunID() async throws {
+        let fixture = try await Fixture.make(
+            runID: "openroad-completion-batch-retry",
+            executableMode: .successful
+        )
+        let failingStore = NthWriteFailureStore(
+            base: fixture.store,
+            failingBatchIndex: 2
+        )
+        let executor = OpenROADPhysicalDesignExecutor(
+            artifactStore: failingStore,
+            scratchRoot: fixture.root
+        )
+
+        let failedResult = try await executor.execute(fixture.request)
+
+        #expect(failedResult.status == .blocked)
+        #expect(failedResult.diagnostics.map(\.code.rawValue).contains(
+            "openroad_postprocess_artifact_persistence_failed"
+        ))
+        #expect(failedResult.artifacts.contains {
+            $0.path.hasSuffix("openroad-output.def")
+        })
+        for name in [
+            "revision.json",
+            "design-diff.json",
+            "stage-completion.json",
+            "process-evidence.json",
+            "run-manifest.json",
+        ] {
+            let path = "runs/\(fixture.request.runID)/physical-design/floorplan/\(name)"
+            #expect(await fixture.store.data(at: path) == nil)
+        }
+
+        let retriedResult = try await executor.execute(fixture.request)
+
+        #expect(retriedResult.status == .completed)
+        #expect(retriedResult.payload.runManifest != nil)
+        #expect(retriedResult.artifacts.contains {
+            $0.path.hasSuffix("process-evidence.json")
+        })
+        #expect(retriedResult.artifacts.contains {
+            $0.path.hasSuffix("run-manifest.json")
+        })
+        fixture.remove()
+    }
+
+    private actor NthWriteFailureStore: PhysicalDesignArtifactStore {
+        let base: InMemoryPhysicalDesignArtifactStore
+        private var failingBatchIndex: Int?
+
+        init(
+            base: InMemoryPhysicalDesignArtifactStore,
+            failingBatchIndex: Int
+        ) {
+            self.base = base
+            self.failingBatchIndex = failingBatchIndex
+        }
+
+        func read(_ reference: ArtifactReference) async throws -> Data {
+            try await base.read(reference)
+        }
+
+        func write(
+            _ artifacts: [PhysicalDesignArtifactWrite]
+        ) async throws -> [ArtifactReference] {
+            if let failingBatchIndex,
+               artifacts.indices.contains(failingBatchIndex) {
+                self.failingBatchIndex = nil
+                throw PhysicalDesignStoreError.writeFailed(
+                    "injected failure at batch index \(failingBatchIndex)"
+                )
+            }
+            return try await base.write(artifacts)
+        }
+    }
+
     private actor SelectiveWriteFailureStore: PhysicalDesignArtifactStore {
         let base: InMemoryPhysicalDesignArtifactStore
         let rejectedPathSuffix: String
@@ -189,24 +267,16 @@ struct OpenROADPhysicalDesignExecutorTests {
         }
 
         func write(
-            _ data: Data,
-            relativePath: String,
-            kind: ArtifactKind,
-            format: ArtifactFormat,
-            runID: String
-        ) async throws -> ArtifactReference {
-            guard !relativePath.hasSuffix(rejectedPathSuffix) else {
+            _ artifacts: [PhysicalDesignArtifactWrite]
+        ) async throws -> [ArtifactReference] {
+            guard !artifacts.contains(where: {
+                $0.relativePath.hasSuffix(rejectedPathSuffix)
+            }) else {
                 throw PhysicalDesignStoreError.writeFailed(
-                    "injected failure for \(relativePath)"
+                    "injected failure for \(rejectedPathSuffix)"
                 )
             }
-            return try await base.write(
-                data,
-                relativePath: relativePath,
-                kind: kind,
-                format: format,
-                runID: runID
-            )
+            return try await base.write(artifacts)
         }
     }
 
