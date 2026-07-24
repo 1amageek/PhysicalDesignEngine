@@ -60,7 +60,7 @@ correlation artifacts. ToolQualification reads those immutable artifacts and
 owns tool trust. The package neither reconstructs a trust record nor evaluates
 approval or release policy.
 
-The `OpenROADPhysicalDesignExecutor` directly conforms to `PhysicalDesignStageExecuting`. It is not an adapter and it does not wrap a native success. It verifies the executable before and after execution, materializes byte-verified inputs into an isolated working directory, applies process timeout and process-group cancellation, and retains generated Tcl, stdout, stderr, DEF, and process evidence.
+The `OpenROADPhysicalDesignExecutor` directly conforms to `PhysicalDesignStageExecuting`. It is not an adapter and it does not wrap a native success. It verifies the executable before and after execution, materializes byte-verified inputs into an isolated working directory, applies process timeout and process-group cancellation, and persists generated Tcl, stdout, and stderr before interpreting process output. When later DEF parsing, completion-metric validation, or artifact persistence fails, the typed result still returns every reference that was already retained instead of orphaning process evidence.
 
 ```mermaid
 flowchart LR

@@ -78,7 +78,7 @@ The native backend does not claim foundry-rule correctness, signoff timing, DRC,
 
 `PhysicalDesignProductionConfiguration` binds the executable path, expected executable SHA-256 and byte count, version probe, technology and cell LEFs, Liberty libraries, synthesized Verilog, SDC, RC setup script, stage script, PDK identity, corner, and timeout. Every artifact is re-read through `PhysicalDesignArtifactStore`; the executable is verified before and after execution.
 
-The backend runs in an isolated directory with a deterministic non-secret environment. Timeout and cancellation terminate the complete process group through `SignoffToolSupport`. A successful process emits canonical DEF/JSON, design diff, stdout, stderr, generated Tcl, process evidence, and run manifest artifacts. A missing executable or view is blocked; non-zero exit, timeout, missing DEF, and persistence failure are typed failures.
+The backend runs in an isolated directory with a deterministic non-secret environment. Timeout and cancellation terminate the complete process group through `SignoffToolSupport`. Generated Tcl, stdout, and stderr are persisted before exit status and output DEF are interpreted. A successful process emits canonical DEF/JSON, design diff, process evidence, and run manifest artifacts. A missing executable or invalid input view is blocked; non-zero exit, timeout, and missing DEF are typed failures that retain process streams. If DEF post-processing or a later evidence write fails, the result includes every artifact reference that was already committed; artifact-store persistence failure is blocked rather than reported as an evidence-free throw.
 
 OpenROAD is not installed by this package. Availability of an executable and PDK views makes the backend callable, not qualified. ToolQualification, an independent physical oracle, flow policy, and human approval remain required.
 
@@ -105,6 +105,7 @@ GitHub revision. This repository does not require an umbrella checkout.
 | CircuiteFoundation | `../CircuiteFoundation` | `7abcac83517935c9b9f7553d7016d62cffde259d` |
 | LogicDesign | `../LogicDesign` | `b9aa25b0b78e6168befa25df3bfe8309bd020a6d` |
 | PDKKit | `../PDKKit` | `b62c5ad7e5819a24977038c2133856caed52f481` |
+| SignoffToolSupport | `../SignoffToolSupport` | `6bf675eecb27e3bd3440c5ce8a85c85c510fc3cb` |
 
 ```bash
 perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \

@@ -50,6 +50,13 @@ The executor supplies typed Xcircuite context variables to the retained stage sc
 
 `PhysicalDesignProcessEvidence` retains the external invocation, sanitized environment fingerprint, observed tool version, exact inputs, standard output/error, generated wrapper Tcl, output DEF references, exit code, and timestamps.
 
+Generated Tcl, stdout, and stderr are persisted immediately after the process
+returns or throws a typed timeout/cancellation error. Output DEF is persisted
+before canonical parsing. If a later post-processing or evidence write fails,
+the returned `PhysicalDesignResult` includes all references already committed
+to the artifact store. A process-evidence write failure therefore cannot hide
+the retained streams.
+
 ## Claims
 
 `PhysicalDesignCapabilityClaims` reports independent geometry, timing, and production claim states. The native backend emits:
@@ -101,8 +108,13 @@ ToolQualification and release policy to evaluate the concrete exporter.
 ## Error contract
 
 - Missing semantics or insufficient trust returns a `blocked` result with typed diagnostics.
-- Persistence failure returns `failed` only when a valid result cannot be committed.
+- Input artifact-store failures are `blocked`. A post-processing persistence
+  failure is `blocked` with `openroad_postprocess_artifact_persistence_failed`
+  and all already retained references; non-store post-processing failures are
+  `failed`.
 - Cancellation remains `cancelled`.
 - Model, production-evidence, artifact-store, and review-artifact failures use typed errors.
 - Errors are never suppressed with `try?`.
-- An unavailable or digest-mismatched OpenROAD executable is `blocked`; timeout, non-zero process exit, missing output, and persistence faults are `failed`.
+- An unavailable or digest-mismatched OpenROAD executable is `blocked`.
+  Timeout, non-zero process exit, and missing output are `failed` with retained
+  process streams when those streams were successfully persisted.

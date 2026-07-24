@@ -15,7 +15,7 @@
 | Native production blocking | Complete | `productionImplementation` requests dispatch only to OpenROAD and never fall back to native geometry |
 | ToolQualification consumption | Contract complete | Canonical process evidence and independent physical correlation validator |
 | Physical process corpus | Not supplied | No real PDK/tool corpus artifacts in this repository |
-| Production process backend | Callable contract complete | Exact executable/views, isolated process, timeout/tree cleanup, DEF/log/evidence retention |
+| Production process backend | Callable contract complete | Exact executable/views, isolated process, timeout/tree cleanup, and retained stream/DEF references across post-processing failures |
 | Installed OpenROAD + PDK corpus | Not supplied | No local OpenROAD executable or real process corpus is bundled |
 | GDSII/OASIS implementation | External responsibility | Dedicated standard mask-data library and host composition required |
 | Release readiness | Blocked | Requires installed tool, retained real corpus, independent oracle, signoff, and host policy |
@@ -50,9 +50,9 @@ No arrow is implicit. In particular, characterized timing does not imply process
 ## Verified regression state
 
 - Xcode package build passes under a timeout-bounded compile gate.
-- The four OpenROAD focused tests pass, covering unavailable tools, successful execution evidence, non-zero exit evidence, and timeout evidence.
+- Six OpenROAD focused tests pass, covering unavailable tools, successful execution evidence, non-zero exit evidence, timeout evidence, zero-exit missing output, and process-evidence persistence failure with retained streams.
 - The prior 42-test native regression baseline remains subject to the workspace-level consolidated matrix after this schema change.
 - Positive and negative CLI fixtures use request schema version 4 and explicit execution intent.
-- The OpenROAD focused suite verifies unavailable-tool blocking, successful process evidence retention, and non-zero exit evidence without claiming tool qualification.
+- The OpenROAD focused suite verifies unavailable-tool blocking, successful and failed process evidence retention, and persistence-failure visibility without claiming tool qualification.
 
 This file must remain evidence-based. A type name or successful smoke fixture is not production qualification.
