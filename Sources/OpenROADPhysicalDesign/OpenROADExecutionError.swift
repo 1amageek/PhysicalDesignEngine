@@ -39,7 +39,7 @@ public enum OpenROADExecutionError: Error, LocalizedError, Sendable, Hashable {
         case .outputDEFUnavailable:
             return "OpenROAD completed without producing the required output DEF."
         case .outputDEFInvalid:
-            return "OpenROAD output DEF could not be represented by the canonical physical snapshot."
+            return "OpenROAD output DEF could not be represented by the physical implementation state."
         case .stageCompletionEvidenceInvalid(let reason):
             return "OpenROAD stage completion evidence is invalid: \(reason)."
         case .outputTopCellMismatch(let expected, let actual):

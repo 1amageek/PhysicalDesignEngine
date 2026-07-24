@@ -354,7 +354,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         guard !input.cells.isEmpty else {
             return blocked(
                 code: "mapped_cells_missing",
-                message: "Placement requires mapped cells in the canonical physical snapshot.",
+                message: "Placement requires mapped cells in the physical implementation state.",
                 actions: ["provide_a_mapped_design_snapshot"]
             )
         }

@@ -21,7 +21,7 @@ flowchart LR
 
 | Product | Responsibility |
 |---|---|
-| `PhysicalDesignCore` | Canonical snapshot, request/result, artifact I/O, timing characterization, production-evidence consumer |
+| `PhysicalDesignCore` | Physical implementation state, standard DEF boundary, request/result, artifact I/O, timing characterization, production-evidence consumer |
 | `FloorplanEngine` | Floorplan and power planning protocol |
 | `PlacementEngine` | Global and detailed placement protocol |
 | `CTSEngine` | Clock-tree synthesis protocol |
@@ -52,8 +52,8 @@ Completed native mutations emit immutable artifacts:
 
 | Artifact | Format | Purpose |
 |---|---|---|
-| `revision.json` | JSON | Canonical physical snapshot |
-| `revision.def` | DEF | Supported standard interchange subset |
+| `revision.json` | JSON | Internal execution state used for deterministic mutation and design diff |
+| `revision.def` | DEF | Canonical physical-design interchange artifact exposed by `PhysicalDesignReference` |
 | `design-diff.json` | JSON | Human/Agent review surface |
 | `run-manifest.json` | JSON | Input, configuration, implementation, and revision binding |
 

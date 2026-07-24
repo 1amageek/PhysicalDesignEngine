@@ -600,15 +600,15 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let revisionWrite = PhysicalDesignArtifactWrite(
             data: revisionData,
             relativePath: artifactPath(request, name: "revision.json"),
-            kind: .layout,
+            kind: .other,
             format: .json,
             runID: request.runID
         )
         let revision = try referenceBuilder.makeReference(for: revisionWrite)
         let physicalReference = PhysicalDesignReference(
-            layoutArtifact: revision,
+            layoutArtifact: outputDEF,
             topCell: output.topCell,
-            layoutDigest: revision.digest.hexadecimalValue
+            layoutDigest: outputDEF.digest.hexadecimalValue
         )
         let diff = try diffBuilder.build(
             runID: request.runID,
@@ -631,7 +631,7 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let stageCompletion = PhysicalDesignStageCompletionEvidence(
             runID: request.runID,
             stage: request.stage,
-            outputLayout: revision,
+            outputLayout: outputDEF,
             metrics: stageMetrics,
             completedAt: completedAt
         )
@@ -913,7 +913,9 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
             }
             snapshot = parsed
         default:
-            throw OpenROADExecutionError.inputArtifactInvalid("input layout must be canonical JSON or DEF")
+            throw OpenROADExecutionError.inputArtifactInvalid(
+                "input layout must be an execution-state JSON snapshot or DEF"
+            )
         }
         guard snapshot.topCell == inputLayout.topCell,
               inputLayout.layoutDigest == inputLayout.layoutArtifact.digest.hexadecimalValue else {
@@ -1443,7 +1445,7 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
            inputLayout.layoutArtifact.format != .json && inputLayout.layoutArtifact.format != .def {
             diagnostics.append(diagnostic(
                 code: "openroad_input_layout_format_unsupported",
-                message: "OpenROAD input layout must be canonical JSON or DEF.",
+                message: "OpenROAD input layout must be an execution-state JSON snapshot or DEF.",
                 actions: ["provide_canonical_json_or_def"]
             ))
         }

@@ -226,7 +226,9 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         }
         if let reference = request.inputLayout {
             guard reference.layoutArtifact.format == .json || reference.layoutArtifact.format == .def else {
-                throw PhysicalDesignStoreError.readFailed("native backend accepts canonical JSON or supported DEF layout artifacts only")
+                throw PhysicalDesignStoreError.readFailed(
+                    "native backend accepts an execution-state JSON snapshot or supported DEF layout artifact only"
+                )
             }
             let expectedArtifactDigest = reference.layoutArtifact.digest.hexadecimalValue
             let expectedArtifactByteCount = reference.layoutArtifact.byteCount
@@ -287,7 +289,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 sourceDiagnostics: []
             )
         }
-        throw PhysicalDesignStoreError.readFailed("a canonical physical snapshot is required")
+        throw PhysicalDesignStoreError.readFailed("a physical implementation state is required")
     }
 
     private func persist(
@@ -303,7 +305,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let snapshotReference = try await artifactStore.write(
             snapshotData,
             relativePath: snapshotPath,
-            kind: .layout,
+            kind: .other,
             format: .json,
             runID: request.runID
         )
@@ -321,9 +323,9 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         try await verifyWrittenArtifact(defReference, expectedData: defData)
 
         let physicalReference = PhysicalDesignReference(
-            layoutArtifact: snapshotReference,
+            layoutArtifact: defReference,
             topCell: output.topCell,
-            layoutDigest: snapshotReference.digest.hexadecimalValue
+            layoutDigest: defReference.digest.hexadecimalValue
         )
         let diff = try diffBuilder.build(
             runID: request.runID,
@@ -528,13 +530,13 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             diagnostics.append(diagnostic(severity: .error, code: "pdk_provenance_missing", message: "PDK process, version and digest are required.", actions: ["provide_pdk_provenance"]))
         }
         if request.inputLayout == nil && request.initialSnapshot == nil {
-            diagnostics.append(diagnostic(severity: .error, code: "physical_snapshot_missing", message: "A canonical physical snapshot is required; native execution does not infer placement state from UI or opaque netlist files.", actions: ["provide_initial_snapshot", "provide_input_layout_reference"]))
+            diagnostics.append(diagnostic(severity: .error, code: "physical_snapshot_missing", message: "A physical implementation state is required; native execution does not infer placement state from UI or opaque netlist files.", actions: ["provide_initial_snapshot", "provide_input_layout_reference"]))
         }
         if request.inputLayout != nil && request.initialSnapshot != nil {
             diagnostics.append(diagnostic(severity: .error, code: "ambiguous_input_state", message: "Provide either inputLayout or initialSnapshot, not both.", actions: ["choose_one_canonical_input_state"]))
         }
         if let inputLayout = request.inputLayout, inputLayout.layoutArtifact.format != .json && inputLayout.layoutArtifact.format != .def {
-            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts canonical JSON and the supported DEF subset; \(inputLayout.layoutArtifact.format.rawValue) requires a dedicated foreign-format decoder.", actions: ["convert_to_canonical_json_or_def", "use_a_qualified_mask_data_decoder"]))
+            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts an execution-state JSON snapshot and the supported DEF subset; \(inputLayout.layoutArtifact.format.rawValue) requires a dedicated foreign-format decoder.", actions: ["convert_to_execution_snapshot_or_def", "use_a_qualified_mask_data_decoder"]))
         }
         if let inputLayout = request.inputLayout {
             diagnostics.append(contentsOf: inputLayout.validationDiagnostics().map {

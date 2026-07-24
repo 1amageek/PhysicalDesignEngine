@@ -62,7 +62,14 @@ struct NativeExecutionTests {
         )
         #expect(decodedResult.evidence.id == evidenceID)
 
-        let revisionReference = try #require(result.payload.physicalDesign?.layoutArtifact)
+        let layoutReference = try #require(result.payload.physicalDesign?.layoutArtifact)
+        #expect(layoutReference.format == .def)
+        #expect(layoutReference.kind == .layout)
+        #expect(result.payload.physicalDesign?.layoutDigest == layoutReference.digest.hexadecimalValue)
+        let revisionReference = try #require(result.artifacts.first {
+            $0.path.hasSuffix("/revision.json")
+        })
+        #expect(revisionReference.kind == .other)
         let revisionData = try #require(await store.data(at: revisionReference.path))
         let snapshot = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: revisionData)
         #expect(snapshot.die != nil)
@@ -316,9 +323,7 @@ struct NativeExecutionTests {
         )
 
         #expect(result.status == .completed)
-        let revision = try #require(result.payload.physicalDesign)
-        let data = try #require(await store.data(at: revision.layoutArtifact.path))
-        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let output = try await decodedSnapshot(from: result, store: store)
         #expect(output.implementationState?.tracks.isEmpty == false)
         #expect(output.implementationState?.powerDomains.count == 1)
         #expect(output.implementationState?.pads.isEmpty == true)
@@ -335,9 +340,7 @@ struct NativeExecutionTests {
         )
 
         #expect(result.status == .completed)
-        let revision = try #require(result.payload.physicalDesign)
-        let data = try #require(await store.data(at: revision.layoutArtifact.path))
-        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let output = try await decodedSnapshot(from: result, store: store)
         let proof = try #require(output.implementationState?.placementProof)
         #expect(proof.legalCellCount == proof.cellCount)
         #expect(proof.blockageConflictCount > 0)
@@ -354,9 +357,7 @@ struct NativeExecutionTests {
             PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis, snapshot: PhysicalDesignFixtureFactory.snapshot())
         )
         #expect(result.status == .completed)
-        let revision = try #require(result.payload.physicalDesign)
-        let data = try #require(await store.data(at: revision.layoutArtifact.path))
-        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let output = try await decodedSnapshot(from: result, store: store)
         #expect(output.cells.contains { $0.isClockBuffer })
         #expect(output.nets.contains { $0.id.hasPrefix("CLK_branch_") && $0.isClock })
         #expect(output.implementationState?.clockRouteConstraints.isEmpty == false)
@@ -444,9 +445,7 @@ struct NativeExecutionTests {
         #expect(result.status == .completed)
         #expect(result.payload.claims.timing == .verified)
         #expect(result.payload.claims.production == .blocked)
-        let revision = try #require(result.payload.physicalDesign)
-        let data = try #require(await store.data(at: revision.layoutArtifact.path))
-        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let output = try await decodedSnapshot(from: result, store: store)
         let estimate = try #require(output.clockTrees.first?.timingEstimate)
         #expect(estimate.cornerID == "typical")
         #expect(estimate.estimatedLatencyPS > 0)
@@ -469,9 +468,7 @@ struct NativeExecutionTests {
         )
 
         #expect(result.status == .completed)
-        let revision = try #require(result.payload.physicalDesign)
-        let data = try #require(await store.data(at: revision.layoutArtifact.path))
-        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let output = try await decodedSnapshot(from: result, store: store)
         let evidence = try #require(output.implementationState?.routingEvidence)
         #expect(evidence.routedNetCount == output.routes.count)
         #expect(evidence.antennaRiskNetIDs == ["DATA"])
@@ -503,9 +500,7 @@ struct NativeExecutionTests {
         )
 
         #expect(result.status == .completed)
-        let reference = try #require(result.payload.physicalDesign)
-        let data = try #require(await store.data(at: reference.layoutArtifact.path))
-        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let output = try await decodedSnapshot(from: result, store: store)
         #expect(output.powerStructures.contains { $0.kind == "ring" })
         #expect(output.powerStructures.contains { $0.kind == "strap" })
         #expect(output.powerStructures.contains { $0.kind == "rail" })
@@ -530,9 +525,7 @@ struct NativeExecutionTests {
         )
 
         #expect(result.status == .completed)
-        let reference = try #require(result.payload.physicalDesign)
-        let data = try #require(await store.data(at: reference.layoutArtifact.path))
-        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: data)
+        let output = try await decodedSnapshot(from: result, store: store)
         let bufferID = "eco_buf_DATA"
         #expect(output.cells.contains { $0.id == bufferID && $0.placed })
         #expect(output.nets.contains { $0.id == "DATA_eco_branch" })
@@ -569,9 +562,7 @@ struct NativeExecutionTests {
             PhysicalDesignFixtureFactory.request(stage: .timingECO, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: ecoConfiguration)
         )
         #expect(ecoResult.status == .completed)
-        let ecoReference = try #require(ecoResult.payload.physicalDesign)
-        let ecoData = try #require(await store.data(at: ecoReference.layoutArtifact.path))
-        let ecoOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: ecoData)
+        let ecoOutput = try await decodedSnapshot(from: ecoResult, store: store)
         #expect(ecoOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.timingECO.rawValue && $0.verified } == true)
 
         var antennaConfiguration = PhysicalDesignFixtureFactory.configuration
@@ -580,9 +571,7 @@ struct NativeExecutionTests {
             PhysicalDesignFixtureFactory.request(stage: .antennaRepair, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: antennaConfiguration)
         )
         #expect(antennaResult.status == .completed)
-        let antennaReference = try #require(antennaResult.payload.physicalDesign)
-        let antennaData = try #require(await store.data(at: antennaReference.layoutArtifact.path))
-        let antennaOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: antennaData)
+        let antennaOutput = try await decodedSnapshot(from: antennaResult, store: store)
         #expect(antennaOutput.cells.contains { $0.master == "ANTENNA_DIODE" })
         #expect(antennaOutput.antennaRepairs.contains { $0.strategy == PhysicalDesignAntennaRepairStrategy.protectionDevice.rawValue })
         #expect(antennaOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.antennaRepair.rawValue && $0.verified } == true)
@@ -597,9 +586,7 @@ struct NativeExecutionTests {
             PhysicalDesignFixtureFactory.request(stage: .fillInsertion, snapshot: fillSnapshot)
         )
         #expect(fillResult.status == .completed)
-        let fillReference = try #require(fillResult.payload.physicalDesign)
-        let fillData = try #require(await store.data(at: fillReference.layoutArtifact.path))
-        let fillOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: fillData)
+        let fillOutput = try await decodedSnapshot(from: fillResult, store: store)
         #expect(fillOutput.fills.isEmpty == false)
         #expect(fillOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.fillInsertion.rawValue && $0.verified } == true)
         #expect(fillOutput.fills.allSatisfy { fill in !fillSnapshot.blockages.contains { $0.intersects(fill.geometry) } })
@@ -608,9 +595,7 @@ struct NativeExecutionTests {
             PhysicalDesignFixtureFactory.request(stage: .redundantViaInsertion, snapshot: PhysicalDesignFixtureFactory.snapshot())
         )
         #expect(viaResult.status == .completed)
-        let viaReference = try #require(viaResult.payload.physicalDesign)
-        let viaData = try #require(await store.data(at: viaReference.layoutArtifact.path))
-        let viaOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: viaData)
+        let viaOutput = try await decodedSnapshot(from: viaResult, store: store)
         #expect(viaOutput.vias.count > 1)
         #expect(viaOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.redundantViaInsertion.rawValue && $0.verified } == true)
 
@@ -618,9 +603,7 @@ struct NativeExecutionTests {
             PhysicalDesignFixtureFactory.request(stage: .hotspotRepair, snapshot: PhysicalDesignFixtureFactory.snapshot())
         )
         #expect(hotspotResult.status == .completed)
-        let hotspotReference = try #require(hotspotResult.payload.physicalDesign)
-        let hotspotData = try #require(await store.data(at: hotspotReference.layoutArtifact.path))
-        let hotspotOutput = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: hotspotData)
+        let hotspotOutput = try await decodedSnapshot(from: hotspotResult, store: store)
         #expect(hotspotOutput.hotspots.allSatisfy { $0.resolved })
         #expect(hotspotOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.hotspotRepair.rawValue && $0.verified } == true)
     }
@@ -835,5 +818,19 @@ struct NativeExecutionTests {
         #expect(result.exitCode == 1)
         #expect(decoded.status == .blocked)
         #expect(decoded.diagnostics.contains { $0.severity == .error })
+    }
+
+    private func decodedSnapshot(
+        from result: PhysicalDesignResult,
+        store: InMemoryPhysicalDesignArtifactStore
+    ) async throws -> PhysicalDesignSnapshot {
+        let reference = try #require(result.artifacts.first {
+            $0.path.hasSuffix("/revision.json")
+        })
+        let data = try #require(await store.data(at: reference.path))
+        return try PhysicalDesignJSONCodec().decode(
+            PhysicalDesignSnapshot.self,
+            from: data
+        )
     }
 }
