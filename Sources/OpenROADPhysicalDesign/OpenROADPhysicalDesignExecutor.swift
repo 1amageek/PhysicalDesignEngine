@@ -233,18 +233,31 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 standardOutput: Data(captured.standardOutput.utf8),
                 standardError: Data(captured.standardError.utf8)
             )
-            let processEvidence = try await persistProcessEvidence(
-                request: request,
-                configuration: configuration,
-                observedVersion: observedVersion,
-                invocation: invocation,
-                environment: environment.fingerprint,
-                outputs: [],
-                streams: streams,
-                termination: termination(for: error),
-                exitCode: nil,
-                startedAt: startedAt
-            )
+            let processEvidence: ArtifactReference
+            do {
+                processEvidence = try await persistProcessEvidence(
+                    request: request,
+                    configuration: configuration,
+                    observedVersion: observedVersion,
+                    invocation: invocation,
+                    environment: environment.fingerprint,
+                    outputs: [],
+                    streams: streams,
+                    termination: termination(for: error),
+                    exitCode: nil,
+                    startedAt: startedAt
+                )
+            } catch {
+                return try retainedPostProcessingFailure(
+                    error,
+                    request: request,
+                    configuration: configuration,
+                    invocation: invocation,
+                    environment: environment.fingerprint,
+                    artifacts: streams.references,
+                    startedAt: startedAt
+                )
+            }
             let failure = timedProcessStatusAndCode(for: error)
             return try result(
                 request: request,
@@ -272,18 +285,31 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
             standardError: Data(processResult.standardError.utf8)
         )
         guard processResult.exitCode == 0 else {
-            let processEvidence = try await persistProcessEvidence(
-                request: request,
-                configuration: configuration,
-                observedVersion: observedVersion,
-                invocation: invocation,
-                environment: environment.fingerprint,
-                outputs: [],
-                streams: evidenceArtifacts,
-                termination: .nonzeroExit,
-                exitCode: processResult.exitCode,
-                startedAt: startedAt
-            )
+            let processEvidence: ArtifactReference
+            do {
+                processEvidence = try await persistProcessEvidence(
+                    request: request,
+                    configuration: configuration,
+                    observedVersion: observedVersion,
+                    invocation: invocation,
+                    environment: environment.fingerprint,
+                    outputs: [],
+                    streams: evidenceArtifacts,
+                    termination: .nonzeroExit,
+                    exitCode: processResult.exitCode,
+                    startedAt: startedAt
+                )
+            } catch {
+                return try retainedPostProcessingFailure(
+                    error,
+                    request: request,
+                    configuration: configuration,
+                    invocation: invocation,
+                    environment: environment.fingerprint,
+                    artifacts: evidenceArtifacts.references,
+                    startedAt: startedAt
+                )
+            }
             return try result(
                 request: request,
                 status: .failed,
@@ -302,26 +328,74 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
         }
 
         guard FileManager.default.fileExists(atPath: workspace.outputDEF.path(percentEncoded: false)) else {
-            throw OpenROADExecutionError.outputDEFUnavailable
+            return try await processContractFailure(
+                OpenROADExecutionError.outputDEFUnavailable,
+                request: request,
+                configuration: configuration,
+                observedVersion: observedVersion,
+                invocation: invocation,
+                environment: environment.fingerprint,
+                outputs: [],
+                streams: evidenceArtifacts,
+                startedAt: startedAt
+            )
         }
-        let outputDEF = try Data(contentsOf: workspace.outputDEF, options: .mappedIfSafe)
+        let outputDEF: Data
+        do {
+            outputDEF = try Data(contentsOf: workspace.outputDEF, options: .mappedIfSafe)
+        } catch {
+            return try retainedPostProcessingFailure(
+                error,
+                request: request,
+                configuration: configuration,
+                invocation: invocation,
+                environment: environment.fingerprint,
+                artifacts: evidenceArtifacts.references,
+                startedAt: startedAt
+            )
+        }
         guard !outputDEF.isEmpty else {
-            throw OpenROADExecutionError.outputDEFUnavailable
+            return try await processContractFailure(
+                OpenROADExecutionError.outputDEFUnavailable,
+                request: request,
+                configuration: configuration,
+                observedVersion: observedVersion,
+                invocation: invocation,
+                environment: environment.fingerprint,
+                outputs: [],
+                streams: evidenceArtifacts,
+                startedAt: startedAt
+            )
         }
-        let outputDEFReference = try await writeVerified(
-            outputDEF,
-            path: artifactPath(request, name: "openroad-output.def"),
-            kind: .layout,
-            format: .def,
-            runID: request.runID
-        )
-        let stageMetrics = try loadStageCompletionMetrics(
-            from: workspace.stageCompletion,
-            expectedStage: request.stage
-        )
-        let parseResult = defParser.parse(outputDEF)
-        guard parseResult.isValid, let output = parseResult.snapshot else {
-            let processEvidence = try await persistProcessEvidence(
+        let outputDEFReference: ArtifactReference
+        do {
+            outputDEFReference = try await writeVerified(
+                outputDEF,
+                path: artifactPath(request, name: "openroad-output.def"),
+                kind: .layout,
+                format: .def,
+                runID: request.runID
+            )
+        } catch {
+            return try retainedPostProcessingFailure(
+                error,
+                request: request,
+                configuration: configuration,
+                invocation: invocation,
+                environment: environment.fingerprint,
+                artifacts: evidenceArtifacts.references,
+                startedAt: startedAt
+            )
+        }
+        let stageMetrics: [PhysicalDesignMetric]
+        do {
+            stageMetrics = try loadStageCompletionMetrics(
+                from: workspace.stageCompletion,
+                expectedStage: request.stage
+            )
+        } catch let error as OpenROADExecutionError {
+            return try await processContractFailure(
+                error,
                 request: request,
                 configuration: configuration,
                 observedVersion: observedVersion,
@@ -329,10 +403,36 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 environment: environment.fingerprint,
                 outputs: [outputDEFReference],
                 streams: evidenceArtifacts,
-                termination: .completed,
-                exitCode: processResult.exitCode,
                 startedAt: startedAt
             )
+        }
+        let parseResult = defParser.parse(outputDEF)
+        guard parseResult.isValid, let output = parseResult.snapshot else {
+            let processEvidence: ArtifactReference
+            do {
+                processEvidence = try await persistProcessEvidence(
+                    request: request,
+                    configuration: configuration,
+                    observedVersion: observedVersion,
+                    invocation: invocation,
+                    environment: environment.fingerprint,
+                    outputs: [outputDEFReference],
+                    streams: evidenceArtifacts,
+                    termination: .completed,
+                    exitCode: processResult.exitCode,
+                    startedAt: startedAt
+                )
+            } catch {
+                return try retainedPostProcessingFailure(
+                    error,
+                    request: request,
+                    configuration: configuration,
+                    invocation: invocation,
+                    environment: environment.fingerprint,
+                    artifacts: evidenceArtifacts.references + [outputDEFReference],
+                    startedAt: startedAt
+                )
+            }
             return try result(
                 request: request,
                 status: .blocked,
@@ -350,24 +450,133 @@ public struct OpenROADPhysicalDesignExecutor: PhysicalDesignStageExecuting {
             )
         }
         guard output.topCell == request.design.topDesignName else {
-            throw OpenROADExecutionError.outputTopCellMismatch(
-                expected: request.design.topDesignName,
-                actual: output.topCell
+            return try await processContractFailure(
+                OpenROADExecutionError.outputTopCellMismatch(
+                    expected: request.design.topDesignName,
+                    actual: output.topCell
+                ),
+                request: request,
+                configuration: configuration,
+                observedVersion: observedVersion,
+                invocation: invocation,
+                environment: environment.fingerprint,
+                outputs: [outputDEFReference],
+                streams: evidenceArtifacts,
+                startedAt: startedAt
             )
         }
-        return try await persistCompletedResult(
+        do {
+            return try await persistCompletedResult(
+                request: request,
+                configuration: configuration,
+                before: before,
+                output: output,
+                outputDEF: outputDEFReference,
+                stageMetrics: stageMetrics,
+                observedVersion: observedVersion,
+                invocation: invocation,
+                environment: environment.fingerprint,
+                streams: evidenceArtifacts,
+                startedAt: startedAt,
+                sourceDiagnostics: parseResult.diagnostics
+            )
+        } catch {
+            return try retainedPostProcessingFailure(
+                error,
+                request: request,
+                configuration: configuration,
+                invocation: invocation,
+                environment: environment.fingerprint,
+                artifacts: evidenceArtifacts.references + [outputDEFReference],
+                startedAt: startedAt
+            )
+        }
+    }
+
+    private func retainedPostProcessingFailure(
+        _ error: any Error,
+        request: PhysicalDesignRequest,
+        configuration: PhysicalDesignProductionConfiguration,
+        invocation: ExecutionInvocation,
+        environment: ExecutionEnvironmentFingerprint,
+        artifacts: [ArtifactReference],
+        startedAt: Date
+    ) throws -> PhysicalDesignResult {
+        let isPersistenceFailure = error is PhysicalDesignStoreError
+        return try result(
             request: request,
-            configuration: configuration,
-            before: before,
-            output: output,
-            outputDEF: outputDEFReference,
-            stageMetrics: stageMetrics,
-            observedVersion: observedVersion,
-            invocation: invocation,
-            environment: environment.fingerprint,
-            streams: evidenceArtifacts,
+            status: isPersistenceFailure ? .blocked : .failed,
+            diagnostics: [diagnostic(
+                code: isPersistenceFailure
+                    ? "openroad_postprocess_artifact_persistence_failed"
+                    : "openroad_postprocess_failed",
+                message: error.localizedDescription,
+                actions: [
+                    "inspect_openroad_stdout",
+                    "inspect_openroad_stderr",
+                    "inspect_generated_openroad_script",
+                    "inspect_retained_openroad_output",
+                ]
+            )],
+            artifacts: artifacts,
             startedAt: startedAt,
-            sourceDiagnostics: parseResult.diagnostics
+            configuration: configuration,
+            invocation: invocation,
+            environment: environment,
+            supportingTool: configuration.executable
+        )
+    }
+
+    private func processContractFailure(
+        _ error: OpenROADExecutionError,
+        request: PhysicalDesignRequest,
+        configuration: PhysicalDesignProductionConfiguration,
+        observedVersion: String,
+        invocation: ExecutionInvocation,
+        environment: ExecutionEnvironmentFingerprint,
+        outputs: [ArtifactReference],
+        streams: ProcessStreamArtifacts,
+        startedAt: Date
+    ) async throws -> PhysicalDesignResult {
+        let processEvidence: ArtifactReference
+        do {
+            processEvidence = try await persistProcessEvidence(
+                request: request,
+                configuration: configuration,
+                observedVersion: observedVersion,
+                invocation: invocation,
+                environment: environment,
+                outputs: outputs,
+                streams: streams,
+                termination: .completed,
+                exitCode: 0,
+                startedAt: startedAt
+            )
+        } catch {
+            return try retainedPostProcessingFailure(
+                error,
+                request: request,
+                configuration: configuration,
+                invocation: invocation,
+                environment: environment,
+                artifacts: streams.references + outputs,
+                startedAt: startedAt
+            )
+        }
+        return try result(
+            request: request,
+            status: blockedError(error) ? .blocked : .failed,
+            diagnostics: [diagnostic(
+                code: diagnosticCode(for: error),
+                message: error.localizedDescription,
+                actions: suggestedActions(for: error)
+            )],
+            artifacts: streams.references + outputs + [processEvidence],
+            startedAt: startedAt,
+            configuration: configuration,
+            invocation: invocation,
+            environment: environment,
+            supportingTool: configuration.executable
         )
     }
 

@@ -114,6 +114,122 @@ struct OpenROADPhysicalDesignExecutorTests {
         fixture.remove()
     }
 
+    @Test
+    func zeroExitWithoutOutputRetainsProcessEvidence() async throws {
+        let fixture = try await Fixture.make(
+            runID: "openroad-zero-exit-missing-output",
+            executableMode: .successful
+        )
+        let executor = OpenROADPhysicalDesignExecutor(
+            artifactStore: fixture.store,
+            processRunner: ZeroExitWithoutOutputProcessRunner(),
+            scratchRoot: fixture.root
+        )
+
+        let result = try await executor.execute(fixture.request)
+
+        #expect(result.status == .failed)
+        #expect(result.diagnostics.map(\.code.rawValue).contains("openroad_output_def_missing"))
+        #expect(result.artifacts.contains { $0.path.hasSuffix("openroad-stdout.log") })
+        #expect(result.artifacts.contains { $0.path.hasSuffix("openroad-stderr.log") })
+        let evidenceReference = try #require(result.artifacts.first {
+            $0.path.hasSuffix("process-evidence.json")
+        })
+        let evidenceData = try await fixture.store.read(evidenceReference)
+        let evidence = try PhysicalDesignJSONCodec().decode(
+            PhysicalDesignProcessEvidence.self,
+            from: evidenceData
+        )
+        #expect(evidence.termination == .completed)
+        #expect(evidence.exitCode == 0)
+        #expect(evidence.outputs.isEmpty)
+        fixture.remove()
+    }
+
+    @Test
+    func processEvidencePersistenceFailureStillReturnsRetainedStreams() async throws {
+        let fixture = try await Fixture.make(
+            runID: "openroad-process-evidence-write-failure",
+            executableMode: .successful
+        )
+        let failingStore = SelectiveWriteFailureStore(
+            base: fixture.store,
+            rejectedPathSuffix: "process-evidence.json"
+        )
+        let executor = OpenROADPhysicalDesignExecutor(
+            artifactStore: failingStore,
+            processRunner: ZeroExitWithoutOutputProcessRunner(),
+            scratchRoot: fixture.root
+        )
+
+        let result = try await executor.execute(fixture.request)
+
+        #expect(result.status == .blocked)
+        #expect(result.diagnostics.map(\.code.rawValue).contains(
+            "openroad_postprocess_artifact_persistence_failed"
+        ))
+        #expect(result.artifacts.contains { $0.path.hasSuffix("openroad-generated.tcl") })
+        #expect(result.artifacts.contains { $0.path.hasSuffix("openroad-stdout.log") })
+        #expect(result.artifacts.contains { $0.path.hasSuffix("openroad-stderr.log") })
+        #expect(!result.artifacts.contains { $0.path.hasSuffix("process-evidence.json") })
+        fixture.remove()
+    }
+
+    private actor SelectiveWriteFailureStore: PhysicalDesignArtifactStore {
+        let base: InMemoryPhysicalDesignArtifactStore
+        let rejectedPathSuffix: String
+
+        init(base: InMemoryPhysicalDesignArtifactStore, rejectedPathSuffix: String) {
+            self.base = base
+            self.rejectedPathSuffix = rejectedPathSuffix
+        }
+
+        func read(_ reference: ArtifactReference) async throws -> Data {
+            try await base.read(reference)
+        }
+
+        func write(
+            _ data: Data,
+            relativePath: String,
+            kind: ArtifactKind,
+            format: ArtifactFormat,
+            runID: String
+        ) async throws -> ArtifactReference {
+            guard !relativePath.hasSuffix(rejectedPathSuffix) else {
+                throw PhysicalDesignStoreError.writeFailed(
+                    "injected failure for \(relativePath)"
+                )
+            }
+            return try await base.write(
+                data,
+                relativePath: relativePath,
+                kind: kind,
+                format: format,
+                runID: runID
+            )
+        }
+    }
+
+    private struct ZeroExitWithoutOutputProcessRunner: TimedProcessRunning {
+        func run(
+            process: Process,
+            cancellationCheck: (@Sendable () async throws -> Bool)?
+        ) async throws -> TimedProcessResult {
+            if process.arguments == ["-version"] {
+                return TimedProcessResult(
+                    exitCode: 0,
+                    standardOutput: "OpenROAD fixture-2.0",
+                    standardError: ""
+                )
+            }
+            return TimedProcessResult(
+                exitCode: 0,
+                standardOutput: "OpenROAD exited before writing DEF",
+                standardError: "missing output"
+            )
+        }
+    }
+
     private struct TimeoutProcessRunner: TimedProcessRunning {
         func run(
             process: Process,
