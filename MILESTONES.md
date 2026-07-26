@@ -33,17 +33,22 @@ flowchart LR
 - A canonical ToolQualification oracle result derives agreement from raw outcomes and metric comparisons, while the physical consumer cross-binds the qualified stage, request scope and separate backend/oracle outputs.
 - The native backend still blocks production intent.
 
-## M6 — Required
+## M6 — External evidence required
 
-- Implement a real placement/routing backend behind the existing stage protocols.
+- Execute the callable OpenROAD placement/routing backend with an installed
+  production tool and exact PDK views.
 - Retain positive, negative, boundary, and regression corpora for concrete PDK profiles.
 - Produce actual backend/oracle output artifacts and correlation records.
-- Implement and qualify concrete GDSII/OASIS encoders.
+- Qualify the host-composed GDSII/OASIS encoders against real process
+  artifacts.
 
-## M7 — Required
+## M7 — External production run required
 
-- Compose ToolQualification evidence with DesignFlowKernel approval/resume/release policy.
-- Run independent DRC/LVS/PEX/Timing and downstream signoff engines.
-- Demonstrate reproducible Xcircuite workspace recovery and human review.
+- Supply accepted ToolQualification evidence to the implemented
+  DesignFlowKernel approval/resume/release composition.
+- Run independent DRC/LVS/PEX/Timing and downstream signoff engines on the
+  real process fixture.
+- Retain the implemented Xcircuite recovery and human-review path against that
+  production fixture.
 
 Production readiness remains blocked until M6 and M7 are evidenced by actual artifacts; source-level protocol presence is insufficient.

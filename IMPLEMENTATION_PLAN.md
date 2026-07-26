@@ -42,11 +42,10 @@ The callable backend portion is implemented by `OpenROADPhysicalDesignExecutor`.
 ## Remaining implementation work
 
 - Retain process-specific physical corpus, oracle and health result artifacts produced by actual tools for ToolQualification reconstruction.
-- Compose canonical physical artifacts with a dedicated standard mask-data
-  library in the host flow and qualify the concrete exporter in
-  ToolQualification.
-- Integrate DRC/LVS/PEX/Timing feedback through the host flow without treating native proxy checks as signoff.
-- Add end-to-end Xcircuite/DesignFlowKernel fixtures once the external backend exists.
+- Qualify the already composed standard mask-data exporter against real
+  process artifacts in ToolQualification.
+- Retain real PDK-backed end-to-end Xcircuite/DesignFlowKernel fixtures for
+  the callable external backend.
 
 ## Verification
 

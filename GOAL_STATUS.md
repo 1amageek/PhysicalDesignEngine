@@ -17,7 +17,7 @@
 | Physical process corpus | Not supplied | No real PDK/tool corpus artifacts in this repository |
 | Production process backend | Callable contract complete | Exact executable/views, isolated process, timeout/tree cleanup, and retained stream/DEF references across post-processing failures |
 | Installed OpenROAD + PDK corpus | Not supplied | No local OpenROAD executable or real process corpus is bundled |
-| GDSII/OASIS implementation | External responsibility | Dedicated standard mask-data library and host composition required |
+| GDSII/OASIS implementation | Host composition implemented | Xcircuite delegates standard mask encoding/round-trip verification to `swift-mask-data`/`semiconductor-layout`; PhysicalDesignEngine does not own mask I/O |
 | Release readiness | Blocked | Requires installed tool, retained real corpus, independent oracle, signoff, and host policy |
 
 ## Function status
@@ -28,10 +28,10 @@
 | Placement | Row legalizer and wirelength/congestion proof | DBU proxy only | Blocked |
 | CTS | Buffers, branch nets, routes, vias, route constraints | PS only with exact characterization | Blocked |
 | Global/detailed routing | Manhattan geometry and native conflict checks | No signoff timing claim | Blocked |
-| Physical ECO | Typed reviewable mutations | Requires independent Timing/DRC feedback | Blocked |
+| Physical ECO | Typed reviewable mutations | Xcircuite feedback/re-run/review/resume composition implemented | Production eligibility remains blocked on independent process evidence |
 | Antenna / DFM | Repair candidates and native proof | No signoff claim | Blocked |
 | JSON / DEF artifacts | Immutable and verified | Not applicable | Complete for interchange subset |
-| GDSII / OASIS | Not exposed | Not applicable | Dedicated exporter and TQ evidence required |
+| GDSII / OASIS | Correctly not exposed by this package | Not applicable | Host exporter and round-trip path implemented; real-process TQ evidence required |
 | OpenROAD process execution | Exact executable and view binding | Tool output retained as standard DEF | Callable; qualification external |
 
 ## Trust progression
