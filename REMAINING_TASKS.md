@@ -10,8 +10,7 @@ integration-gated.
 
 | ID | Priority | Owner | Task | Exit criteria |
 |---|---|---|---|---|
-| PHY-1 | P1 | PhysicalDesignEngine and qualification workflow | Retain real process-specific physical corpus, independent oracle, and health artifacts. | Actual OpenROAD/PDK runs retain exact executable, process, PDK, RC, Liberty, corner, input/output, and oracle identities and can be reconstructed by ToolQualification. |
-| PHY-W3 | P1 | Xcircuite / DesignFlowKernel integration | Add end-to-end flow fixtures for the external backend. | A retained run covers execution, raw evidence, failure, review, approval, resume, downstream signoff handoff, and immutable artifact verification. |
+No package-owned P1 implementation remains.
 
 ## External prerequisites
 
@@ -22,6 +21,11 @@ qualification.
 PHY-1 and PHY-W3 specifically require those real external inputs. They cannot
 be completed by adding process data, mask I/O, trust policy, or flow lifecycle
 ownership to PhysicalDesignEngine.
+
+| Former ID | Owner | Required evidence |
+|---|---|---|
+| PHY-1 | Physical qualification workflow | Actual OpenROAD/PDK runs retaining exact executable, process, PDK, RC, Liberty, corner, input/output, health and independent oracle identities for ToolQualification reconstruction. |
+| PHY-W3 | Production Xcircuite/DesignFlowKernel workflow | A real-backend run covering raw evidence, failure, review, approval, resume, downstream signoff handoff, and immutable artifact verification. |
 
 ## Completed host P1
 
