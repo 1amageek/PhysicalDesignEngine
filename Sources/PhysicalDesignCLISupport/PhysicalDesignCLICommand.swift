@@ -47,7 +47,7 @@ public struct PhysicalDesignCLICommand: Sendable {
         physical-design [--request <path>] [--project-root <path>]
 
         Reads a PhysicalDesignRequest JSON document from --request or stdin and emits one JSON result envelope.
-        Execution intent selects the native geometry or OpenROAD process backend.
+        All execution intents use the native physical-design implementation.
         Immutable artifacts are written under runs/<run-id>/physical-design/.
         """
     }

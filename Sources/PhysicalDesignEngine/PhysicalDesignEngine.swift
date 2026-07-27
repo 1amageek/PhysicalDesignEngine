@@ -1,13 +1,11 @@
 import Foundation
 import PhysicalDesignCore
 import CircuiteFoundation
-import OpenROADPhysicalDesign
 
 public struct PhysicalDesignEngine: PhysicalDesignStageExecuting {
     public let artifactStore: any PhysicalDesignArtifactStore
 
     private let executor: NativePhysicalDesignExecutor
-    private let openROADExecutor: OpenROADPhysicalDesignExecutor
 
     public init(
         artifactStore: any PhysicalDesignArtifactStore,
@@ -20,19 +18,11 @@ public struct PhysicalDesignEngine: PhysicalDesignStageExecuting {
             implementationID: implementationID,
             implementationVersion: implementationVersion
         )
-        self.openROADExecutor = OpenROADPhysicalDesignExecutor(
-            artifactStore: artifactStore
-        )
     }
 
     public func execute(
         _ request: PhysicalDesignRequest
     ) async throws -> PhysicalDesignResult {
-        switch request.executionIntent {
-        case .geometrySmoke, .characterizedTiming:
-            try await executor.execute(request)
-        case .productionImplementation:
-            try await openROADExecutor.execute(request)
-        }
+        try await executor.execute(request)
     }
 }

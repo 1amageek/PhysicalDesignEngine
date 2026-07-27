@@ -418,11 +418,12 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             diagnostics.append(diagnostic(severity: .error, code: "unsupported_request_schema", message: "Request schema version \(request.schemaVersion) is not supported.", actions: ["upgrade_the_request_schema"]))
         }
         if request.executionIntent == .productionImplementation {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Native production physical design is not complete. This is the only production request path after removal of the prohibited external backend, and it must not report success until native timing-driven placement, CTS, routing, extraction feedback, and production qualification are implemented and behaviorally verified.
             diagnostics.append(diagnostic(
                 severity: .error,
                 code: "native_production_implementation_unsupported",
-                message: "The native geometry backend cannot execute a production physical implementation request.",
-                actions: ["configure_the_openroad_backend", "provide_exact_pdk_and_tool_artifacts"]
+                message: "Native production physical implementation is not complete.",
+                actions: ["complete_native_timing_driven_implementation", "provide_exact_pdk_and_corner_artifacts"]
             ))
         }
         if request.executionIntent == .characterizedTiming {
@@ -611,10 +612,6 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     ) throws -> PhysicalDesignResult {
         let configurationData = try codec.encode(request.configuration)
         let configurationDigest = try hasher.digest(data: configurationData, using: .sha256)
-        let designRevision = try ContentDigest(
-            algorithm: .sha256,
-            hexadecimalValue: request.design.designDigest
-        )
         let producer = try ProducerIdentity(
             kind: .engine,
             identifier: implementationID,
@@ -631,7 +628,6 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 inputs: request.inputs,
                 invocation: try ExecutionInvocation.inProcess(entryPoint: implementationID),
                 configurationDigest: configurationDigest,
-                designRevision: designRevision,
                 randomSeed: seed,
                 startedAt: startedAt,
                 completedAt: Date()

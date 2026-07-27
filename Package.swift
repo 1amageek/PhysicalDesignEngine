@@ -13,28 +13,19 @@ let circuiteFoundationDependency: Package.Dependency = isLSIWorkspace && FileMan
     atPath: workspaceRoot.appendingPathComponent("CircuiteFoundation/Package.swift").path
 )
     ? .package(path: "../CircuiteFoundation")
-    : .package(url: "https://github.com/1amageek/CircuiteFoundation.git", revision: "dc792c88e189c822c9f83ea86cf139ee68560dca")
+    : .package(url: "https://github.com/1amageek/CircuiteFoundation.git", revision: "1dd75ecf2b8758c54c4e008ff5fd59e263cce0e6")
 
 let logicDesignDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("LogicDesign/Package.swift").path
 )
     ? .package(path: "../LogicDesign")
-    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "e8f8e1dace0445ddd816929c4ca0fe17cca12a7b")
+    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "1ad3b929412e9d459be45a7cb3a426d99aa9417b")
 
 let pdkKitDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("PDKKit/Package.swift").path
 )
     ? .package(path: "../PDKKit")
     : .package(url: "https://github.com/1amageek/PDKKit.git", revision: "3ab7e3b6094d2de672b582d90076cf58b6527766")
-
-let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("SignoffToolSupport/Package.swift").path
-)
-    ? .package(path: "../SignoffToolSupport")
-    : .package(
-        url: "https://github.com/1amageek/SignoffToolSupport.git",
-        revision: "2c36104106bdfc8c279629c162c3ced9d7401328"
-    )
 
 let package = Package(
     name: "PhysicalDesignEngine",
@@ -47,7 +38,6 @@ let package = Package(
         .library(name: "RoutingEngine", targets: ["RoutingEngine"]),
         .library(name: "PhysicalECO", targets: ["PhysicalECO"]),
         .library(name: "PhysicalDFM", targets: ["PhysicalDFM"]),
-        .library(name: "OpenROADPhysicalDesign", targets: ["OpenROADPhysicalDesign"]),
         .library(name: "PhysicalDesignEngine", targets: ["PhysicalDesignEngine"]),
         .library(name: "PhysicalDesignCLISupport", targets: ["PhysicalDesignCLISupport"]),
         .executable(name: "physical-design", targets: ["PhysicalDesignCLI"]),
@@ -56,7 +46,6 @@ let package = Package(
         circuiteFoundationDependency,
         logicDesignDependency,
         pdkKitDependency,
-        signoffToolSupportDependency,
     ],
     targets: [
         .target(
@@ -92,15 +81,8 @@ let package = Package(
             dependencies: ["PhysicalDesignCore"]
         ),
         .target(
-            name: "OpenROADPhysicalDesign",
-            dependencies: [
-                "PhysicalDesignCore",
-                .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
-            ]
-        ),
-        .target(
             name: "PhysicalDesignEngine",
-            dependencies: ["PhysicalDesignCore", "FloorplanEngine", "PlacementEngine", "CTSEngine", "RoutingEngine", "PhysicalECO", "PhysicalDFM", "OpenROADPhysicalDesign"]
+            dependencies: ["PhysicalDesignCore", "FloorplanEngine", "PlacementEngine", "CTSEngine", "RoutingEngine", "PhysicalECO", "PhysicalDFM"]
         ),
         .target(
             name: "PhysicalDesignCLISupport",
@@ -121,10 +103,8 @@ let package = Package(
                 "RoutingEngine",
                 "PhysicalECO",
                 "PhysicalDFM",
-                "OpenROADPhysicalDesign",
                 "PhysicalDesignEngine",
-                "PhysicalDesignCLISupport",
-                .product(name: "SignoffToolSupport", package: "SignoffToolSupport")
+                "PhysicalDesignCLISupport"
             ],
             resources: [.copy("../../Fixtures")]
         ),
