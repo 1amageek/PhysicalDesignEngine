@@ -14,16 +14,16 @@ actor TamperingPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
         tamperedPath = path
     }
 
-    func read(_ reference: ArtifactReference) async throws -> Data {
-        if reference.path == tamperedPath {
+    func read(_ binding: PhysicalDesignArtifactBinding) async throws -> Data {
+        if binding.path == tamperedPath {
             return Data("tampered artifact".utf8)
         }
-        return try await base.read(reference)
+        return try await base.read(binding)
     }
 
     func write(
         _ artifacts: [PhysicalDesignArtifactWrite]
-    ) async throws -> [ArtifactReference] {
+    ) async throws -> [PhysicalDesignArtifactBinding] {
         try await base.write(artifacts)
     }
 }

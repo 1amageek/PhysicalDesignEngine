@@ -2,17 +2,17 @@ import Foundation
 import CircuiteFoundation
 
 public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var runID: String
     public var stage: PhysicalDesignStage
     public var manifest: PhysicalDesignRunManifest
-    public var manifestReference: ArtifactReference
+    public var manifestReference: PhysicalDesignArtifactBinding
     public var manifestDigest: String
     public var baseLayout: PhysicalDesignReference?
     public var proposedLayout: PhysicalDesignReference
-    public var designDiff: ArtifactReference
+    public var designDiff: PhysicalDesignArtifactBinding
     public var artifactDigests: [String: String]
     public var reviewScope: [String]
     public var createdAt: Date
@@ -21,11 +21,11 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         runID: String,
         stage: PhysicalDesignStage,
         manifest: PhysicalDesignRunManifest,
-        manifestReference: ArtifactReference,
+        manifestReference: PhysicalDesignArtifactBinding,
         manifestDigest: String,
         baseLayout: PhysicalDesignReference?,
         proposedLayout: PhysicalDesignReference,
-        designDiff: ArtifactReference,
+        designDiff: PhysicalDesignArtifactBinding,
         artifactDigests: [String: String],
         reviewScope: [String],
         createdAt: Date = Date()
@@ -60,9 +60,9 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
         if reviewScope.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
             diagnostics.append("review packet review scope contains an empty value")
         }
-        if manifestReference.digest.algorithm != .sha256
-            || manifestReference.digest.hexadecimalValue.isEmpty
-            || manifestReference.byteCount == 0 {
+        if manifestReference.reference.digest.algorithm != .sha256
+            || manifestReference.reference.digest.hexadecimalValue.isEmpty
+            || manifestReference.reference.byteCount == 0 {
             diagnostics.append("review packet manifest reference lacks complete integrity metadata")
         }
         let manifestArtifactPaths = Set(manifest.artifacts.map(\.path))
@@ -74,11 +74,11 @@ public struct PhysicalDesignReviewPacket: Sendable, Hashable, Codable {
                 diagnostics.append("review packet is missing the verified digest for \(artifact.path)")
                 continue
             }
-            if artifact.digest.algorithm != .sha256
-                || artifact.digest.hexadecimalValue != digest {
+            if artifact.reference.digest.algorithm != .sha256
+                || artifact.reference.digest.hexadecimalValue != digest {
                 diagnostics.append("review packet digest does not match the manifest reference for \(artifact.path)")
             }
-            if artifact.byteCount == 0 {
+            if artifact.reference.byteCount == 0 {
                 diagnostics.append("review packet artifact lacks complete integrity metadata for \(artifact.path)")
             }
         }

@@ -63,21 +63,21 @@ public struct PhysicalDesignClockTimingModel: Sendable, Hashable, Codable {
               cornerID == reference.cornerID else {
             throw PhysicalDesignClockTimingModelError.invalidModel("process, PDK version or corner identity mismatch")
         }
-        guard reference.pdkManifestArtifact.digest.algorithm == .sha256,
+        guard reference.pdkManifestArtifact.reference.digest.algorithm == .sha256,
               pdkManifestDigest.caseInsensitiveCompare(
-                reference.pdkManifestArtifact.digest.hexadecimalValue
+                reference.pdkManifestArtifact.reference.digest.hexadecimalValue
               ) == .orderedSame else {
             throw PhysicalDesignClockTimingModelError.sourceArtifactMismatch("PDK manifest")
         }
-        guard reference.rcModelArtifact.digest.algorithm == .sha256,
+        guard reference.rcModelArtifact.reference.digest.algorithm == .sha256,
               rcModelDigest.caseInsensitiveCompare(
-                reference.rcModelArtifact.digest.hexadecimalValue
+                reference.rcModelArtifact.reference.digest.hexadecimalValue
               ) == .orderedSame else {
             throw PhysicalDesignClockTimingModelError.sourceArtifactMismatch("RC model")
         }
-        guard reference.cellLibraryArtifact.digest.algorithm == .sha256,
+        guard reference.cellLibraryArtifact.reference.digest.algorithm == .sha256,
               cellLibraryDigest.caseInsensitiveCompare(
-                reference.cellLibraryArtifact.digest.hexadecimalValue
+                reference.cellLibraryArtifact.reference.digest.hexadecimalValue
               ) == .orderedSame else {
             throw PhysicalDesignClockTimingModelError.sourceArtifactMismatch("cell library")
         }

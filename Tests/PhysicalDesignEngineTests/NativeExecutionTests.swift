@@ -51,7 +51,7 @@ struct NativeExecutionTests {
         let result = try await engine.execute(request)
 
         #expect(result.status == .completed)
-        #expect(result.artifacts.map(\.format) == [.json, .def, .json, .json])
+        #expect(result.artifacts.map(\.descriptor.format) == [.json, .def, .json, .json])
         #expect(result.payload.changedObjectCount > 0)
         #expect(result.payload.physicalDesign?.layoutDigest.isEmpty == false)
         let evidenceID = result.evidence.id
@@ -63,13 +63,13 @@ struct NativeExecutionTests {
         #expect(decodedResult.evidence.id == evidenceID)
 
         let layoutReference = try #require(result.payload.physicalDesign?.layoutArtifact)
-        #expect(layoutReference.format == .def)
-        #expect(layoutReference.kind == .layout)
-        #expect(result.payload.physicalDesign?.layoutDigest == layoutReference.digest.hexadecimalValue)
-        let revisionReference = try #require(result.artifacts.first {
+        #expect(layoutReference.descriptor.format == .def)
+        #expect(layoutReference.descriptor.kind == .layout)
+        #expect(result.payload.physicalDesign?.layoutDigest == layoutReference.reference.digest.hexadecimalValue)
+        let revisionReference = try #require(result.artifactBindings.first {
             $0.path.hasSuffix("/revision.json")
         })
-        #expect(revisionReference.kind == .other)
+        #expect(revisionReference.descriptor.kind == .other)
         let revisionData = try #require(await store.data(at: revisionReference.path))
         let snapshot = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: revisionData)
         #expect(snapshot.die != nil)
@@ -297,9 +297,10 @@ struct NativeExecutionTests {
         request.inputLayout = PhysicalDesignReference(
             layoutArtifact: sourceReference,
             topCell: sourceSnapshot.topCell,
-            layoutDigest: sourceReference.digest.hexadecimalValue
+            layoutDigest: sourceReference.reference.digest.hexadecimalValue
         )
-        request.inputs.append(sourceReference)
+        request.inputs.append(sourceReference.reference)
+        request.inputBindings.append(sourceReference)
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
 
@@ -308,7 +309,7 @@ struct NativeExecutionTests {
         let manifestData = try #require(await store.data(at: manifestReference.path))
         let manifest = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: manifestData)
         #expect(manifest.sourceLayoutFormat == .def)
-        #expect(manifest.sourceLayoutDigest == sourceReference.digest.hexadecimalValue)
+        #expect(manifest.sourceLayoutDigest == sourceReference.reference.digest.hexadecimalValue)
         #expect(manifest.sourceParserID == PhysicalDesignDEFParser.parserID)
         #expect(manifest.sourceParserVersion == PhysicalDesignDEFParser.parserVersion)
         #expect(result.diagnostics.contains { $0.code.rawValue == "def_core_inferred_from_rows" })
@@ -401,9 +402,9 @@ struct NativeExecutionTests {
             processID: "fixture-130nm",
             pdkVersion: "1",
             cornerID: "typical",
-            pdkManifestDigest: pdk.digest.hexadecimalValue,
-            rcModelDigest: rc.digest.hexadecimalValue,
-            cellLibraryDigest: library.digest.hexadecimalValue,
+            pdkManifestDigest: pdk.reference.digest.hexadecimalValue,
+            rcModelDigest: rc.reference.digest.hexadecimalValue,
+            cellLibraryDigest: library.reference.digest.hexadecimalValue,
             wireDelaySamples: [
                 .init(pathLengthDBU: 0, delayPS: 0),
                 .init(pathLengthDBU: 20_000, delayPS: 40),
@@ -430,12 +431,14 @@ struct NativeExecutionTests {
             stage: .clockTreeSynthesis,
             snapshot: PhysicalDesignFixtureFactory.snapshot()
         )
-        request.inputs += [modelArtifact, pdk, rc, library]
+        request.inputs += [modelArtifact, pdk, rc, library].map(\.reference)
+        request.inputBindings += [modelArtifact, pdk, rc, library]
         request.pdk = PDKReference(
-            manifest: pdk,
+            manifest: pdk.reference,
+            manifestLocator: PhysicalDesignFixtureFactory.locator(for: pdk),
             processID: "fixture-130nm",
             version: "1",
-            digest: pdk.digest.hexadecimalValue
+            digest: pdk.reference.digest.hexadecimalValue
         )
         request.executionIntent = .characterizedTiming
         request.clockTimingModel = modelReference
@@ -449,7 +452,7 @@ struct NativeExecutionTests {
         let estimate = try #require(output.clockTrees.first?.timingEstimate)
         #expect(estimate.cornerID == "typical")
         #expect(estimate.estimatedLatencyPS > 0)
-        #expect(estimate.modelDigest == modelArtifact.digest.hexadecimalValue)
+        #expect(estimate.modelDigest == modelArtifact.reference.digest.hexadecimalValue)
     }
 
     @Test("execution intent does not encode flow authority")
@@ -626,7 +629,7 @@ struct NativeExecutionTests {
         let engine = PhysicalDesignEngine(artifactStore: store)
         var request = PhysicalDesignFixtureFactory.request(stage: .floorplan)
         request.inputLayout = PhysicalDesignReference(
-            layoutArtifact: PhysicalDesignFixtureFactory.artifact(
+            layoutArtifact: PhysicalDesignFixtureFactory.binding(
                 path: "inputs/base.gds",
                 kind: .layout,
                 format: .gdsii,
@@ -649,7 +652,7 @@ struct NativeExecutionTests {
             snapshot: PhysicalDesignFixtureFactory.snapshot()
         )
         request.requestedModeIDs = [" ", "func", "func"]
-        request.constraints = PhysicalDesignFixtureFactory.artifact(
+        request.constraints = PhysicalDesignFixtureFactory.binding(
             path: "inputs/constraints.json",
             kind: .constraint,
             format: .json
@@ -677,20 +680,21 @@ struct NativeExecutionTests {
             format: .json,
             runID: "input-fixture"
         )
-        let tamperedArtifact = ArtifactReference(
-            id: storedReference.id,
-            locator: storedReference.locator,
-            digest: storedReference.digest,
-            byteCount: storedReference.byteCount + 1,
-            producer: storedReference.producer
+        let tamperedArtifact = PhysicalDesignFixtureFactory.binding(
+            path: storedReference.path,
+            kind: storedReference.descriptor.kind,
+            format: storedReference.descriptor.format,
+            digest: storedReference.reference.digest.hexadecimalValue,
+            byteCount: storedReference.reference.byteCount + 1
         )
         var request = PhysicalDesignFixtureFactory.request(stage: .floorplan)
         request.inputLayout = PhysicalDesignReference(
             layoutArtifact: tamperedArtifact,
             topCell: "fixture_top",
-            layoutDigest: storedReference.digest.hexadecimalValue
+            layoutDigest: storedReference.reference.digest.hexadecimalValue
         )
-        request.inputs.append(tamperedArtifact)
+        request.inputs.append(tamperedArtifact.reference)
+        request.inputBindings.append(tamperedArtifact)
 
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
 
@@ -824,7 +828,7 @@ struct NativeExecutionTests {
         from result: PhysicalDesignResult,
         store: InMemoryPhysicalDesignArtifactStore
     ) async throws -> PhysicalDesignSnapshot {
-        let reference = try #require(result.artifacts.first {
+        let reference = try #require(result.artifactBindings.first {
             $0.path.hasSuffix("/revision.json")
         })
         let data = try #require(await store.data(at: reference.path))

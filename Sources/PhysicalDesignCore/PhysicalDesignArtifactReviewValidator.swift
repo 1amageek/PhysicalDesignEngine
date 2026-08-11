@@ -1,5 +1,6 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 
 public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactReviewValidating {
     public let artifactStore: any PhysicalDesignArtifactStore
@@ -14,7 +15,7 @@ public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactRevie
     }
 
     public func preparePacket(
-        manifestReference: ArtifactReference,
+        manifestReference: PhysicalDesignArtifactBinding,
         reviewScope: [String] = ["proposed_layout", "design_diff", "implementation_configuration"]
     ) async throws -> PhysicalDesignReviewPacket {
         guard !reviewScope.isEmpty,
@@ -30,15 +31,15 @@ public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactRevie
         } catch {
             throw PhysicalDesignArtifactReviewError.artifactReadFailed(error.localizedDescription)
         }
-        let expectedManifestDigest = manifestReference.digest.hexadecimalValue
-        let expectedManifestByteCount = manifestReference.byteCount
+        let expectedManifestDigest = manifestReference.reference.digest.hexadecimalValue
+        let expectedManifestByteCount = manifestReference.reference.byteCount
         guard !expectedManifestDigest.isEmpty else {
             throw PhysicalDesignArtifactReviewError.artifactReadFailed(
                 "\(manifestReference.path): manifest reference lacks complete integrity metadata"
             )
         }
         let actualManifestDigest = try hasher
-            .digest(data: data, using: manifestReference.digest.algorithm)
+            .digest(data: data, using: manifestReference.reference.digest.algorithm)
             .hexadecimalValue
         guard expectedManifestDigest == actualManifestDigest else {
             throw PhysicalDesignArtifactReviewError.artifactReadFailed(
@@ -56,7 +57,7 @@ public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactRevie
         } catch {
             throw PhysicalDesignArtifactReviewError.manifestDecodeFailed(error.localizedDescription)
         }
-        guard manifestReference.format == .json else {
+        guard manifestReference.descriptor.format == .json else {
             throw PhysicalDesignArtifactReviewError.invalidManifest(
                 "review manifest reference must use JSON format"
             )
@@ -83,21 +84,21 @@ public struct PhysicalDesignArtifactReviewValidator: PhysicalDesignArtifactRevie
             } catch {
                 throw PhysicalDesignArtifactReviewError.artifactReadFailed(error.localizedDescription)
             }
-            let expectedDigest = artifact.digest.hexadecimalValue
+            let expectedDigest = artifact.reference.digest.hexadecimalValue
             guard !expectedDigest.isEmpty else {
                 throw PhysicalDesignArtifactReviewError.artifactReadFailed(
                     "\(artifact.path): artifact reference lacks complete integrity metadata"
                 )
             }
             let digest = try hasher
-                .digest(data: artifactData, using: artifact.digest.algorithm)
+                .digest(data: artifactData, using: artifact.reference.digest.algorithm)
                 .hexadecimalValue
             guard expectedDigest == digest else {
                 throw PhysicalDesignArtifactReviewError.artifactReadFailed(
                     "\(artifact.path): digest does not match the artifact reference"
                 )
             }
-            guard UInt64(artifactData.count) == artifact.byteCount else {
+            guard UInt64(artifactData.count) == artifact.reference.byteCount else {
                 throw PhysicalDesignArtifactReviewError.artifactReadFailed(
                     "\(artifact.path): byte count does not match the artifact reference"
                 )

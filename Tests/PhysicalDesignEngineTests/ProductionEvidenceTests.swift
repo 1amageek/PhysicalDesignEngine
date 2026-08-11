@@ -40,6 +40,25 @@ struct ProductionEvidenceTests {
         #expect(result.status == .completed)
         #expect(result.payload.claims.production == .blocked)
     }
+
+    @Test("production implementation remains a typed unsupported capability")
+    func productionImplementationFailsClosed() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var request = PhysicalDesignFixtureFactory.request(
+            stage: .placement,
+            snapshot: PhysicalDesignFixtureFactory.snapshot()
+        )
+        request.executionIntent = .productionImplementation
+
+        let result = try await NativePhysicalDesignExecutor(artifactStore: store).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.payload.claims.production == .blocked)
+        #expect(result.diagnostics.contains {
+            $0.severity == .error
+                && $0.code.rawValue == "native_production_implementation_unsupported"
+        })
+    }
 }
 
 private extension PhysicalDesignExecutionIntent {

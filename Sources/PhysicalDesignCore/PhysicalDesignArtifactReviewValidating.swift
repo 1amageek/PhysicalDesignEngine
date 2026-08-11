@@ -2,7 +2,7 @@ import CircuiteFoundation
 
 public protocol PhysicalDesignArtifactReviewValidating: Sendable {
     func preparePacket(
-        manifestReference: ArtifactReference,
+        manifestReference: PhysicalDesignArtifactBinding,
         reviewScope: [String]
     ) async throws -> PhysicalDesignReviewPacket
 

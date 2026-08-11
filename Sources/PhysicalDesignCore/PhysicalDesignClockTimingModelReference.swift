@@ -2,19 +2,19 @@ import CircuiteFoundation
 import Foundation
 
 public struct PhysicalDesignClockTimingModelReference: Sendable, Hashable, Codable {
-    public var modelArtifact: ArtifactReference
-    public var pdkManifestArtifact: ArtifactReference
-    public var rcModelArtifact: ArtifactReference
-    public var cellLibraryArtifact: ArtifactReference
+    public var modelArtifact: PhysicalDesignArtifactBinding
+    public var pdkManifestArtifact: PhysicalDesignArtifactBinding
+    public var rcModelArtifact: PhysicalDesignArtifactBinding
+    public var cellLibraryArtifact: PhysicalDesignArtifactBinding
     public var processID: String
     public var pdkVersion: String
     public var cornerID: String
 
     public init(
-        modelArtifact: ArtifactReference,
-        pdkManifestArtifact: ArtifactReference,
-        rcModelArtifact: ArtifactReference,
-        cellLibraryArtifact: ArtifactReference,
+        modelArtifact: PhysicalDesignArtifactBinding,
+        pdkManifestArtifact: PhysicalDesignArtifactBinding,
+        rcModelArtifact: PhysicalDesignArtifactBinding,
+        cellLibraryArtifact: PhysicalDesignArtifactBinding,
         processID: String,
         pdkVersion: String,
         cornerID: String
@@ -28,7 +28,7 @@ public struct PhysicalDesignClockTimingModelReference: Sendable, Hashable, Codab
         self.cornerID = cornerID
     }
 
-    public var sourceArtifacts: [ArtifactReference] {
+    public var sourceArtifacts: [PhysicalDesignArtifactBinding] {
         [pdkManifestArtifact, rcModelArtifact, cellLibraryArtifact]
     }
 }

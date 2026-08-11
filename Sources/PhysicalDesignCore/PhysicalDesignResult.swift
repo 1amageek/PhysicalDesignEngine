@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 
 /// Domain result for one physical-design stage execution.
@@ -9,7 +10,8 @@ public struct PhysicalDesignResult: Sendable, Hashable, Codable,
     public let runID: String
     public let status: PhysicalDesignExecutionStatus
     public let diagnostics: [DesignDiagnostic]
-    public let artifacts: [ArtifactReference]
+    public let artifactBindings: [PhysicalDesignArtifactBinding]
+    public var artifacts: [ArtifactReference] { artifactBindings.map(\.reference) }
     public let provenance: ExecutionProvenance
     public let payload: PhysicalDesignPayload
     public let evidence: EvidenceManifest
@@ -19,17 +21,21 @@ public struct PhysicalDesignResult: Sendable, Hashable, Codable,
         runID: String,
         status: PhysicalDesignExecutionStatus,
         diagnostics: [DesignDiagnostic] = [],
-        artifacts: [ArtifactReference] = [],
+        artifactBindings: [PhysicalDesignArtifactBinding] = [],
         provenance: ExecutionProvenance,
         payload: PhysicalDesignPayload
-    ) {
+    ) throws {
         self.schemaVersion = schemaVersion
         self.runID = runID
         self.status = status
         self.diagnostics = diagnostics
-        self.artifacts = artifacts
+        self.artifactBindings = artifactBindings
         self.provenance = provenance
         self.payload = payload
-        self.evidence = EvidenceManifest(provenance: provenance, artifacts: artifacts)
+        self.evidence = try EvidenceManifest.contentAddressed(
+            provenance: provenance,
+            artifacts: artifactBindings.map(\.reference),
+            digester: SHA256ContentDigester()
+        )
     }
 }

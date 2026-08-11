@@ -12,13 +12,13 @@ public struct LocalPhysicalDesignClockTimingModelLoader: PhysicalDesignClockTimi
         from artifactStore: any PhysicalDesignArtifactStore
     ) async throws -> PhysicalDesignClockTimingModel {
         let references = [reference.modelArtifact] + reference.sourceArtifacts
-        guard references.allSatisfy({ $0.locator.role == .input }) else {
+        guard references.allSatisfy({ $0.descriptor.role == .input }) else {
             throw PhysicalDesignClockTimingModelError.invalidModel("all timing model artifacts must have the input role")
         }
-        guard Set(references.map(\.id)).count == references.count else {
+        guard Set(references.map(\.reference.id)).count == references.count else {
             throw PhysicalDesignClockTimingModelError.invalidModel("timing model artifact identities must be distinct")
         }
-        guard reference.modelArtifact.locator.format == .json else {
+        guard reference.modelArtifact.descriptor.format == .json else {
             throw PhysicalDesignClockTimingModelError.invalidModel("timing characterization must be JSON")
         }
         let modelData = try await artifactStore.read(reference.modelArtifact)

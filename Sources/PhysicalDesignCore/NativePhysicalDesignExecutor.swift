@@ -1,6 +1,7 @@
 import Foundation
 import LogicIR
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 
 public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     public let expectedStage: PhysicalDesignStage?
@@ -214,7 +215,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         guard let reference = request.clockTimingModel else { return nil }
         guard reference.processID == request.pdk.processID,
               reference.pdkVersion == request.pdk.version,
-              reference.pdkManifestArtifact == request.pdk.manifest else {
+              reference.pdkManifestArtifact.reference == request.pdk.manifest else {
             throw PhysicalDesignClockTimingModelError.sourceArtifactMismatch("selected PDK")
         }
         return try await timingModelLoader.load(reference, from: artifactStore)
@@ -225,13 +226,13 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             throw PhysicalDesignStoreError.readFailed("request contains both inputLayout and initialSnapshot")
         }
         if let reference = request.inputLayout {
-            guard reference.layoutArtifact.format == .json || reference.layoutArtifact.format == .def else {
+            guard reference.layoutArtifact.descriptor.format == .json || reference.layoutArtifact.descriptor.format == .def else {
                 throw PhysicalDesignStoreError.readFailed(
                     "native backend accepts an execution-state JSON snapshot or supported DEF layout artifact only"
                 )
             }
-            let expectedArtifactDigest = reference.layoutArtifact.digest.hexadecimalValue
-            let expectedArtifactByteCount = reference.layoutArtifact.byteCount
+            let expectedArtifactDigest = reference.layoutArtifact.reference.digest.hexadecimalValue
+            let expectedArtifactByteCount = reference.layoutArtifact.reference.byteCount
             guard !expectedArtifactDigest.isEmpty,
                   !reference.layoutDigest.isEmpty else {
                 throw PhysicalDesignStoreError.readFailed(
@@ -247,7 +248,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             let sourceParserID: String
             let sourceParserVersion: String
             let sourceDiagnostics: [PhysicalDesignDEFDiagnostic]
-            if reference.layoutArtifact.format == .json {
+            if reference.layoutArtifact.descriptor.format == .json {
                 snapshot = try codec.decode(PhysicalDesignSnapshot.self, from: data)
                 sourceParserID = "physical-design-json-codec"
                 sourceParserVersion = "1.0.0"
@@ -271,7 +272,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             return LoadedSnapshot(
                 snapshot: snapshot,
                 baseReference: reference,
-                sourceLayoutFormat: reference.layoutArtifact.format,
+                sourceLayoutFormat: reference.layoutArtifact.descriptor.format,
                 sourceLayoutDigest: sourceDigest,
                 sourceParserID: sourceParserID,
                 sourceParserVersion: sourceParserVersion,
@@ -325,7 +326,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let physicalReference = PhysicalDesignReference(
             layoutArtifact: defReference,
             topCell: output.topCell,
-            layoutDigest: defReference.digest.hexadecimalValue
+            layoutDigest: defReference.reference.digest.hexadecimalValue
         )
         let diff = try diffBuilder.build(
             runID: request.runID,
@@ -333,8 +334,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             actor: implementationID,
             before: before,
             after: output,
-            baseSnapshot: request.inputLayout?.layoutArtifact,
-            proposedSnapshot: snapshotReference
+            baseSnapshot: request.inputLayout?.layoutArtifact.reference,
+            proposedSnapshot: snapshotReference.reference
         )
         let diffData = try codec.encode(diff)
         let diffPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/design-diff.json"
@@ -446,7 +447,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         }
         if let timingReference = request.clockTimingModel {
             let timingArtifacts = [timingReference.modelArtifact] + timingReference.sourceArtifacts
-            if !Set(timingArtifacts).isSubset(of: Set(request.inputs)) {
+            if !Set(timingArtifacts.map(\.reference)).isSubset(of: Set(request.inputs)) {
                 diagnostics.append(diagnostic(
                     severity: .error,
                     code: "clock_timing_inputs_missing",
@@ -482,7 +483,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 actions: ["declare_timing_modes"]
             ))
         }
-        if request.constraints.kind != .constraint {
+        if request.constraints.descriptor.kind != .constraint {
             diagnostics.append(diagnostic(
                 severity: .error,
                 code: "physical_constraints_artifact_invalid",
@@ -490,7 +491,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 actions: ["provide_a_constraint_artifact"]
             ))
         }
-        if request.constraints.format != .sdc {
+        if request.constraints.descriptor.format != .sdc {
             diagnostics.append(diagnostic(
                 severity: .error,
                 code: "physical_constraints_format_invalid",
@@ -517,8 +518,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 actions: ["deduplicate_timing_mode_ids"]
             ))
         }
-        let requiredInputs = [request.design.artifact, request.constraints, request.pdk.manifest]
-            + (request.inputLayout.map { [$0.layoutArtifact] } ?? [])
+        let requiredInputs = [request.design.artifact, request.constraints.reference, request.pdk.manifest]
+            + (request.inputLayout.map { [$0.layoutArtifact.reference] } ?? [])
         if !Set(requiredInputs).isSubset(of: Set(request.inputs)) {
             diagnostics.append(diagnostic(
                 severity: .error,
@@ -536,8 +537,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         if request.inputLayout != nil && request.initialSnapshot != nil {
             diagnostics.append(diagnostic(severity: .error, code: "ambiguous_input_state", message: "Provide either inputLayout or initialSnapshot, not both.", actions: ["choose_one_canonical_input_state"]))
         }
-        if let inputLayout = request.inputLayout, inputLayout.layoutArtifact.format != .json && inputLayout.layoutArtifact.format != .def {
-            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts an execution-state JSON snapshot and the supported DEF subset; \(inputLayout.layoutArtifact.format.rawValue) requires a dedicated foreign-format decoder.", actions: ["convert_to_execution_snapshot_or_def", "use_a_qualified_mask_data_decoder"]))
+        if let inputLayout = request.inputLayout, inputLayout.layoutArtifact.descriptor.format != .json && inputLayout.layoutArtifact.descriptor.format != .def {
+            diagnostics.append(diagnostic(severity: .error, code: "unsupported_layout_format", message: "The native backend accepts an execution-state JSON snapshot and the supported DEF subset; \(inputLayout.layoutArtifact.descriptor.format.rawValue) requires a dedicated foreign-format decoder.", actions: ["convert_to_execution_snapshot_or_def", "use_a_qualified_mask_data_decoder"]))
         }
         if let inputLayout = request.inputLayout {
             diagnostics.append(contentsOf: inputLayout.validationDiagnostics().map {
@@ -549,28 +550,37 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 )
             })
         }
-        let artifactReferences = request.inputs + [request.design.artifact, request.constraints, request.pdk.manifest]
-        for reference in artifactReferences where reference.path.hasPrefix("/") {
-            diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(reference.path)", entity: reference.path, actions: ["use_project_relative_artifact_paths"]))
+        for binding in request.inputBindings where binding.path.hasPrefix("/") {
+            diagnostics.append(diagnostic(severity: .error, code: "absolute_artifact_path", message: "Artifact paths must be project-relative: \(binding.path)", entity: binding.path, actions: ["use_project_relative_artifact_paths"]))
+        }
+        for reference in requiredInputs where !request.inputBindings.contains(where: { $0.reference == reference }) {
+            diagnostics.append(diagnostic(
+                severity: .error,
+                code: "physical_design_input_binding_missing",
+                message: "Artifact \(reference.id.description) has no execution availability binding.",
+                entity: reference.id.description,
+                actions: ["provide_exact_artifact_availability"]
+            ))
         }
         return diagnostics
     }
 
     private func verifyWrittenArtifact(
-        _ reference: ArtifactReference,
+        _ binding: PhysicalDesignArtifactBinding,
         expectedData: Data
     ) async throws {
+        let reference = binding.reference
         guard reference.byteCount == UInt64(expectedData.count) else {
-            throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid byte count")
+            throw PhysicalDesignStoreError.writeFailed("artifact \(binding.path) returned an invalid byte count")
         }
         let expectedDigest = try hasher.digest(data: expectedData, using: reference.digest.algorithm).hexadecimalValue
         guard reference.digest.algorithm == .sha256,
               reference.digest.hexadecimalValue == expectedDigest else {
-            throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) returned an invalid SHA-256 digest")
+            throw PhysicalDesignStoreError.writeFailed("artifact \(binding.path) returned an invalid SHA-256 digest")
         }
-        let persistedData = try await artifactStore.read(reference)
+        let persistedData = try await artifactStore.read(binding)
         guard persistedData == expectedData else {
-            throw PhysicalDesignStoreError.writeFailed("artifact \(reference.path) could not be re-read with identical bytes")
+            throw PhysicalDesignStoreError.writeFailed("artifact \(binding.path) could not be re-read with identical bytes")
         }
     }
 
@@ -606,7 +616,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         status: PhysicalDesignExecutionStatus,
         diagnostics: [DesignDiagnostic],
         payload: PhysicalDesignPayload,
-        artifacts: [ArtifactReference] = [],
+        artifacts: [PhysicalDesignArtifactBinding] = [],
         startedAt: Date,
         seed: UInt64? = nil
     ) throws -> PhysicalDesignResult {
@@ -617,12 +627,12 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             identifier: implementationID,
             version: implementationVersion
         )
-        return PhysicalDesignResult(
+        return try PhysicalDesignResult(
             schemaVersion: PhysicalDesignRequest.currentSchemaVersion,
             runID: request.runID,
             status: status,
             diagnostics: diagnostics,
-            artifacts: artifacts,
+            artifactBindings: artifacts,
             provenance: try ExecutionProvenance(
                 producer: producer,
                 inputs: request.inputs,

@@ -1,47 +1,56 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationCrypto
+import CircuiteFoundationFoundation
 
 public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     public let projectRoot: URL
     private let hasher: SHA256ContentDigester
     private let referenceBuilder: PhysicalDesignArtifactReferenceBuilder
+    private let rootID: ArtifactRootID
 
     public init(projectRoot: URL, hasher: SHA256ContentDigester = SHA256ContentDigester()) {
+        do {
+            self.rootID = try ArtifactRootID(rawValue: "physical-design-project")
+        } catch {
+            preconditionFailure("The static physical-design project root ID is invalid: \(error)")
+        }
         self.projectRoot = projectRoot.standardizedFileURL.resolvingSymlinksInPath()
         self.hasher = hasher
         self.referenceBuilder = PhysicalDesignArtifactReferenceBuilder(hasher: hasher)
     }
 
-    public func read(_ reference: ArtifactReference) async throws -> Data {
+    public func read(_ binding: PhysicalDesignArtifactBinding) async throws -> Data {
+        let reference = binding.reference
         let location: ArtifactLocation
         let url: URL
         do {
-            location = try ArtifactLocation(workspaceRelativePath: reference.path)
+            location = try ArtifactLocation(workspaceRelativePath: binding.path)
             url = try validatedURL(for: location, allowMissingLeaf: false)
         } catch {
-            throw PhysicalDesignStoreError.invalidPath(reference.path)
+            throw PhysicalDesignStoreError.invalidPath(binding.path)
         }
 
         do {
             let data = try Data(contentsOf: url)
             if UInt64(data.count) != reference.byteCount {
-                throw PhysicalDesignStoreError.readFailed("\(reference.path): byte count does not match the reference")
+                throw PhysicalDesignStoreError.readFailed("\(binding.path): byte count does not match the reference")
             }
             let actualDigest = try hasher.digest(data: data, using: reference.digest.algorithm)
             if actualDigest != reference.digest {
-                throw PhysicalDesignStoreError.readFailed("\(reference.path): SHA-256 digest does not match the reference")
+                throw PhysicalDesignStoreError.readFailed("\(binding.path): SHA-256 digest does not match the reference")
             }
             return data
         } catch let error as PhysicalDesignStoreError {
             throw error
         } catch {
-            throw PhysicalDesignStoreError.readFailed("\(reference.path): \(error.localizedDescription)")
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): \(error.localizedDescription)")
         }
     }
 
     public func write(
         _ artifacts: [PhysicalDesignArtifactWrite]
-    ) async throws -> [ArtifactReference] {
+    ) async throws -> [PhysicalDesignArtifactBinding] {
         var uniquePaths = Set<String>()
         var prepared: [PreparedWrite] = []
         do {
@@ -64,7 +73,7 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
                 } catch {
                     throw PhysicalDesignStoreError.invalidPath(artifact.relativePath)
                 }
-                let reference = try referenceBuilder.makeReference(for: artifact)
+                let reference = try referenceBuilder.makeReference(for: artifact, rootID: rootID)
                 if FileManager.default.fileExists(atPath: destination.path) {
                     let existing = try Data(contentsOf: destination, options: .mappedIfSafe)
                     guard existing == artifact.data else {
@@ -259,5 +268,5 @@ private struct PreparedWrite {
     let artifact: PhysicalDesignArtifactWrite
     let destination: URL
     let temporary: URL?
-    let reference: ArtifactReference
+    let reference: PhysicalDesignArtifactBinding
 }

@@ -5,12 +5,12 @@ public struct PhysicalDesignProductionConfiguration: Sendable, Hashable, Codable
     public let backendID: String
     public let executable: PhysicalDesignExecutableReference
     public let versionArguments: [String]
-    public let technologyLEFs: [ArtifactReference]
-    public let cellLEFs: [ArtifactReference]
-    public let libertyLibraries: [ArtifactReference]
-    public let synthesizedNetlist: ArtifactReference
-    public let rcSetupScript: ArtifactReference
-    public let stageScript: ArtifactReference
+    public let technologyLEFs: [PhysicalDesignArtifactBinding]
+    public let cellLEFs: [PhysicalDesignArtifactBinding]
+    public let libertyLibraries: [PhysicalDesignArtifactBinding]
+    public let synthesizedNetlist: PhysicalDesignArtifactBinding
+    public let rcSetupScript: PhysicalDesignArtifactBinding
+    public let stageScript: PhysicalDesignArtifactBinding
     public let cornerID: String
     public let timeoutSeconds: Double
 
@@ -18,12 +18,12 @@ public struct PhysicalDesignProductionConfiguration: Sendable, Hashable, Codable
         backendID: String = "openroad",
         executable: PhysicalDesignExecutableReference,
         versionArguments: [String] = ["-version"],
-        technologyLEFs: [ArtifactReference],
-        cellLEFs: [ArtifactReference],
-        libertyLibraries: [ArtifactReference],
-        synthesizedNetlist: ArtifactReference,
-        rcSetupScript: ArtifactReference,
-        stageScript: ArtifactReference,
+        technologyLEFs: [PhysicalDesignArtifactBinding],
+        cellLEFs: [PhysicalDesignArtifactBinding],
+        libertyLibraries: [PhysicalDesignArtifactBinding],
+        synthesizedNetlist: PhysicalDesignArtifactBinding,
+        rcSetupScript: PhysicalDesignArtifactBinding,
+        stageScript: PhysicalDesignArtifactBinding,
         cornerID: String,
         timeoutSeconds: Double = 300
     ) throws {
@@ -59,31 +59,31 @@ public struct PhysicalDesignProductionConfiguration: Sendable, Hashable, Codable
             + [synthesizedNetlist, rcSetupScript, stageScript]
         var paths = Set<String>()
         for artifact in artifacts {
-            guard artifact.locator.role == .input,
-                  artifact.digest.algorithm == .sha256,
-                  artifact.byteCount > 0 else {
+            guard artifact.descriptor.role == .input,
+                  artifact.reference.digest.algorithm == .sha256,
+                  artifact.reference.byteCount > 0 else {
                 throw PhysicalDesignProductionConfigurationError.invalidArtifact(artifact.path)
             }
             guard paths.insert(artifact.path).inserted else {
                 throw PhysicalDesignProductionConfigurationError.duplicateArtifact(artifact.path)
             }
         }
-        guard technologyLEFs.allSatisfy({ $0.format == .lef }) else {
+        guard technologyLEFs.allSatisfy({ $0.descriptor.format == .lef }) else {
             throw PhysicalDesignProductionConfigurationError.invalidArtifact("technology LEF format")
         }
-        guard cellLEFs.allSatisfy({ $0.format == .lef }) else {
+        guard cellLEFs.allSatisfy({ $0.descriptor.format == .lef }) else {
             throw PhysicalDesignProductionConfigurationError.invalidArtifact("cell LEF format")
         }
-        guard libertyLibraries.allSatisfy({ $0.format == .liberty }) else {
+        guard libertyLibraries.allSatisfy({ $0.descriptor.format == .liberty }) else {
             throw PhysicalDesignProductionConfigurationError.invalidArtifact("Liberty format")
         }
-        guard synthesizedNetlist.format == .verilog || synthesizedNetlist.format == .systemVerilog else {
+        guard synthesizedNetlist.descriptor.format == .verilog || synthesizedNetlist.descriptor.format == .systemVerilog else {
             throw PhysicalDesignProductionConfigurationError.invalidArtifact("synthesized netlist format")
         }
-        guard rcSetupScript.format == .text || rcSetupScript.format == .raw else {
+        guard rcSetupScript.descriptor.format == .text || rcSetupScript.descriptor.format == .raw else {
             throw PhysicalDesignProductionConfigurationError.invalidArtifact("RC setup script format")
         }
-        guard stageScript.format == .text || stageScript.format == .raw else {
+        guard stageScript.descriptor.format == .text || stageScript.descriptor.format == .raw else {
             throw PhysicalDesignProductionConfigurationError.invalidArtifact("stage script format")
         }
 
@@ -100,7 +100,7 @@ public struct PhysicalDesignProductionConfiguration: Sendable, Hashable, Codable
         self.timeoutSeconds = timeoutSeconds
     }
 
-    public var inputArtifacts: [ArtifactReference] {
+    public var inputArtifacts: [PhysicalDesignArtifactBinding] {
         technologyLEFs + cellLEFs + libertyLibraries
             + [synthesizedNetlist, rcSetupScript, stageScript]
     }
@@ -111,12 +111,12 @@ public struct PhysicalDesignProductionConfiguration: Sendable, Hashable, Codable
             backendID: container.decode(String.self, forKey: .backendID),
             executable: container.decode(PhysicalDesignExecutableReference.self, forKey: .executable),
             versionArguments: container.decode([String].self, forKey: .versionArguments),
-            technologyLEFs: container.decode([ArtifactReference].self, forKey: .technologyLEFs),
-            cellLEFs: container.decode([ArtifactReference].self, forKey: .cellLEFs),
-            libertyLibraries: container.decode([ArtifactReference].self, forKey: .libertyLibraries),
-            synthesizedNetlist: container.decode(ArtifactReference.self, forKey: .synthesizedNetlist),
-            rcSetupScript: container.decode(ArtifactReference.self, forKey: .rcSetupScript),
-            stageScript: container.decode(ArtifactReference.self, forKey: .stageScript),
+            technologyLEFs: container.decode([PhysicalDesignArtifactBinding].self, forKey: .technologyLEFs),
+            cellLEFs: container.decode([PhysicalDesignArtifactBinding].self, forKey: .cellLEFs),
+            libertyLibraries: container.decode([PhysicalDesignArtifactBinding].self, forKey: .libertyLibraries),
+            synthesizedNetlist: container.decode(PhysicalDesignArtifactBinding.self, forKey: .synthesizedNetlist),
+            rcSetupScript: container.decode(PhysicalDesignArtifactBinding.self, forKey: .rcSetupScript),
+            stageScript: container.decode(PhysicalDesignArtifactBinding.self, forKey: .stageScript),
             cornerID: container.decode(String.self, forKey: .cornerID),
             timeoutSeconds: container.decode(Double.self, forKey: .timeoutSeconds)
         )

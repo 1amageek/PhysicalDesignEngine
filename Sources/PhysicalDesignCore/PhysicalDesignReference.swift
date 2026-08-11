@@ -2,12 +2,12 @@ import Foundation
 import CircuiteFoundation
 
 public struct PhysicalDesignReference: Sendable, Hashable, Codable {
-    public var layoutArtifact: ArtifactReference
+    public var layoutArtifact: PhysicalDesignArtifactBinding
     public var topCell: String
     public var layoutDigest: String
 
     public init(
-        layoutArtifact: ArtifactReference,
+        layoutArtifact: PhysicalDesignArtifactBinding,
         topCell: String,
         layoutDigest: String
     ) {
@@ -24,21 +24,18 @@ public struct PhysicalDesignReference: Sendable, Hashable, Codable {
         if layoutDigest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append("physical design layout digest is empty")
         }
-        if layoutArtifact.kind != .layout {
+        if layoutArtifact.descriptor.kind != .layout {
             diagnostics.append("physical design artifact kind must be layout")
         }
-        if layoutArtifact.format != .json && layoutArtifact.format != .def {
+        if layoutArtifact.descriptor.format != .json && layoutArtifact.descriptor.format != .def {
             diagnostics.append("physical design reference format is unsupported by the native backend")
         }
-        if layoutArtifact.digest.algorithm != .sha256
-            || layoutArtifact.digest.hexadecimalValue.isEmpty {
+        if layoutArtifact.reference.digest.algorithm != .sha256
+            || layoutArtifact.reference.digest.hexadecimalValue.isEmpty {
             diagnostics.append("physical design artifact SHA-256 digest is missing")
         }
-        if layoutArtifact.byteCount == 0 {
+        if layoutArtifact.reference.byteCount == 0 {
             diagnostics.append("physical design artifact byte count is missing or invalid")
-        }
-        if layoutArtifact.path.hasPrefix("/") {
-            diagnostics.append("physical design artifact path must be project-relative")
         }
         return diagnostics
     }

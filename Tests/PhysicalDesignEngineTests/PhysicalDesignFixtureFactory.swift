@@ -1,5 +1,6 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 import LogicIR
 import PDKCore
 @testable import PhysicalDesignCore
@@ -34,16 +35,60 @@ enum PhysicalDesignFixtureFactory {
         byteCount: UInt64 = 1
     ) -> ArtifactReference {
         do {
-            let locator = ArtifactLocator(
-                location: try ArtifactLocation(workspaceRelativePath: path),
-                role: role,
-                kind: kind,
-                format: format
-            )
             let contentDigest = try ContentDigest(algorithm: .sha256, hexadecimalValue: digest)
-            return ArtifactReference(locator: locator, digest: contentDigest, byteCount: byteCount)
+            return try ArtifactReference(
+                digest: contentDigest,
+                byteCount: byteCount,
+                descriptor: ArtifactDescriptor(role: role, kind: kind, format: format)
+            )
         } catch {
             fatalError("Invalid physical-design fixture artifact: \(error)")
+        }
+    }
+
+    static func binding(
+        path: String,
+        kind: ArtifactKind,
+        format: ArtifactFormat,
+        role: ArtifactRole = .input,
+        digest: String = String(repeating: "a", count: 64),
+        byteCount: UInt64 = 1
+    ) -> PhysicalDesignArtifactBinding {
+        do {
+            let reference = artifact(
+                path: path,
+                kind: kind,
+                format: format,
+                role: role,
+                digest: digest,
+                byteCount: byteCount
+            )
+            return try PhysicalDesignArtifactBinding(
+                logicalID: path,
+                reference: reference,
+                availability: .local(
+                    artifactID: reference.id,
+                    rootID: try ArtifactRootID(rawValue: "physical-design-memory"),
+                    relativePath: try ArtifactRelativePath(
+                        segments: path.split(separator: "/").map(String.init)
+                    )
+                )
+            )
+        } catch {
+            fatalError("Invalid physical-design fixture binding: \(error)")
+        }
+    }
+
+    static func locator(for binding: PhysicalDesignArtifactBinding) -> ArtifactLocator {
+        do {
+            return ArtifactLocator(
+                location: try ArtifactLocation(workspaceRelativePath: binding.path),
+                role: binding.descriptor.role,
+                kind: binding.descriptor.kind,
+                format: binding.descriptor.format
+            )
+        } catch {
+            fatalError("Invalid physical-design fixture locator: \(error)")
         }
     }
 
@@ -52,18 +97,36 @@ enum PhysicalDesignFixtureFactory {
         snapshot: PhysicalDesignSnapshot? = nil,
         configuration: PhysicalDesignConfiguration = PhysicalDesignFixtureFactory.configuration
     ) -> PhysicalDesignRequest {
-        PhysicalDesignRequest(
+        let design = binding(
+            path: "inputs/design.json",
+            kind: .netlist,
+            format: .json,
+            digest: designDigest
+        )
+        let constraints = binding(
+            path: "inputs/constraints.sdc",
+            kind: .constraint,
+            format: .sdc
+        )
+        let pdk = binding(
+            path: "inputs/pdk.json",
+            kind: .technology,
+            format: .json,
+            digest: pdkDigest
+        )
+        return PhysicalDesignRequest(
             runID: "test-\(stage.rawValue)",
-            inputs: [],
+            inputBindings: [design, constraints, pdk],
             design: LogicDesignReference(
-                artifact: artifact(path: "inputs/design.json", kind: .netlist, format: .json),
+                artifact: design.reference,
                 topDesignName: "fixture_top",
                 designDigest: designDigest
             ),
-            constraints: artifact(path: "inputs/constraints.sdc", kind: .constraint, format: .sdc),
+            constraints: constraints,
             requestedModeIDs: ["func"],
             pdk: PDKReference(
-                manifest: artifact(path: "inputs/pdk.json", kind: .technology, format: .json),
+                manifest: pdk.reference,
+                manifestLocator: locator(for: pdk),
                 processID: "fixture-130nm",
                 version: "1",
                 digest: pdkDigest

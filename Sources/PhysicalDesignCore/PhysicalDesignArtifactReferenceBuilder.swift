@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 
 public struct PhysicalDesignArtifactReferenceBuilder: Sendable {
@@ -9,33 +10,35 @@ public struct PhysicalDesignArtifactReferenceBuilder: Sendable {
     }
 
     public func makeReference(
-        for write: PhysicalDesignArtifactWrite
-    ) throws -> ArtifactReference {
-        let location: ArtifactLocation
+        for write: PhysicalDesignArtifactWrite,
+        rootID: ArtifactRootID
+    ) throws -> PhysicalDesignArtifactBinding {
+        let relativePath: ArtifactRelativePath
         do {
-            location = try ArtifactLocation(workspaceRelativePath: write.relativePath)
+            relativePath = try ArtifactRelativePath(
+                segments: write.relativePath.split(separator: "/").map(String.init)
+            )
         } catch {
             throw PhysicalDesignStoreError.invalidPath(write.relativePath)
         }
         let digest = try hasher.digest(data: write.data, using: .sha256)
-        let locator = ArtifactLocator(
-            location: location,
+        let reference = try ArtifactReference(
+            digest: digest,
+            byteCount: UInt64(write.data.count),
+            descriptor: ArtifactDescriptor(
             role: .output,
             kind: write.kind,
             format: write.format
+            )
         )
-        return ArtifactReference(
-            id: ArtifactID(stableKey: [
-                "physical-design",
-                write.runID,
-                write.relativePath,
-                write.kind.rawValue,
-                write.format.rawValue,
-                digest.hexadecimalValue,
-            ].joined(separator: ":")),
-            locator: locator,
-            digest: digest,
-            byteCount: UInt64(write.data.count)
+        return try PhysicalDesignArtifactBinding(
+            logicalID: write.relativePath,
+            reference: reference,
+            availability: .local(
+                artifactID: reference.id,
+                rootID: rootID,
+                relativePath: relativePath
+            )
         )
     }
 }

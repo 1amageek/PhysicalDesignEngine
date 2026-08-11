@@ -52,6 +52,8 @@ let package = Package(
             name: "PhysicalDesignCore",
             dependencies: [
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
                 .product(name: "LogicIR", package: "LogicDesign"),
                 .product(name: "PDKCore", package: "PDKKit")
             ]
@@ -97,6 +99,7 @@ let package = Package(
             dependencies: [
                 "PhysicalDesignCore",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
                 "FloorplanEngine",
                 "PlacementEngine",
                 "CTSEngine",

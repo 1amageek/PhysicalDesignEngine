@@ -4,20 +4,20 @@ import PDKCore
 import CircuiteFoundation
 
 public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 4
+    public static let currentSchemaVersion = 5
 
     public var schemaVersion: Int
     public var runID: String
     public var stage: PhysicalDesignStage
     public var status: PhysicalDesignExecutionStatus
     public var design: LogicDesignReference
-    public var constraints: ArtifactReference
+    public var constraints: PhysicalDesignArtifactBinding
     public var requestedModeIDs: [String]
     public var pdk: PDKReference
     public var baseLayout: PhysicalDesignReference?
     public var proposedLayout: PhysicalDesignReference?
-    public var designDiff: ArtifactReference?
-    public var artifacts: [ArtifactReference]
+    public var designDiff: PhysicalDesignArtifactBinding?
+    public var artifacts: [PhysicalDesignArtifactBinding]
     public var implementationID: String
     public var implementationVersion: String
     public var deterministicSeed: UInt64?
@@ -29,7 +29,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var executionIntent: PhysicalDesignExecutionIntent
     public var clockTimingModel: PhysicalDesignClockTimingModelReference?
     public var productionConfiguration: PhysicalDesignProductionConfiguration?
-    public var processEvidence: ArtifactReference?
+    public var processEvidence: PhysicalDesignArtifactBinding?
     public var claims: PhysicalDesignCapabilityClaims
     public var createdAt: Date
     public var completedAt: Date
@@ -69,13 +69,13 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         stage: PhysicalDesignStage,
         status: PhysicalDesignExecutionStatus,
         design: LogicDesignReference,
-        constraints: ArtifactReference,
+        constraints: PhysicalDesignArtifactBinding,
         requestedModeIDs: [String],
         pdk: PDKReference,
         baseLayout: PhysicalDesignReference?,
         proposedLayout: PhysicalDesignReference?,
-        designDiff: ArtifactReference?,
-        artifacts: [ArtifactReference],
+        designDiff: PhysicalDesignArtifactBinding?,
+        artifacts: [PhysicalDesignArtifactBinding],
         implementationID: String,
         implementationVersion: String,
         deterministicSeed: UInt64?,
@@ -89,7 +89,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         executionIntent: PhysicalDesignExecutionIntent,
         clockTimingModel: PhysicalDesignClockTimingModelReference? = nil,
         productionConfiguration: PhysicalDesignProductionConfiguration? = nil,
-        processEvidence: ArtifactReference? = nil,
+        processEvidence: PhysicalDesignArtifactBinding? = nil,
         claims: PhysicalDesignCapabilityClaims
     ) {
         self.schemaVersion = Self.currentSchemaVersion
@@ -135,13 +135,13 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         stage = try container.decode(PhysicalDesignStage.self, forKey: .stage)
         status = try container.decode(PhysicalDesignExecutionStatus.self, forKey: .status)
         design = try container.decode(LogicDesignReference.self, forKey: .design)
-        constraints = try container.decode(ArtifactReference.self, forKey: .constraints)
+        constraints = try container.decode(PhysicalDesignArtifactBinding.self, forKey: .constraints)
         requestedModeIDs = try container.decode([String].self, forKey: .requestedModeIDs)
         pdk = try container.decode(PDKReference.self, forKey: .pdk)
         baseLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .baseLayout)
         proposedLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .proposedLayout)
-        designDiff = try container.decodeIfPresent(ArtifactReference.self, forKey: .designDiff)
-        artifacts = try container.decode([ArtifactReference].self, forKey: .artifacts)
+        designDiff = try container.decodeIfPresent(PhysicalDesignArtifactBinding.self, forKey: .designDiff)
+        artifacts = try container.decode([PhysicalDesignArtifactBinding].self, forKey: .artifacts)
         implementationID = try container.decode(String.self, forKey: .implementationID)
         implementationVersion = try container.decode(String.self, forKey: .implementationVersion)
         deterministicSeed = try container.decodeIfPresent(UInt64.self, forKey: .deterministicSeed)
@@ -153,7 +153,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         executionIntent = try container.decode(PhysicalDesignExecutionIntent.self, forKey: .executionIntent)
         clockTimingModel = try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel)
         productionConfiguration = try container.decodeIfPresent(PhysicalDesignProductionConfiguration.self, forKey: .productionConfiguration)
-        processEvidence = try container.decodeIfPresent(ArtifactReference.self, forKey: .processEvidence)
+        processEvidence = try container.decodeIfPresent(PhysicalDesignArtifactBinding.self, forKey: .processEvidence)
         claims = try container.decode(PhysicalDesignCapabilityClaims.self, forKey: .claims)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         completedAt = try container.decode(Date.self, forKey: .completedAt)
@@ -182,7 +182,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if Set(normalizedModeIDs).count != normalizedModeIDs.count {
             diagnostics.append("requested timing mode IDs are not unique")
         }
-        if constraints.kind != .constraint || constraints.format != .sdc {
+        if constraints.descriptor.kind != .constraint || constraints.descriptor.format != .sdc {
             diagnostics.append("constraints are not a canonical SDC artifact")
         }
         diagnostics.append(contentsOf: LogicDesignProvenanceValidation.issues(for: design)
@@ -248,19 +248,16 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if let processEvidence, !artifactPaths.contains(processEvidence.path) {
             diagnostics.append("process evidence is not present in the artifact set")
         }
-        let artifactIDs = artifacts.map(\.artifactID)
+        let artifactIDs = artifacts.map(\.logicalID)
         if Set(artifactIDs).count != artifactIDs.count {
             diagnostics.append("artifact IDs are not unique")
         }
         for artifact in artifacts {
-            if artifact.path.hasPrefix("/") {
-                diagnostics.append("artifact \(artifact.path) is not project-relative")
-            }
-            if artifact.digest.algorithm != .sha256
-                || artifact.digest.hexadecimalValue.isEmpty {
+            if artifact.reference.digest.algorithm != .sha256
+                || artifact.reference.digest.hexadecimalValue.isEmpty {
                 diagnostics.append("artifact \(artifact.path) has no SHA-256 digest")
             }
-            if artifact.byteCount == 0 && artifact.kind != .log {
+            if artifact.reference.byteCount == 0 && artifact.descriptor.kind != .log {
                 diagnostics.append("artifact \(artifact.path) has no valid byte count")
             }
         }
