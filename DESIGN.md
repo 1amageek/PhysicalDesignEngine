@@ -68,8 +68,10 @@ DEF decoding keeps each supported `+ ROUTED` clause's points on its declared lay
 coordinates from later clauses cannot create connecting or zero-length segments.
 The supported DEF subset is not a lossless execution-state serialization: cell pin
 positions and abstract via state are not fully represented. JSON remains the full
-execution-state artifact; DEF route-geometry round trips do not prove via or
-foundry connectivity.
+execution-state artifact and is emitted with artifact kind `layout` so its exact
+binding can be consumed by `PhysicalDesignReference` without reclassification.
+This corrects the descriptor without changing content identity or snapshot bytes.
+DEF route-geometry round trips do not prove via or foundry connectivity.
 
 ## Runtime Flows
 

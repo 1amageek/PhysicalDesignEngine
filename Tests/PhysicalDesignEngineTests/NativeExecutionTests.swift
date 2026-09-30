@@ -69,7 +69,7 @@ struct NativeExecutionTests {
         let revisionReference = try #require(result.artifactBindings.first {
             $0.path.hasSuffix("/revision.json")
         })
-        #expect(revisionReference.descriptor.kind == .other)
+        #expect(revisionReference.descriptor.kind == .layout)
         let revisionData = try #require(await store.data(at: revisionReference.path))
         let snapshot = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: revisionData)
         #expect(snapshot.die != nil)
@@ -538,10 +538,15 @@ struct NativeExecutionTests {
         let firstSnapshot = try await decodedSnapshot(from: first, store: store)
         #expect(firstSnapshot.vias.count == 2)
 
-        let request = PhysicalDesignFixtureFactory.request(
-            stage: .detailedRouting,
-            snapshot: firstSnapshot
+        let binding = try #require(first.artifactBindings.first { $0.path.hasSuffix("/revision.json") })
+        var request = PhysicalDesignFixtureFactory.request(stage: .detailedRouting)
+        request.inputLayout = PhysicalDesignReference(
+            layoutArtifact: binding,
+            topCell: firstSnapshot.topCell,
+            layoutDigest: binding.reference.digest.hexadecimalValue
         )
+        request.inputBindings.append(binding)
+        request.inputs.append(binding.reference)
         let second = try await engine.execute(request)
         #expect(second.status == .completed, "\(second.diagnostics)")
         let secondSnapshot = try await decodedSnapshot(from: second, store: store)

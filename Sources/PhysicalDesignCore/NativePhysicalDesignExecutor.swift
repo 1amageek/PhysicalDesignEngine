@@ -306,7 +306,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let snapshotReference = try await artifactStore.write(
             snapshotData,
             relativePath: snapshotPath,
-            kind: .other,
+            kind: .layout,
             format: .json,
             runID: request.runID
         )
