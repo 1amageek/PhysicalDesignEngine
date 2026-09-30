@@ -495,6 +495,90 @@ struct NativeExecutionTests {
         #expect(result.artifacts.isEmpty)
     }
 
+    @Test("vertical routing checks spacing on its actual layer", arguments: [true, false])
+    func routingUsesActualSegmentLayer(sameLayer: Bool) async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var snapshot = PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false)
+        snapshot.pins = [
+            .init(id: "A0", name: "A0", x: sameLayer ? 30_000 : 20_000, y: 20_000, netID: "A", direction: "output"),
+            .init(id: "A1", name: "A1", x: sameLayer ? 30_000 : 40_000, y: sameLayer ? 40_000 : 20_000, netID: "A", direction: "input"),
+            .init(id: "B0", name: "B0", x: 30_000, y: 15_000, netID: "B", direction: "output"),
+            .init(id: "B1", name: "B1", x: 30_000, y: 25_000, netID: "B", direction: "input")
+        ]
+        snapshot.nets = [.init(id: "A", pinIDs: ["A0", "A1"]), .init(id: "B", pinIDs: ["B0", "B1"])]
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.preferredRoutingLayers = [2, 3]
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: .detailedRouting, snapshot: snapshot, configuration: configuration)
+        )
+
+        if sameLayer {
+            #expect(result.status == .blocked)
+            #expect(result.diagnostics.contains { $0.code.rawValue == "routing_spacing_conflict" })
+            #expect(result.artifacts.isEmpty)
+            #expect(result.payload.claims.geometry == .blocked)
+        } else {
+            #expect(result.status == .completed)
+            let output = try await decodedSnapshot(from: result, store: store)
+            #expect(output.routes.count == 2)
+            #expect(Set(output.routes.flatMap(\.segments).map(\.layer)) == [2, 3])
+            #expect(output.vias.isEmpty)
+        }
+    }
+
+    @Test("global to detailed routing preserves layer connections")
+    func reroutingPreservesVias() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let engine = PhysicalDesignEngine(artifactStore: store)
+        let first = try await engine.execute(PhysicalDesignFixtureFactory.request(
+            stage: .globalRouting,
+            snapshot: PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false)
+        ))
+        #expect(first.status == .completed)
+        let firstSnapshot = try await decodedSnapshot(from: first, store: store)
+        #expect(firstSnapshot.vias.count == 2)
+
+        let request = PhysicalDesignFixtureFactory.request(
+            stage: .detailedRouting,
+            snapshot: firstSnapshot
+        )
+        let second = try await engine.execute(request)
+        #expect(second.status == .completed, "\(second.diagnostics)")
+        let secondSnapshot = try await decodedSnapshot(from: second, store: store)
+        #expect(secondSnapshot.routes == firstSnapshot.routes)
+        #expect(secondSnapshot.vias == firstSnapshot.vias)
+        #expect(secondSnapshot.implementationState?.routingEvidence?.viaCount == secondSnapshot.vias.count)
+    }
+
+    @Test("retained multilayer DEF keeps each route clause on its own layer")
+    func defRoutingClausesRoundTrip() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .globalRouting,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false)
+            )
+        )
+        #expect(result.status == .completed)
+        let output = try await decodedSnapshot(from: result, store: store)
+        let binding = try #require(result.payload.physicalDesign?.layoutArtifact)
+        let data = try await store.read(binding)
+        let parsed = PhysicalDesignDEFParser().parse(data)
+        #expect(parsed.isValid, "\(parsed.diagnostics)")
+        let decoded = try #require(parsed.snapshot)
+        for net in output.nets {
+            let expected = output.routes.filter { $0.netID == net.id }.flatMap(\.segments)
+            let actual = decoded.routes.filter { $0.netID == net.id }.flatMap(\.segments)
+            #expect(actual.count == expected.count)
+            for segment in expected {
+                #expect(actual.contains {
+                    $0.layer == segment.layer && $0.x1 == segment.x1 && $0.y1 == segment.y1
+                        && $0.x2 == segment.x2 && $0.y2 == segment.y2
+                })
+            }
+        }
+    }
+
     @Test("power planning materializes connected power nets and vias")
     func powerPlanningMaterializesConnectivity() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()

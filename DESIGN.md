@@ -1,86 +1,118 @@
 # PhysicalDesignEngine Design
 
-## Purpose
+## Purpose and Scope
 
-PhysicalDesignEngine owns typed physical-design state, stage protocols, deterministic native geometry mutations, and evidence needed to review those mutations. It remains usable without UI state or the Xcircuite runtime.
+PhysicalDesignEngine owns canonical physical state, native stage execution, and
+immutable raw observations. Its current scope is deterministic geometry smoke and
+characterized CTS, not production physical closure. The system ownership contract
+is [LSI AGENTS.md](../AGENTS.md). Products and modules follow [Package.swift](Package.swift).
 
-## Responsibility boundary
+## Responsibilities and Boundaries
 
-```mermaid
-flowchart TD
-  F["CircuiteFoundation\nartifact / diagnostic / provenance"] --> P["PhysicalDesignEngine\nphysical state and stage execution"]
-  T["ToolQualification\nprocess trust evidence"] --> P
-  P --> K["DesignFlowKernel\napproval / resume / flow policy"]
-  P --> X["Xcircuite\nworkspace persistence and composition"]
-```
+The package owns floorplan, power geometry, placement, CTS, routing, ECO, antenna,
+fill, via and hotspot mutations; request validation; JSON/DEF interchange; and
+artifact provenance. `PhysicalDesignEngine` and each stage wrapper delegate to
+`NativePhysicalDesignExecutor`, which validates inputs, invokes the shared
+`PhysicalDesignNativeMutationEngine`, and persists verified immutable outputs.
 
-PhysicalDesignEngine owns:
+OpenROAD compatibility execution belongs to EDAInteroperability. PhysicalDesignEngine
+neither invokes OpenROAD nor substitutes it for missing native production semantics.
+ToolQualification owns tool trust; DesignFlowKernel owns approval and resume;
+Xcircuite owns workspace composition. DRC, LVS, PEX and timing signoff remain with
+their domain engines. Standard mask encoding belongs to swift-mask-data and its
+layout integration.
 
-- canonical `PhysicalDesignSnapshot` geometry and implementation proof state;
-- direct `Engine`-conforming stage protocols;
-- immutable JSON/DEF/diff/manifest output;
-- PDK/RC/Liberty/corner-bound clock timing estimates;
-- physical oracle-correlation records consumed with ToolQualification evidence.
-- isolated OpenROAD execution bound to exact executable and PDK-view bytes.
+## Related Designs
 
-It does not own:
+| Design | Relationship | Contract Used | Summary | Cautions |
+|---|---|---|---|---|
+| [LSI architecture](../docs/platform-architecture.md) | parent system architecture | Native-primary platform ownership | Independent domain engines compose through Xcircuite | Smoke completion does not prove platform completion |
+| [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | Artifact identity, diagnostics, provenance | Shared cross-domain contracts | Content identity is separate from availability |
+| [LogicDesign](../LogicDesign/DESIGN.md) | depends on | Logic design reference | Exact logical input identity | Preserve input digest binding |
+| [PDKKit](../PDKKit/DESIGN.md) | depends on | PDK reference | Exact process input identity | Geometry models do not prove foundry qualification |
+| [EDAInteroperability](../EDAInteroperability/DESIGN.md) | coordinates with | DEF compatibility | External execution and import live outside this package | An oracle does not replace the native implementation |
+| [DesignFlowKernel](../DesignFlowKernel/DESIGN.md) | used by through Xcircuite | Engine results and artifacts | Host approval and resume | The package cannot issue approval or release authorization |
 
-- tool qualification or production eligibility issuance;
-- flow approval, release policy, or run lifecycle;
-- final DRC, LVS, PEX, timing, density, antenna, EM/IR, or tapeout verdicts;
-- a concrete GDSII/OASIS implementation.
-
-## Three execution meanings
-
-| Layer | Inputs | Output claim |
-|---|---|---|
-| Geometry smoke | Canonical snapshot and deterministic configuration | Geometry invariants only |
-| Characterized CTS | Geometry plus exact PDK/RC/Liberty/corner model artifacts | Clock timing estimate for that retained model |
-| Production process backend | Exact executable, PDK views, netlist, SDC, RC setup, stage script, and corner | Standard DEF and raw process evidence; eligibility remains blocked for independent policy |
-
-`characterizedTiming` and `productionImplementation` are intentionally separate. A valid RC/cell model can support a timing estimate without proving the placement/routing algorithm, rule deck, executable, corpus, or oracle correlation.
-
-## Dimensional model
-
-Geometry fields use database units (`DBU`). Time fields use picoseconds (`PS`) and appear only in `PhysicalDesignClockTimingEstimate`.
+## Architecture
 
 ```mermaid
 flowchart LR
-  Geometry["Clock path length (DBU)"] --> Model["PDK + RC + Liberty + corner model"]
-  Cells["Retained buffer masters"] --> Model
-  Model --> Time["Latency / skew (PS)"]
+  Request["Typed request + exact inputs"] --> Executor["NativePhysicalDesignExecutor"]
+  Executor --> Mutation["Shared native mutation engine"]
+  Mutation --> State["Validated snapshot + observations"]
+  State --> Store["Immutable JSON / DEF / diff / manifest"]
+  Store --> Host["Xcircuite + domain verification + review"]
+  External["EDAInteroperability / independent oracle"] --> Host
 ```
 
-The native CTS algorithm never compares DBU distance with a picosecond target and never derives time by copying a path length. Wire-delay samples must increase in path length without decreasing delay. Interpolation is bounded to the retained characterization range; extrapolation and missing cell delays are typed errors.
+## Contracts and Invariants
 
-## Production trust boundary
+Request schema 5 rejects legacy schema values. Exactly one initial snapshot or
+retained layout supplies the physical state. A completed mutation must pass snapshot
+validation; blocked mutations publish no successful revision. Geometry, timing and
+production claims remain distinct. `productionImplementation` fails with
+`native_production_implementation_unsupported` until native production behavior is
+implemented and verified; no caller flag or external backend may bypass this gate.
 
-PhysicalDesignEngine emits revisions, diffs, implementation identity, and raw
-correlation artifacts. ToolQualification reads those immutable artifacts and
-owns tool trust. The package neither reconstructs a trust record nor evaluates
-approval or release policy.
+Geometry uses DBU. Timing estimates use PS only with verified PDK/RC/Liberty/corner
+characterization; missing models and extrapolation fail explicitly.
 
-The `OpenROADPhysicalDesignExecutor` directly conforms to `PhysicalDesignStageExecuting`. It is not an adapter and it does not wrap a native success. It verifies the executable before and after execution, materializes byte-verified inputs into an isolated working directory, applies process timeout and process-group cancellation, and persists generated Tcl, stdout, and stderr before interpreting process output. When later DEF parsing, completion-metric validation, or artifact persistence fails, the typed result still returns every reference that was already retained instead of orphaning process evidence.
+Routing checks every segment against other nets on that segment's actual layer.
+Coincident geometry on different layers is not a same-layer spacing violation.
+Re-routing replaces both routes and vias for the selected nets and preserves
+unselected nets. Every generated inter-layer bend retains its newly generated via,
+even when the preceding snapshot used the same via ID. Routing evidence must describe
+the retained output, not connections discarded during replacement.
 
-```mermaid
-flowchart LR
-  Inputs["Verilog / SDC / LEF / Liberty / RC / PDK"] --> Verify["Digest and byte verification"]
-  Verify --> OpenROAD["OpenROAD isolated process"]
-  OpenROAD --> Raw["DEF / stdout / stderr / invocation"]
-  Raw --> Canonical["Canonical snapshot / diff / manifest"]
-  Raw --> TQ["ToolQualification + independent oracle"]
+DEF decoding keeps each supported `+ ROUTED` clause's points on its declared layer;
+coordinates from later clauses cannot create connecting or zero-length segments.
+The supported DEF subset is not a lossless execution-state serialization: cell pin
+positions and abstract via state are not fully represented. JSON remains the full
+execution-state artifact; DEF route-geometry round trips do not prove via or
+foundry connectivity.
+
+## Runtime Flows
+
+```text
+API / CLI / stage wrapper -> validation -> load exact snapshot -> native mutation
+    -> validate output -> immutable JSON / DEF / diff / manifest -> domain verification
 ```
 
-## Artifact safety
+Cancellation is checked before mutation and within routing. Blocked or cancelled
+mutations cannot become successful revision artifacts. A subsequent stage consumes
+an exact retained state rather than an implicit latest revision.
 
-All artifact locations are workspace-relative. The filesystem store resolves the configured root canonically, checks each parent and leaf against that root, rejects symlink traversal, verifies byte count and SHA-256 on read, and uses immutable destination paths on write.
+## State, Ownership, and Lifecycle
 
-Artifact review validation in this package prepares an immutable review packet and revalidates its current bytes. DesignFlowKernel owns approval decisions, resume, and lifecycle transitions.
+Mutation state and DEF parser state are invocation-local values. No new shared
+mutable state or target-dependent isolation is introduced. The memory artifact
+store owns its dictionary in an actor; the filesystem store owns root containment,
+immutable paths, digest/byte verification, and symlink rejection. Host run lifetime
+and shutdown remain outside the native mutation engine.
 
-## Foreign format boundary
+## Failure, Concurrency, and Constraints
 
-PhysicalDesignEngine emits canonical JSON and its supported DEF subset. A host
-composes those results with a dedicated standard mask-data library for
-GDSII/OASIS stream-out. The exporter contract and implementation belong to
-that library; ToolQualification and host release policy evaluate the concrete
-toolchain.
+Malformed configuration, ambiguous inputs, invalid snapshots, routing blockages,
+same-layer spacing conflicts, incomplete nets and unsupported fidelity produce
+structured failures. Per-request configuration owns route width/spacing, allowed
+layers, geometry and repair constraints. Existing deterministic Manhattan routing
+is a limited native algorithm; it does not establish timing-driven or foundry-rule
+closure. WASM and Embedded execution are not claimed by this Foundation-based
+macOS package or by macOS-only verification evidence.
+
+## Verification and Change Impact
+
+[NativeExecutionTests](Tests/PhysicalDesignEngineTests/NativeExecutionTests.swift)
+owns behavioral routing verification: reject same-layer vertical overlap, accept
+different-layer crossing, preserve vias from global through detailed routing, and
+reopen the actual retained multilayer DEF without geometry/layer corruption.
+The existing package tests cover stage prerequisites, negative inputs, cancellation,
+immutable artifacts, review packets, characterized CTS and CLI failures.
+[ProductionEvidenceTests](Tests/PhysicalDesignEngineTests/ProductionEvidenceTests.swift)
+owns native production rejection and the release-authority boundary.
+
+Routing changes affect global/detailed routing and ECO re-routing through the same
+shared function. DEF changes affect stored output and EDAInteroperability import.
+Verify the affected behavioral tests, then the non-Metal SwiftPM package with a
+process timeout. Platform signoff and independent process qualification require
+separate evidence; package tests cannot establish them.

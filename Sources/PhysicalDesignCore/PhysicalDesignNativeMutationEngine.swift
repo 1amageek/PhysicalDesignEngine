@@ -1128,9 +1128,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     netFailed = true
                     break
                 }
-                if zip([horizontalLayer, verticalLayer], geometries).contains(where: { layer, geometry in
+                if zip(pathSegments, geometries).contains(where: { segment, geometry in
                     routeGeometries.contains { existing in
-                        existing.netID != net.id && existing.layer == layer && existing.geometry.expanded(by: implementationConstraints.routeSpacing).intersects(geometry)
+                        existing.netID != net.id && existing.layer == segment.layer && existing.geometry.expanded(by: implementationConstraints.routeSpacing).intersects(geometry)
                     }
                 }) {
                     spacingConflicts += 1
@@ -1221,7 +1221,6 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 actions: ["repair_net_connectivity", "use_a_qualified_external_router"]
             )
         }
-        let existingViaIDs = Set(output.vias.map(\.id))
         let remainingVias = output.vias.filter { !reroutedNetIDs.contains($0.netID) }
         let minimumViaSpacing = (configuration.repairConstraints ?? .default).minimumViaSpacing
         let allVias = remainingVias + generatedVias
@@ -1237,8 +1236,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 actions: ["increase_via_spacing", "choose_another_routing_layer", "use_a_qualified_external_router"]
             )
         }
-        output.vias = output.vias.filter { !reroutedNetIDs.contains($0.netID) }
-        output.vias.append(contentsOf: generatedVias.filter { !existingViaIDs.contains($0.id) })
+        output.vias = allVias
         output.routes = output.routes.filter { !reroutedNetIDs.contains($0.netID) } + routes
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
         implementationState.routingEvidence = PhysicalDesignImplementationState.RoutingEvidence(

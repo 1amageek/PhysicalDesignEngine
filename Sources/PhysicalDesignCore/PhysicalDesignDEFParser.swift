@@ -922,7 +922,7 @@ public struct PhysicalDesignDEFParser: Sendable {
                 }
                 var points: [(Int64, Int64)] = []
                 var scan = position + 2
-                while scan + 3 < item.count {
+                while scan + 3 < item.count, item[scan].text != "+" {
                     if let first = Int64(item[scan + 1].text), let second = Int64(item[scan + 2].text), item[scan].text == "(", item[scan + 3].text == ")" {
                         points.append((first, second))
                         scan += 4
