@@ -1,7 +1,7 @@
 {
   "schemaVersion": 5,
-  "runID": "fixture-negative-001",
-  "executionIntent": "geometrySmoke",
+  "runID": "fixture-native-production-unsupported-001",
+  "executionIntent": "productionImplementation",
   "inputs": [
     {
       "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002015d1422d9634c06cb33d92f6eae2eb27bd93c0e8a1e27a1b576a5c7a8a63963800000000000000b5",
@@ -86,7 +86,7 @@
       "format": "json"
     }
   },
-  "stage": "placement",
+  "stage": "floorplan",
   "configuration": {
     "dieWidth": 100000,
     "dieHeight": 100000,
@@ -112,6 +112,53 @@
     "ecoDeltaX": 0,
     "ecoDeltaY": 0,
     "deterministicSeed": 7
+  },
+  "initialSnapshot": {
+    "schemaVersion": 1,
+    "topCell": "fixture_top",
+    "unitsPerMicron": 1000,
+    "die": null,
+    "core": null,
+    "rows": [],
+    "cells": [
+      {
+        "id": "U1",
+        "master": "NAND2_X1",
+        "x": 0,
+        "y": 0,
+        "width": 1000,
+        "height": 1000,
+        "placed": false,
+        "locked": false,
+        "isClockBuffer": false,
+        "isFiller": false
+      },
+      {
+        "id": "U2",
+        "master": "BUF_X1",
+        "x": 0,
+        "y": 0,
+        "width": 1000,
+        "height": 1000,
+        "placed": false,
+        "locked": false,
+        "isClockBuffer": false,
+        "isFiller": false
+      }
+    ],
+    "pins": [],
+    "nets": [],
+    "blockages": [],
+    "powerStructures": [],
+    "clockTrees": [],
+    "routes": [],
+    "vias": [],
+    "fills": [],
+    "hotspots": [],
+    "antennaRepairs": [],
+    "metadata": {
+      "fixture": "positive"
+    }
   },
   "inputBindings": [
     {

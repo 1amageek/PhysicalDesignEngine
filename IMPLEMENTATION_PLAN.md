@@ -1,52 +1,43 @@
 # PhysicalDesignEngine Implementation Plan
 
-## Delivered foundation
+## Confirmed Baseline
 
-1. Direct CircuiteFoundation `Engine` conformance and Foundation result/evidence types
-2. Immutable artifact store with digest/byte verification and symlink-safe workspace containment
-3. Canonical JSON snapshot and supported DEF parser/writer
-4. Deterministic native geometry for declared stages
-5. Reviewable design diff, implementation proof, and run manifest
-6. Geometry/timing/production intent and claim separation
-7. PDK/RC/Liberty/corner-bound CTS timing model
-8. ToolQualification process-evidence consumer with physical oracle cross-binding
-9. Explicit ownership boundary for standard mask-data export
-10. Direct OpenROAD process backend with exact executable/view binding, timeout, process-tree cleanup, and raw evidence
+The native engine executes deterministic geometry and characterized CTS through
+API and CLI. Production intent remains explicitly unsupported. The owning
+contracts are [DESIGN.md](DESIGN.md); current evidence is [GOAL_STATUS.md](GOAL_STATUS.md).
+External OpenROAD execution belongs to EDAInteroperability and cannot close a native
+implementation gap. The [system production plan](../PRODUCTION_READY_IMPLEMENTATION_PLAN.md)
+owns cross-package dependencies and the platform acceptance gate.
 
-## Native completion gate
+## Completed Corrections
 
-The native backend is complete only for its declared geometry-smoke scope. It must:
+Native routing now checks spacing on the actual segment layer and preserves
+replacement vias. DEF decoding stops each supported route clause at its boundary.
+Behavioral regressions cover rejection, different-layer crossing, repeated routing
+and the actual retained multilayer DEF. Developer fixtures use schema 5 and bind
+real checked-in input bytes rather than fabricated digests.
 
-- remain deterministic for the same canonical inputs and seed;
-- keep DBU geometry separate from PS timing;
-- block timing when characterization is absent;
-- block every native production-eligible request;
-- emit immutable artifacts and structured diagnostics;
-- remain independently executable through typed API and CLI.
+## Remaining Native Work
 
-## Production backend gate
+These are required implementation outcomes, not claims that an algorithm is
+implemented or an API design is settled. Define the affected lower-level contracts,
+measured resource bounds and behavioral fixtures before implementing each item.
 
-A future production backend may be composed only when all of these are retained and verified:
+| ID | Responsibility | Prerequisite | Falsifiable completion evidence |
+|---|---|---|---|
+| N1 | Consume process-specific legal layers, tracks, cell/pin shapes and via/contact rules | Exact PDK/library views and bounded import/loss policy | Missing or inconsistent views fail; output geometry and connectivity agree with retained source bytes, including non-square cores |
+| N2 | Timing-driven legal placement | N1 and real timing graph/corner inputs | Placed cells satisfy legal sites, orientation, overlap and blockage constraints; retained timing and congestion observations drive placement rather than DBU-only proxy scores |
+| N3 | Constraint-driven CTS | N2 and characterized buffer/wire models | Every sink is connected; skew, latency, slew and load limits are measured for the exact corner, with rejected candidates and bounded failure/cancellation |
+| N4 | Native global/detailed routing beyond single-bend Manhattan geometry | N1/N3 | Obstacle cases can be routed or fail explicitly; legal tracks, widths, layer directions and via stacks satisfy geometry and electrical-connectivity checks; supported standard output preserves those semantics |
+| N5 | Close ECO using extraction and timing feedback | Native PEX and STA contracts owned by their packages | Each candidate is followed by exact extraction/timing/DRC/LVS evidence; stale pre-mutation evidence is rejected; a rejected ECO leaves the prior revision intact |
+| N6 | Independently qualify the native process scope | N1-N5 plus actual PDK-backed corpus | Distinct oracle identities and retained raw outputs correlate over success, violations, repair, hierarchy, corners and resource bounds; ToolQualification recomputes the decision |
 
-| Evidence | Owner |
-|---|---|
-| Tool/oracle executable, process profile, PDK, rule deck, corpus, oracle, and health evidence | ToolQualification |
-| Physical stage/corner/RC/Liberty correlation and separate backend/oracle outputs | PhysicalDesignEngine domain evidence |
-| Flow transition, human approval, resume, release policy | DesignFlowKernel |
-| Workspace persistence | Xcircuite |
-
-No PhysicalDesignEngine type may issue its own production qualification or elevate a native result from a caller-provided boolean/string.
-
-The callable backend portion is implemented by `OpenROADPhysicalDesignExecutor`. Its successful status means only that the bound process produced a canonical DEF. `PhysicalDesignCapabilityClaims.production` remains blocked until ToolQualification and host flow policy accept independent evidence.
-
-## Remaining implementation work
-
-- Retain process-specific physical corpus, oracle and health result artifacts produced by actual tools for ToolQualification reconstruction.
-- Qualify the already composed standard mask-data exporter against real
-  process artifacts in ToolQualification.
-- Retain real PDK-backed end-to-end Xcircuite/DesignFlowKernel fixtures for
-  the callable external backend.
+Only N6 plus the host signoff/review/release gates can support production
+eligibility. Until then, retain the native unsupported marker and typed failure.
 
 ## Verification
 
-Every change requires timeout-bounded Xcode build/test, structured negative tests, immutable artifact verification, updated capability documentation, and explicit production-blocking behavior when evidence is incomplete.
+Use the non-Metal package's `swift test` with a process timeout and explicitly
+built CLI product as documented in [Fixtures/README.md](Fixtures/README.md).
+Tests of native geometry cannot establish foundry correctness, full timing closure,
+lossless DEF via interchange, or production eligibility.

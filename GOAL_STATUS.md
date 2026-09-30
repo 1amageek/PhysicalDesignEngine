@@ -1,58 +1,33 @@
 # PhysicalDesignEngine Goal Status
 
-## Current state
+Updated: 2026-10-01
 
-**The deterministic native backend and a directly conforming OpenROAD process backend are implemented. Installed OpenROAD/PDK qualification and real-process eligibility remain external evidence requirements.**
+The native geometry subset is executable. Native production physical design is
+not implemented, and OpenROAD is not a backend of this package. External
+compatibility execution belongs to EDAInteroperability. Installing or qualifying
+OpenROAD alone cannot complete PhysicalDesignEngine.
 
-| Maturity gate | Status | Evidence |
+| Capability | Current claim | Evidence / remaining gap |
 |---|---|---|
-| Direct Foundation contract | Complete | Direct `Engine`, artifact, diagnostic, provenance, and evidence conformance |
-| Immutable artifact safety | Complete | Digest/byte verification, immutable paths, canonical root, symlink rejection |
-| Canonical JSON / DEF | Complete for supported subset | Parser/writer and retained fixture tests |
-| Native geometry stages | Smoke scope complete | Stage regression and physical invariant tests |
-| CTS dimensional correctness | Complete | DBU path lengths and characterization-only PS estimates |
-| Characterization integrity | Complete | Exact PDK/RC/Liberty/corner artifact loader and monotonic model validation |
-| Native production blocking | Complete | `productionImplementation` requests dispatch only to OpenROAD and never fall back to native geometry |
-| ToolQualification consumption | Contract complete | Canonical process evidence and independent physical correlation validator |
-| Physical process corpus | Not supplied | No real PDK/tool corpus artifacts in this repository |
-| Production process backend | Callable contract complete | Exact executable/views, isolated process, timeout/tree cleanup, and retained stream/DEF references across post-processing failures |
-| Installed OpenROAD + PDK corpus | Not supplied | No local OpenROAD executable or real process corpus is bundled |
-| GDSII/OASIS implementation | Host composition implemented | Xcircuite delegates standard mask encoding/round-trip verification to `swift-mask-data`/`semiconductor-layout`; PhysicalDesignEngine does not own mask I/O |
-| Release readiness | Blocked | Requires installed tool, retained real corpus, independent oracle, signoff, and host policy |
+| Native stage API | Executable subset | `PhysicalDesignEngine` and stage wrappers delegate to the shared native executor |
+| Floorplan / power / placement | Deterministic geometry | Legal geometry tests; process-specific and timing-driven closure remain |
+| CTS | Geometry; model-bound PS estimate when supplied | Characterization tests; full corner/load/slew closure remains |
+| Routing / ECO | Limited native Manhattan geometry | Actual-layer spacing and rerouting-via regressions; obstacle search, process-legal via stacks and timing feedback remain |
+| Canonical artifacts | Immutable JSON, supported DEF, diff and manifest | Byte verification, tamper and review tests; DEF is not full execution-state serialization |
+| Developer CLI | Current schema-5 retained inputs | Actual CLI positive/missing-state/unsupported-production fixtures and digest verification |
+| Native production intent | Explicitly unsupported | `ProductionEvidenceTests.productionImplementationFailsClosed`; incomplete implementation marker retained |
+| Tool trust / release | Owned outside this package | Independent native-process correlation, complete signoff and exact human approval remain required |
 
-## Function status
+## Current Verification
 
-| Function | Native implementation | Timing meaning | Production status |
-|---|---|---|---|
-| Floorplan / power planning | Deterministic geometry | No timing claim | Blocked |
-| Placement | Row legalizer and wirelength/congestion proof | DBU proxy only | Blocked |
-| CTS | Buffers, branch nets, routes, vias, route constraints | PS only with exact characterization | Blocked |
-| Global/detailed routing | Manhattan geometry and native conflict checks | No signoff timing claim | Blocked |
-| Physical ECO | Typed reviewable mutations | Xcircuite feedback/re-run/review/resume composition implemented | Production eligibility remains blocked on independent process evidence |
-| Antenna / DFM | Repair candidates and native proof | No signoff claim | Blocked |
-| JSON / DEF artifacts | Immutable and verified | Not applicable | Complete for interchange subset |
-| GDSII / OASIS | Correctly not exposed by this package | Not applicable | Host exporter and round-trip path implemented; real-process TQ evidence required |
-| OpenROAD process execution | Exact executable and view binding | Tool output retained as standard DEF | Callable; qualification external |
+Verification uses Swift 6.4.0 on macOS arm64. All 51 package tests in four suites
+pass, including three retained CLI request cases, with a 120-second process timeout. The routing corrections fail against
+the old code and pass against the current code. Existing native API, artifact,
+review, stage and characterized-CTS regressions pass. The CLI process test requires
+an explicitly built executable and `BUILT_PRODUCTS_DIR` when the SwiftPM test runner
+cannot infer its product directory. Reproducible commands and the synthetic fixture
+scope are documented in [Fixtures/README.md](Fixtures/README.md).
 
-## Trust progression
-
-```mermaid
-flowchart LR
-  G["Native geometry smoke"] --> C["Characterized CTS timing"]
-  C --> Q["ToolQualification process evidence"]
-  Q --> O["Independent raw oracle result"]
-  O --> F["DesignFlowKernel policy / approval"]
-  F --> R["Release eligibility"]
-```
-
-No arrow is implicit. In particular, characterized timing does not imply process qualification, and process qualification does not itself approve a design run or release.
-
-## Verified regression state
-
-- Xcode package build passes under a timeout-bounded compile gate.
-- Six OpenROAD focused tests pass, covering unavailable tools, successful execution evidence, non-zero exit evidence, timeout evidence, zero-exit missing output, and process-evidence persistence failure with retained streams.
-- The prior 42-test native regression baseline remains subject to the workspace-level consolidated matrix after this schema change.
-- Positive and negative CLI fixtures use request schema version 4 and explicit execution intent.
-- The OpenROAD focused suite verifies unavailable-tool blocking, successful and failed process evidence retention, and persistence-failure visibility without claiming tool qualification.
-
-This file must remain evidence-based. A type name or successful smoke fixture is not production qualification.
+No WASM, Embedded, foundry PDK, production timing closure or platform release claim
+is inferred from this macOS package verification. Remaining native implementation
+outcomes and acceptance evidence are tracked in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
