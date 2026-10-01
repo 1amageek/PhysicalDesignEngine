@@ -32,6 +32,10 @@ The directional-track matrix covers 20 cases across global routing, detailed
 routing, ECO and CTS, including missing directions and excluded layers. CTS
 re-execution changes layer pairs without retaining stale vias or duplicating
 branches; a changed timing model cannot verify the preceding estimate.
+Actual CLI integration also passes for rectangular floorplan to exact retained
+JSON to global routing to exact retained JSON to detailed routing, using synthetic
+geometry inputs. Every output identity is verified, routes/vias are preserved,
+and missing directions and production intent fail without output artifacts.
 
 No WASM, Embedded, foundry PDK, production timing closure or platform release claim
 is inferred from this macOS package verification. Remaining native implementation
