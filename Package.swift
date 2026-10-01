@@ -16,6 +16,11 @@ let pdkKitDependency: Package.Dependency = .package(
     exact: "26.812.0"
 )
 
+let swiftMaskDataDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/swift-mask-data.git",
+    exact: "26.812.0"
+)
+
 let package = Package(
     name: "PhysicalDesignEngine",
     platforms: [.macOS(.v26)],
@@ -35,6 +40,7 @@ let package = Package(
         circuiteFoundationDependency,
         logicDesignDependency,
         pdkKitDependency,
+        swiftMaskDataDependency,
     ],
     targets: [
         .target(
@@ -44,7 +50,8 @@ let package = Package(
                 .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
                 .product(name: "LogicIR", package: "LogicDesign"),
-                .product(name: "PDKCore", package: "PDKKit")
+                .product(name: "PDKCore", package: "PDKKit"),
+                .product(name: "LEF", package: "swift-mask-data")
             ]
         ),
         .target(

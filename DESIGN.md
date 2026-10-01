@@ -125,6 +125,13 @@ is a limited native algorithm; it does not establish timing-driven or foundry-ru
 closure. WASM and Embedded execution are not claimed by this Foundation-based
 macOS package or by macOS-only verification evidence.
 
+Technology input preparation and declared-grid validation are specified by
+[PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md) and its
+[TechnologyConstraints component](Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
+The optional technology path uses existing schema-5 input bindings, keeps native
+production blocked, and adds a direct dependency on the fixed swift-mask-data LEF
+product. It does not change PDKKit or the standard parser's public contracts.
+
 ## Verification and Change Impact
 
 [NativeExecutionTests](Tests/PhysicalDesignEngineTests/NativeExecutionTests.swift)

@@ -35,6 +35,13 @@ artifact bindings and a domain payload. A completed native stage writes
 `PhysicalDesignRunManifest` is schema 5. JSON contains the complete execution
 state; DEF carries the supported interchange subset described by the design.
 
+Input-role bindings with kind `technology` and format `lef` activate native scalar
+technology preparation without adding a schema field. Their source/constraint
+contract and unsupported cases are owned by
+[TechnologyConstraints](Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
+Prepared snapshots retain technology provenance and require those inputs in later
+stages; dropping them does not restore synthetic geometry defaults.
+
 Geometry, timing and production claims are distinct observations. Their authority
 boundary is defined in [DESIGN.md](DESIGN.md#contracts-and-invariants).
 `PhysicalDesignClockTimingModelReference` identifies its model and source bytes;

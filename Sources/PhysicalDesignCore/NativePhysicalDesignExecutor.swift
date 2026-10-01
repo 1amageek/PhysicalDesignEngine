@@ -74,11 +74,12 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         do {
             try Task.checkCancellation()
             let loaded = try await loadSnapshot(from: request)
+            let preparedSnapshot = try await PhysicalDesignTechnologyConstraints.prepare(loaded.snapshot, request: request, store: artifactStore)
             let timingModel = try await loadClockTimingModel(from: request)
             try Task.checkCancellation()
             let outcome = await mutationEngine.apply(
                 request,
-                to: loaded.snapshot,
+                to: preparedSnapshot,
                 clockTimingModel: timingModel,
                 clockTimingModelReference: request.clockTimingModel
             )
@@ -151,6 +152,16 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 request: request,
                 status: .blocked,
                 diagnostics: error.diagnostics.map(defDiagnostic),
+                payload: emptyPayload,
+                startedAt: startedAt,
+                seed: request.configuration.deterministicSeed
+            )
+        } catch let error as PhysicalDesignTechnologyError {
+            return try envelope(
+                request: request,
+                status: .blocked,
+                diagnostics: [diagnostic(severity: .error, code: error.diagnosticCode, message: error.localizedDescription,
+                                         actions: ["repair_exact_pdk_technology_views_and_routing_configuration"])],
                 payload: emptyPayload,
                 startedAt: startedAt,
                 seed: request.configuration.deterministicSeed

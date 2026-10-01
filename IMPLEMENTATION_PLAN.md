@@ -24,6 +24,11 @@ owned branch routes, vias and layer constraints while preserving unrelated nets.
 Re-characterization of retained trees remains unsupported and fails explicitly
 rather than verifying an estimate produced by a preceding model.
 
+Native scalar technology preparation now consumes exact manifest-bound technology
+LEF through existing input bindings. Its supported subset and rejection policy are
+owned by [TechnologyConstraints](Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
+This closes the source-to-track preparation portion of N1; full N1 remains open.
+
 ## Remaining Native Work
 
 These are required implementation outcomes, not claims that an algorithm is
