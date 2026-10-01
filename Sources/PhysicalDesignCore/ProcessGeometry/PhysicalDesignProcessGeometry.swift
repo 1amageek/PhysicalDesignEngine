@@ -37,6 +37,8 @@ struct PhysicalDesignProcessGeometry: Sendable {
     let sites: [String: Site]
     let vias: [String: Via]
     let layers: [Int16: PDKLayerDefinition]
+    let sourceLayers: [Int16: LEFLayerDef]
+    let cutSpacings: [Int16: Int32]
 
     init(inputs: PhysicalDesignProcessInputs, request: PhysicalDesignRequest, units: Int) throws {
         manifestReference = request.pdk.manifest
@@ -89,6 +91,11 @@ struct PhysicalDesignProcessGeometry: Sendable {
             }
         }
         layers = nativeLayers
+        sourceLayers = declaredLayers
+        cutSpacings = try declaredLayers.filter { $0.value.type == .cut }.compactMapValues { rule in
+            guard let spacing = rule.spacing else { return nil }
+            return try Self.coordinate(PhysicalDesignProcessInputs.dbu(spacing, units: units, field: "\(rule.name).SPACING"), field: "cut spacing")
+        }
         var nativeSites: [String: Site] = [:]
         var nativeVias: [String: Via] = [:]
         for assetID in documents.keys.sorted() {
@@ -123,6 +130,27 @@ struct PhysicalDesignProcessGeometry: Sendable {
                 for layer in via.layers {
                     shapes += try Self.shapes(rectangles: layer.rects, polygons: layer.polygons,
                         layer: Self.layer(layer.layerName, in: layerMap), units: units)
+                }
+                let cutShapes = shapes.filter { $0.layer == cut }
+                guard let rule = declaredLayers[cut] else { throw PhysicalDesignTechnologyError.invalid("Fixed via cut rules disappeared.") }
+                try Self.validateCutSpacing(cutShapes, minimum: cutSpacings[cut])
+                if let width = rule.width {
+                    let minimum = try Self.coordinate(Self.dimension(width, units: units, field: "\(rule.name).WIDTH"), field: "cut width")
+                    for shape in cutShapes {
+                        guard try Region(layer: cut, polygons: [shape]).widthViolations(minWidth: minimum).isEmpty else {
+                            throw PhysicalDesignTechnologyError.invalid("Via \(via.name) violates the declared cut WIDTH.")
+                        }
+                    }
+                }
+                let enclosure = try rule.enclosure.map { value in
+                    (try PhysicalDesignProcessInputs.dbu(value.overhang1, units: units, field: "enclosure overhang1"),
+                     try PhysicalDesignProcessInputs.dbu(value.overhang2, units: units, field: "enclosure overhang2"))
+                }
+                for metalLayer in [lower, upper] {
+                    let metal = Region(layer: metalLayer, polygons: shapes.filter { $0.layer == metalLayer })
+                    for shape in cutShapes {
+                        try Self.validateContact(shape, metal: metal, enclosure: enclosure)
+                    }
                 }
                 nativeVias[via.name] = Via(definition: via, lowerLayer: lower, cutLayer: cut, upperLayer: upper, shapes: shapes)
             }
@@ -255,6 +283,56 @@ struct PhysicalDesignProcessGeometry: Sendable {
         guard let name = via.master else { throw PhysicalDesignTechnologyError.invalid("Via footprint admission requires an exact fixed master.") }
         return try viaShapes(master: name, x: via.x, y: via.y).allSatisfy { shape in
             shape.points.allSatisfy { bounds.containsPoint(x: Int64($0.x), y: Int64($0.y)) }
+        }
+    }
+
+    static func validateCutSpacing(_ shapes: [IRBoundary], minimum: Int32?) throws {
+        // ponytail: pairwise primitive checks retain cut identity; use a spatial index when measured via counts exceed the admission budget.
+        for i in shapes.indices {
+            let first = Region(layer: shapes[i].layer, polygons: [shapes[i]])
+            for j in shapes.indices where j > i {
+                let second = Region(layer: shapes[j].layer, polygons: [shapes[j]])
+                guard try first.intersection(second).isEmpty else {
+                    throw PhysicalDesignTechnologyError.invalid("Distinct fixed via cuts overlap.")
+                }
+                if let minimum, minimum > 0 {
+                    guard try first.spaceViolations(to: second, minSpace: minimum).isEmpty else {
+                        throw PhysicalDesignTechnologyError.invalid("Fixed via cuts violate declared edge-to-edge SPACING.")
+                    }
+                }
+            }
+        }
+    }
+
+    private static func validateContact(_ shape: IRBoundary, metal: Region, enclosure: (Int64, Int64)?) throws {
+        let cut = Region(layer: shape.layer, polygons: [shape])
+        guard try cut.subtracting(metal).isEmpty else {
+            throw PhysicalDesignTechnologyError.invalid("Fixed via metal does not cover its cut geometry.")
+        }
+        guard let (first, second) = enclosure else { return }
+        if first == second {
+            let minimum = try coordinate(first, field: "cut enclosure")
+            guard try metal.enclosureViolations(inner: cut, minEnclosure: minimum).isEmpty else {
+                throw PhysicalDesignTechnologyError.invalid("Fixed via metal violates declared ENCLOSURE.")
+            }
+            return
+        }
+        guard let bounds = cut.boundingBox else { throw PhysicalDesignTechnologyError.invalid("Fixed via cut is empty.") }
+        func rectangle(_ dx: Int64, _ dy: Int64) throws -> Region {
+            let x1 = try coordinate(Int64(bounds.minX) - dx, field: "cut enclosure x1")
+            let x2 = try coordinate(Int64(bounds.maxX) + dx, field: "cut enclosure x2")
+            let y1 = try coordinate(Int64(bounds.minY) - dy, field: "cut enclosure y1")
+            let y2 = try coordinate(Int64(bounds.maxY) + dy, field: "cut enclosure y2")
+            return Region(layer: shape.layer, polygons: [.init(layer: shape.layer, datatype: 0, points: [
+                .init(x: x1, y: y1), .init(x: x2, y: y1), .init(x: x2, y: y2), .init(x: x1, y: y2), .init(x: x1, y: y1)])])
+        }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Source contact admission supports asymmetric opposite-side enclosure for rectangular cuts. Nonrectangular directional offsets require an exact polygon offset operation before they can be admitted.
+        guard try rectangle(0, 0).subtracting(cut).isEmpty else {
+            throw PhysicalDesignTechnologyError.unsupported("Asymmetric ENCLOSURE requires a rectangular fixed cut.")
+        }
+        guard try rectangle(first, second).subtracting(metal).isEmpty
+                || rectangle(second, first).subtracting(metal).isEmpty else {
+            throw PhysicalDesignTechnologyError.invalid("Fixed via metal violates opposite-side ENCLOSURE.")
         }
     }
 

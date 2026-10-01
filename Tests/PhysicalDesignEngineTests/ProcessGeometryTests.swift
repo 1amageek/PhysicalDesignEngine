@@ -633,6 +633,63 @@ struct ProcessGeometryTests {
             stage: stage, configuration: base.configuration, processAssets: processAssets ?? base.processAssets)
     }
 
+    @Test("source routing layer admission rejects cut and unknown layers", arguments: ["route", "power", "fill", "track", "clock-constraint", "pin"])
+    func sourceLayerAdmission(kind: String) async throws {
+        let (geometry, base, _) = try await fixture()
+        for layer in [2, 4, 99] {
+            var snapshot = try geometry.bind(.init(topCell: base.design.topDesignName,
+                die: .init(x: 0, y: 0, width: 10000, height: 10000), nets: [.init(id: "N", pinIDs: [])]))
+            switch kind {
+            case "route": snapshot.routes = [.init(id: "R", netID: "N", segments: [.init(id: "S", layer: layer, x1: 100, y1: 100, x2: 900, y2: 100)])]
+            case "power": snapshot.powerStructures = [.init(id: "P", netID: "N", kind: "strap", layer: layer, geometry: .init(x: 100, y: 100, width: 100, height: 500))]
+            case "fill": snapshot.fills = [.init(id: "F", layer: layer, geometry: .init(x: 100, y: 100, width: 100, height: 100))]
+            case "track": snapshot.implementationState = .init(tracks: [.init(id: "T", layer: layer, direction: "horizontal", origin: 100, spacing: 200, count: 5)])
+            case "clock-constraint": snapshot.implementationState = .init(clockRouteConstraints: [.init(id: "C", netID: "N", layer: layer, width: 100, spacing: 100, maximumLength: 1000)])
+            default:
+                snapshot.pins = [.init(id: "P", cellID: nil, name: "P", x: 100, y: 100, netID: "N", direction: "input", accessLayer: layer)]
+                snapshot.nets[0].pinIDs = ["P"]
+            }
+            #expect(snapshot.validationDiagnostics().isEmpty, "\(snapshot.validationDiagnostics())")
+            if layer == 2 { try geometry.validate(snapshot) }
+            else { #expect(throws: PhysicalDesignTechnologyError.self) { try geometry.validate(snapshot) } }
+        }
+    }
+
+    @Test("fixed source contact rules reject invalid geometry", arguments: ["cut-width", "cut-spacing", "cut-overlap", "uncovered-cut", "enclosure", "isotropic-enclosure", "asymmetric-enclosure", "asymmetric-enclosure-rotated", "concave-enclosure", "offgrid-cut-rule"])
+    func fixedContactRules(scenario: String) async throws {
+        if scenario.hasPrefix("asymmetric-enclosure") || scenario == "isotropic-enclosure" {
+            let (geometry, _, _) = try await fixture(scenario)
+            #expect(geometry.vias["hv"] != nil)
+        } else {
+            await #expect(throws: PhysicalDesignTechnologyError.self) { try await fixture(scenario) }
+        }
+    }
+
+    @Test("via spacing uses cut edges and antenna cannot invent source feedback")
+    func sourceOutputContactAndFeedback() async throws {
+        let (geometry, base, _) = try await fixture()
+        var snapshot = try geometry.bind(.init(topCell: base.design.topDesignName,
+            die: .init(x: 0, y: 0, width: 10000, height: 10000), nets: [.init(id: "N", pinIDs: [], antennaRatio: 100, maximumAntennaRatio: 10)],
+            routes: [.init(id: "R", netID: "N", segments: [.init(id: "S", layer: 2, x1: 100, y1: 100, x2: 900, y2: 100)])],
+            vias: [.init(id: "V1", netID: "N", x: 500, y: 500, lowerLayer: 2, upperLayer: 3, master: "hv"),
+                   .init(id: "V2", netID: "N", x: 600, y: 500, lowerLayer: 2, upperLayer: 3, master: "hv")]))
+        try geometry.validate(snapshot) // Exactly 50 DBU between 50 DBU cuts.
+        for x: Int64 in [599, 525, 500] {
+            snapshot.vias[1].x = x
+            #expect(throws: PhysicalDesignTechnologyError.self) { try geometry.validate(snapshot) }
+        }
+        snapshot.vias.removeLast()
+        var request = nativeRequest(base)
+        request.stage = .antennaRepair
+        for strategy in [PhysicalDesignAntennaRepairStrategy.jumper, .reroute, .protectionDevice] {
+            request.configuration.repairConstraints?.antennaStrategy = strategy
+            let outcome = await PhysicalDesignNativeMutationEngine().applyPrepared(request, to: snapshot, processGeometry: geometry)
+            #expect(outcome.status == .blocked && outcome.snapshot == nil)
+            #expect(outcome.diagnostics.contains { $0.code.rawValue == "antenna_source_feedback_unimplemented" })
+            #expect(snapshot.nets[0].antennaRatio == 100)
+        }
+    }
+
     private func fixture(_ scenario: String = "valid", replacement: String? = nil) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
         let store = InMemoryPhysicalDesignArtifactStore()
         var technology = """
@@ -687,7 +744,21 @@ struct ProcessGeometryTests {
             let end = try #require(technology.range(of: "END hv"))
             let duplicate = String(technology[start.lowerBound..<end.upperBound]).replacingOccurrences(of: "hv", with: "hv2")
             technology = technology.replacingOccurrences(of: "END LIBRARY", with: duplicate + "\nEND LIBRARY")
-        case "offset-via": technology = technology.replacingOccurrences(of: "RECT -0.1 -0.1 0.1 0.1", with: "RECT 1 1 1.2 1.2")
+        case "offset-via": technology = technology.replacingOccurrences(of: "RECT -0.1 -0.1 0.1 0.1", with: "RECT 1 1 1.2 1.2").replacingOccurrences(of: "RECT -0.025 -0.025 0.025 0.025", with: "RECT 1.075 1.075 1.125 1.125")
+        case "cut-width": technology = technology.replacingOccurrences(of: "WIDTH 0.05", with: "WIDTH 0.051")
+        case "cut-spacing", "cut-overlap":
+            technology = technology.replacingOccurrences(of: "RECT -0.025 -0.025 0.025 0.025 ;", with: "RECT -0.025 -0.025 0.025 0.025 ; RECT \(scenario == "cut-spacing" ? "0.074 -0.025 0.124 0.025" : "0 -0.025 0.05 0.025") ;")
+            technology = technology.replacingOccurrences(of: "RECT -0.1 -0.1 0.1 0.1", with: "RECT -0.2 -0.2 0.2 0.2")
+        case "uncovered-cut": technology = technology.replacingOccurrences(of: "RECT -0.1 -0.1 0.1 0.1", with: "RECT -0.01 -0.01 0.01 0.01")
+        case "isotropic-enclosure": technology = technology.replacingOccurrences(of: "SPACING 0.05 ;", with: "SPACING 0.05 ; ENCLOSURE 0.075 0.075 ;")
+        case "enclosure": technology = technology.replacingOccurrences(of: "SPACING 0.05 ;", with: "SPACING 0.05 ; ENCLOSURE 0.076 0.076 ;")
+        case "asymmetric-enclosure", "asymmetric-enclosure-rotated":
+            technology = technology.replacingOccurrences(of: "SPACING 0.05 ;", with: "SPACING 0.05 ; ENCLOSURE 0.075 0.025 ;")
+            technology = technology.replacingOccurrences(of: "RECT -0.1 -0.1 0.1 0.1", with: scenario == "asymmetric-enclosure" ? "RECT -0.1 -0.05 0.1 0.05" : "RECT -0.05 -0.1 0.05 0.1")
+        case "concave-enclosure":
+            technology = technology.replacingOccurrences(of: "SPACING 0.05 ;", with: "SPACING 0.05 ; ENCLOSURE 0.075 0.025 ;")
+            technology = technology.replacingOccurrences(of: "RECT -0.1 -0.1 0.1 0.1 ;", with: "POLYGON -0.1 -0.1 0.1 -0.1 0.1 0.1 0.05 0.1 0.05 0 -0.1 0 ;")
+        case "offgrid-cut-rule": technology = technology.replacingOccurrences(of: "SPACING 0.05", with: "SPACING 0.0505")
         case "mask": cells = cells.replacingOccurrences(of: "RECT 0.1 0.3", with: "RECT MASK 1 0.1 0.3")
         case "bad-resistance": technology = technology.replacingOccurrences(of: "RESISTANCE 0.75", with: "RESISTANCE -0.75")
         case "port-via", "missing-port-via": cells = cells.replacingOccurrences(of: "RECT 0.1 0.3 0.3 0.5 ;", with: "VIA 0.2 0.4 \(scenario == "port-via" ? "hv" : "missing") ;")

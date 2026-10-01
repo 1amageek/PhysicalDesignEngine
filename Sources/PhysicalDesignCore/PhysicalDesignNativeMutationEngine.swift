@@ -113,6 +113,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .timingECO, .drcRepair:
             outcome = eco(input, configuration: request.configuration, stage: request.stage, processGeometry: processGeometry)
         case .antennaRepair:
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Native source-bound antenna repair has no source-qualified area/gate feedback calculation. API/CLI requests must fail until the changed physical geometry is remeasured against declared process rules.
+            guard processGeometry == nil else {
+                return blocked(code: "antenna_source_feedback_unimplemented", message: "Source-bound antenna repair requires native process-qualified feedback.", actions: ["implement_source_qualified_antenna_analysis"])
+            }
             outcome = antennaRepair(input, configuration: request.configuration)
         case .fillInsertion:
             outcome = fillInsertion(input, configuration: request.configuration)
@@ -1724,6 +1728,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         )
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The source-free geometry-smoke antenna stage uses arithmetic ratio placeholders rather than recomputed physical feedback. Source-bound calls are blocked at dispatch; this path cannot qualify antenna correctness until candidate geometry and declared gate/process data drive the measurement.
     private func antennaRepair(
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration

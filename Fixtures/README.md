@@ -109,3 +109,11 @@ CTS uses the actual selected ports and creates fresh clock routes. Antenna
 source device insertion and derived post-repair antenna evidence are implemented.
 Run `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter sourceInsertedCells`
 to exercise source-bound API save/resume, CTS, routing follow-up and rejection paths.
+
+Source contact admission checks mapped routing layers for routes, power, fill,
+tracks and clock constraints. Fixed source vias check cut WIDTH, edge spacing,
+metal coverage and opposite-side ENCLOSURE against their actual shapes.
+Inter-via checks retain distinct cuts, including same-net redundant contacts.
+Source-bound antenna mutation is blocked until measured native feedback exists.
+Run `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter 'sourceLayerAdmission|fixedContactRules|sourceOutputContactAndFeedback'`.
+These checks establish basic contact admission, not full native routing signoff.

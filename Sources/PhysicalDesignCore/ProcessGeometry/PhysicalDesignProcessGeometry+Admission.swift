@@ -85,10 +85,18 @@ extension PhysicalDesignProcessGeometry {
                 }
             }
         }
+        for route in snapshot.routes {
+            for segment in route.segments { _ = try requireRoutingLayer(segment.layer) }
+        }
+        for structure in snapshot.powerStructures { _ = try requireRoutingLayer(structure.layer) }
+        for fill in snapshot.fills { _ = try requireRoutingLayer(fill.layer) }
+        for track in snapshot.implementationState?.tracks ?? [] { _ = try requireRoutingLayer(track.layer) }
+        for constraint in snapshot.implementationState?.clockRouteConstraints ?? [] { _ = try requireRoutingLayer(constraint.layer) }
         for pin in snapshot.pins {
-            guard let layer = pin.accessLayer, let number = Int16(exactly: layer), layers[number]?.isRoutingLayer == true else {
+            guard let layer = pin.accessLayer else {
                 throw PhysicalDesignTechnologyError.invalid("Pin \(pin.id) requires an explicit mapped routing access layer.")
             }
+            let number = try requireRoutingLayer(layer)
             guard let cellID = pin.cellID else { continue }
             guard let cell = cells[cellID], let sourcePin = masters[cell.master]?.pins[pin.name],
                   let direction = sourcePin.definition.direction,
@@ -101,17 +109,28 @@ extension PhysicalDesignProcessGeometry {
                 throw PhysicalDesignTechnologyError.invalid("Pin \(pin.id) access point is outside its exact source port on the selected layer.")
             }
         }
+        var cuts: [Int16: [IRBoundary]] = [:]
         for via in snapshot.vias {
             guard let name = via.master, let source = vias[name],
                   via.lowerLayer == Int(source.lowerLayer), via.upperLayer == Int(source.upperLayer), let die = snapshot.die else {
                 throw PhysicalDesignTechnologyError.invalid("Via \(via.id) requires an exact fixed master and matching routing layers.")
             }
             for shape in try viaShapes(master: name, x: via.x, y: via.y) {
+                if shape.layer == source.cutLayer { cuts[source.cutLayer, default: []].append(shape) }
                 guard shape.points.allSatisfy({ die.containsPoint(x: Int64($0.x), y: Int64($0.y)) }) else {
                     throw PhysicalDesignTechnologyError.invalid("Via \(via.id) source footprint is outside the die.")
                 }
             }
         }
+        for (layer, shapes) in cuts { try Self.validateCutSpacing(shapes, minimum: cutSpacings[layer]) }
+    }
+
+    private func requireRoutingLayer(_ layer: Int) throws -> Int16 {
+        guard let number = Int16(exactly: layer), layers[number]?.isRoutingLayer == true,
+              sourceLayers[number]?.type == .routing else {
+            throw PhysicalDesignTechnologyError.invalid("Native routing layer \(layer) requires a declared mapped source ROUTING layer.")
+        }
+        return number
     }
 
     func canPlace(_ cell: PhysicalDesignSnapshot.Cell, on row: PhysicalDesignSnapshot.Row) -> Bool {

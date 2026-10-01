@@ -79,7 +79,23 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
   pair, or preserves an explicit existing source master. The center-joined profile
   admits only routing footprints containing the origin and full translated shapes
   inside the construction bounds. Missing/ambiguous defaults and offset-access
-  profiles fail explicitly. Fixed via selection does not establish cut/enclosure DRC.
+  profiles fail explicitly.
+- Selected fixed vias enforce the declared cut WIDTH and scalar edge-to-edge
+  SPACING using the existing exact Manhattan/Euclidean geometry kernel. Distinct
+  cut primitives cannot overlap; absent optional rules do not invent thresholds.
+- Both routing footprints cover every cut. Declared ENCLOSURE overhangs apply to
+  opposite sides and may swap X/Y independently for each metal. Rectangular cuts
+  use exact expanded regions, including concave metal coverage; asymmetric
+  enclosure of nonrectangular cuts fails explicitly. Isotropic enclosure uses
+  the existing polygon enclosure operation. Unsupported qualified/repeated rules
+  are rejected by strict LEF intake, including nondefault clearance metrics.
+- Admission checks inter-via cut overlap and source spacing, including same-net
+  and redundant vias. This contact profile does not qualify full routing DRC.
+- Every route, power rectangle, fill, track and clock route constraint resolves
+  to a declared source ROUTING layer. Pin access uses the same check.
+- Source-bound antenna repair fails before mutation or publication until the
+  native source-qualified calculation can remeasure a candidate. Arithmetic
+  ratio reduction and inferred next-layer numbers do not constitute feedback.
 - Public bare mutation cannot consume bound process sources without the artifact
   intake path. The executor supplies the immutable projection to internal mutation.
 - Connected pin reconstruction reuses one deterministic declared routing-boundary

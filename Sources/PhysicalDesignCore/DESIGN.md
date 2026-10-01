@@ -85,8 +85,10 @@ master keeps its identity. Missing/ambiguous defaults fail, without a name or
 layer-number fallback. This center-joined profile requires both routing footprints
 to contain the via origin and every translated shape to fit the construction core.
 Redundant candidates retain the original master and test full footprints before
-location acceptance. Multi-transition route search, process cut/enclosure DRC and
-pin-access closure remain B5; fixed source resolution alone does not prove them.
+location acceptance. Multi-transition route search, full routing DRC and
+pin-access closure remain B5. ProcessGeometry owns basic fixed-contact width,
+spacing and enclosure admission plus source routing-layer identity; fixed source
+resolution alone does not qualify native routing.
 The same path constructor materializes transitions at declared pin access layers
 and each segment-layer boundary. A bend via alone cannot bridge a different pin
 layer at an endpoint. Repeated same-net transitions at the same position/pair are
