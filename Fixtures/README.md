@@ -94,5 +94,5 @@ Explicit named vias preserve their source identity during redundant insertion.
 The current center-joined profile rejects offset routing footprints and any full
 translated footprint outside the construction core. It does not establish
 process cut/enclosure DRC or legal width-aware pin access.
-Run `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter
-'constructedFixedVias|viaFootprintAuthority'` for these source-bound regressions.
+Run `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter 'constructedFixedVias|viaFootprintAuthority'`
+for these source-bound regressions.
