@@ -117,6 +117,17 @@ struct ProcessGeometryTests {
         #expect(omitted.diagnostics.contains { $0.code.rawValue == "physical_technology_invalid" })
         let bare = await PhysicalDesignNativeMutationEngine().apply(request, to: floorplan)
         #expect(bare.status == .blocked && bare.diagnostics.contains { $0.code.rawValue == "process_geometry_unresolved" })
+        var movement = resumed(request, from: placedReference, runID: "move-exact", stage: .timingECO)
+        movement.configuration.ecoAction = .moveCell
+        movement.configuration.ecoTargetCellID = "U1"
+        movement.configuration.ecoDeltaX = 300
+        let movedResult = try await engine.execute(movement)
+        #expect(movedResult.status == .completed, "\(movedResult.diagnostics)")
+        let movedBinding = try #require(movedResult.payload.physicalDesign?.layoutArtifact)
+        let moved = try codec.decode(PhysicalDesignSnapshot.self, from: await store.read(movedBinding))
+        #expect(moved.cells.first?.x == 300 && moved.pins.first?.x == 2000 && moved.pins.first?.y == 200)
+        #expect(moved.implementationState?.placementProof == nil)
+        try geometry.validate(moved)
         var resize = resumed(request, from: placedReference, runID: "fabricated-resize", stage: .timingECO)
         resize.configuration.ecoTargetCellID = "U1"
         let rejectedResize = try await engine.execute(resize)

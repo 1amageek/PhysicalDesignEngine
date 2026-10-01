@@ -402,9 +402,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         }
 
         var output = input
-        var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
         var blockageConflictCount = 0
         let rows = output.rows.sorted { $0.id < $1.id }
+        let pinIndicesByCell = Dictionary(grouping: output.pins.indices, by: { output.pins[$0].cellID })
         for cell in output.cells where cell.locked && !cell.placed {
             return blocked(
                 code: "locked_cell_unplaced",
@@ -451,29 +451,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     cell.placed = true
                     cursorX = alignedX + cell.width + configuration.placementSpacing
                     let previousCell = output.cells[cellIndex]
-                    for pinIndex in output.pins.indices where output.pins[pinIndex].cellID == cell.id {
-                        let (offsetX, offsetXOverflow) = output.pins[pinIndex].x.subtractingReportingOverflow(previousCell.x)
-                        let (offsetY, offsetYOverflow) = output.pins[pinIndex].y.subtractingReportingOverflow(previousCell.y)
-                        guard !offsetXOverflow, !offsetYOverflow else {
-                            return blocked(
-                                code: "placement_pin_coordinate_overflow",
-                                message: "Placement could not translate pin geometry for cell \(cell.id) without overflowing the coordinate range.",
-                                entity: cell.id,
-                                actions: ["repair_pin_geometry", "reduce_placement_coordinate_range"]
-                            )
-                        }
-                        let (newPinX, newPinXOverflow) = cell.x.addingReportingOverflow(offsetX)
-                        let (newPinY, newPinYOverflow) = cell.y.addingReportingOverflow(offsetY)
-                        guard !newPinXOverflow, !newPinYOverflow else {
-                            return blocked(
-                                code: "placement_pin_coordinate_overflow",
-                                message: "Placement could not translate pin geometry for cell \(cell.id) without overflowing the coordinate range.",
-                                entity: cell.id,
-                                actions: ["repair_pin_geometry", "reduce_placement_coordinate_range"]
-                            )
-                        }
-                        output.pins[pinIndex].x = newPinX
-                        output.pins[pinIndex].y = newPinY
+                    if let failure = relocatePins(from: previousCell, to: cell, indices: pinIndicesByCell[cell.id, default: []], in: &output) {
+                        return Outcome(snapshot: nil, status: .blocked, diagnostics: [failure], candidateActions: ["repair_pin_geometry"])
                     }
                     output.cells[cellIndex] = cell
                     break
@@ -538,6 +517,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         let wirelengthObjectiveDBU = estimatedWirelength(output)
         let congestionObjective = maximumRowUtilization(output)
         let legalCellCount = max(0, output.cells.count - overlapCount - outsideCoreCount)
+        if output.cells != input.cells { invalidateCellGeometryDependents(in: &output) }
+        var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
         implementationState.placementProof = PhysicalDesignImplementationState.PlacementProof(
             cellCount: output.cells.count,
             legalCellCount: legalCellCount,
@@ -589,6 +570,37 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 )
             ]
         )
+    }
+
+    private func relocatePins(from previous: PhysicalDesignSnapshot.Cell, to cell: PhysicalDesignSnapshot.Cell,
+        indices: [Int], in snapshot: inout PhysicalDesignSnapshot) -> DesignDiagnostic? {
+        for index in indices {
+            let (offsetX, offsetXOverflow) = snapshot.pins[index].x.subtractingReportingOverflow(previous.x)
+            let (offsetY, offsetYOverflow) = snapshot.pins[index].y.subtractingReportingOverflow(previous.y)
+            let (x, xOverflow) = cell.x.addingReportingOverflow(offsetX)
+            let (y, yOverflow) = cell.y.addingReportingOverflow(offsetY)
+            guard !offsetXOverflow, !offsetYOverflow, !xOverflow, !yOverflow else {
+                return diagnostic(severity: .error, code: "cell_pin_coordinate_overflow",
+                    message: "Cell \(cell.id) pin relocation exceeds the coordinate range.", entity: cell.id,
+                    actions: ["repair_pin_geometry", "reduce_cell_coordinate_range"])
+            }
+            snapshot.pins[index].x = x
+            snapshot.pins[index].y = y
+        }
+        return nil
+    }
+
+    private func invalidateCellGeometryDependents(in snapshot: inout PhysicalDesignSnapshot) {
+        snapshot.routes.removeAll()
+        snapshot.vias.removeAll()
+        snapshot.clockTrees.removeAll()
+        snapshot.implementationState?.clockRouteConstraints.removeAll()
+        snapshot.implementationState?.routingEvidence = nil
+        snapshot.implementationState?.placementProof = nil
+        snapshot.implementationState?.repairProofs.removeAll()
+        snapshot.metadata["routingStatus"] = "requires_routing"
+        snapshot.metadata["clockTreeStatus"] = "requires_clock_tree_synthesis"
+        snapshot.metadata["clockTimingStatus"] = "invalidated_by_cell_geometry"
     }
 
     private func clockTreeSynthesis(
@@ -1461,6 +1473,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["choose_another_eco_target", "move_adjacent_cells", "increase_core_area"]
                 )
             }
+            invalidateCellGeometryDependents(in: &output)
         case .moveCell:
             guard let target = configuration.ecoTargetCellID,
                   let index = output.cells.firstIndex(where: { $0.id == target }) else {
@@ -1517,6 +1530,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["reduce_eco_delta", "move_adjacent_cells"]
                 )
             }
+            let indices = output.pins.indices.filter { output.pins[$0].cellID == cell.id }
+            if let failure = relocatePins(from: cell, to: output.cells[index], indices: indices, in: &output) {
+                return Outcome(snapshot: nil, status: .blocked, diagnostics: [failure], candidateActions: ["repair_pin_geometry"])
+            }
+            if cell != output.cells[index] { invalidateCellGeometryDependents(in: &output) }
         case .bufferInsertion:
             guard let netID = configuration.ecoTargetNetID,
                   let netIndex = output.nets.firstIndex(where: { $0.id == netID }) else {

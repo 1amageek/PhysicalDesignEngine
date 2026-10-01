@@ -864,6 +864,48 @@ struct NativeExecutionTests {
         #expect(result.artifacts.isEmpty)
     }
 
+    @Test("cell relocation invalidates retained route and clock evidence and rejects pin overflow", arguments: ["eco", "placement", "unchanged", "overflow"])
+    func cellRelocationEvidence(scenario: String) async throws {
+        let mutation = PhysicalDesignNativeMutationEngine()
+        let initial = PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false)
+        let routed = await mutation.apply(PhysicalDesignFixtureFactory.request(stage: .globalRouting), to: initial)
+        #expect(routed.status == .completed)
+        let clocked = await mutation.apply(PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis), to: try #require(routed.snapshot))
+        #expect(clocked.status == .completed)
+        var retained = try #require(clocked.snapshot)
+        #expect(!retained.routes.isEmpty && !retained.clockTrees.isEmpty)
+        #expect(retained.implementationState?.routingEvidence != nil)
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.ecoAction = .moveCell
+        configuration.ecoTargetCellID = "U1"
+        configuration.ecoDeltaX = scenario == "unchanged" ? 0 : 100
+        if scenario == "overflow" { retained.pins[0].x = .max }
+        let stage: PhysicalDesignStage = scenario == "placement" ? .placement : .timingECO
+        let outcome = await mutation.apply(PhysicalDesignFixtureFactory.request(stage: stage, configuration: configuration), to: retained)
+        if scenario == "overflow" {
+            #expect(outcome.status == .blocked && outcome.snapshot == nil)
+            #expect(outcome.diagnostics.contains { $0.code.rawValue == "cell_pin_coordinate_overflow" })
+            return
+        }
+        #expect(outcome.status == .completed, "\(outcome.diagnostics)")
+        let output = try #require(outcome.snapshot)
+        if scenario == "unchanged" {
+            #expect(output.routes == retained.routes && output.vias == retained.vias && output.clockTrees == retained.clockTrees)
+            #expect(output.implementationState?.routingEvidence == retained.implementationState?.routingEvidence)
+        } else {
+            #expect(output.routes.isEmpty && output.vias.isEmpty && output.clockTrees.isEmpty)
+            #expect(output.implementationState?.routingEvidence == nil && output.implementationState?.clockRouteConstraints.isEmpty == true)
+            #expect(output.metadata["routingStatus"] == "requires_routing" && output.metadata["clockTimingStatus"] == "invalidated_by_cell_geometry")
+            #expect(output.implementationState?.repairProofs.allSatisfy { $0.strategy == PhysicalECOAction.moveCell.rawValue } == true)
+            let previousCell = try #require(retained.cells.first { $0.id == "U1" })
+            let cell = try #require(output.cells.first { $0.id == "U1" })
+            for pin in retained.pins where pin.cellID == "U1" {
+                let movedPin = try #require(output.pins.first { $0.id == pin.id })
+                #expect(movedPin.x - cell.x == pin.x - previousCell.x && movedPin.y - cell.y == pin.y - previousCell.y)
+            }
+        }
+    }
+
     @Test("repair strategies persist verified proof evidence")
     func repairProofs() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()

@@ -70,6 +70,14 @@ Off-grid pin access is unsupported and blocks; it is not rounded or snapped.
 
 ## State, Ownership, and Lifecycle
 
+Native placement and ECO movement share one checked cell-owned pin translation.
+Coordinates remain instance-global and source-relative offsets survive relocation.
+After a cell pose/master/dimension change, retained routes/vias, clock trees and
+global placement/routing/repair evidence no longer prove the new snapshot and are
+invalidated before fresh stage evidence is produced. Re-running an unchanged pose
+preserves existing evidence. Routing and CTS must be rerun for changed geometry;
+geometry-smoke stage completion does not claim timing or routing closure.
+
 Technology and mutation values are invocation-local, Sendable values. The store
 owns input byte verification. No shared mutable state or conditional isolation is added.
 
