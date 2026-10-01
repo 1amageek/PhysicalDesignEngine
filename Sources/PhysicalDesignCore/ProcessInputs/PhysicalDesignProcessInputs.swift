@@ -63,4 +63,17 @@ struct PhysicalDesignProcessInputs: Sendable {
         }
         return Self(manifest: manifest, technologyViews: technologyViews, cellViews: cellViews)
     }
+
+    static func dbu(_ value: Double?, units: Int, field: String, positive: Bool = false) throws -> Int64 {
+        guard let value, value.isFinite, value >= 0, units > 0, units < 9_007_199_254_740_992 else {
+            throw PhysicalDesignTechnologyError.invalid("\(field) requires a finite nonnegative micron value.")
+        }
+        let scaled = value * Double(units)
+        let rounded = scaled.rounded()
+        guard scaled.isFinite, scaled < 9_007_199_254_740_992,
+              abs(rounded - scaled) <= scaled.ulp, !positive || rounded > 0 else {
+            throw PhysicalDesignTechnologyError.invalid("\(field) cannot be represented as an exact positive/nonnegative integer DBU value.")
+        }
+        return Int64(rounded)
+    }
 }

@@ -74,11 +74,11 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         do {
             try Task.checkCancellation()
             let processInputs = try await PhysicalDesignProcessInputs.load(request: request, store: artifactStore)
+            let loaded = try await loadSnapshot(from: request, processInputs: processInputs)
             // FIXME(INCOMPLETE_IMPLEMENTATION): Native source intake retains exact cell LEF views, but canonical cell/pin/site/via resolution is not yet connected to mutation. API/CLI requests with cell views must remain blocked until source-bound geometry preparation and output validation are behaviorally verified.
             if let processInputs, !processInputs.cellViews.isEmpty {
                 throw PhysicalDesignTechnologyError.unsupported("Native cell/pin/site/via process geometry preparation is not complete.")
             }
-            let loaded = try await loadSnapshot(from: request)
             let preparedSnapshot = try PhysicalDesignTechnologyConstraints.prepare(loaded.snapshot, request: request, processInputs: processInputs)
             let timingModel = try await loadClockTimingModel(from: request)
             try Task.checkCancellation()
@@ -237,7 +237,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         return try await timingModelLoader.load(reference, from: artifactStore)
     }
 
-    private func loadSnapshot(from request: PhysicalDesignRequest) async throws -> LoadedSnapshot {
+    private func loadSnapshot(from request: PhysicalDesignRequest, processInputs: PhysicalDesignProcessInputs?) async throws -> LoadedSnapshot {
         if request.inputLayout != nil && request.initialSnapshot != nil {
             throw PhysicalDesignStoreError.readFailed("request contains both inputLayout and initialSnapshot")
         }
@@ -270,7 +270,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 sourceParserVersion = "1.0.0"
                 sourceDiagnostics = []
             } else {
-                let parseResult = defParser.parse(data)
+                let parseResult = defParser.parse(data, cellMasters: processInputs?.cellViews.values.flatMap(\.macros) ?? [])
                 guard let parsedSnapshot = parseResult.snapshot else {
                     throw PhysicalDesignDEFParseError(diagnostics: parseResult.diagnostics)
                 }

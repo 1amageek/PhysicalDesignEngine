@@ -8,7 +8,7 @@ execution. Parent: [PhysicalDesignCore](../DESIGN.md). No children.
 ## Responsibilities and Boundaries
 
 Own physical source selection, manifest identity, role admission and retained LEF
-documents. TechnologyConstraints owns routing-grid projection; process geometry
+documents and exact DBU conversion. TechnologyConstraints owns routing-grid projection; process geometry
 preparation owns cells, pins, sites and vias. No generic technology service or
 external tool execution is introduced.
 
@@ -17,6 +17,7 @@ external tool execution is introduced.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [PhysicalDesignCore](../DESIGN.md) | Parent / used by | Request, artifact store, typed errors | Native execution intake | Decode before geometry mutation |
+| [MasterGeometry](../MasterGeometry/DESIGN.md) | Used by | Exact integer DBU conversion | Master dimensions | Positive SIZE is required |
 | [TechnologyConstraints](../TechnologyConstraints/DESIGN.md) | Used by | Exact source view and layer mapping | Routing-grid preparation | Do not parse the same source again |
 | [PDKKit](../../../../PDKKit/DESIGN.md) | Depends on | Manifest asset IDs, roles and cross-view mapping | Process authority | Equal digests do not select an asset ID |
 | [LEF](../../../../swift-mask-data/Sources/LEF/DESIGN.md) | Depends on | LEFDocument and typed reader errors | Standard semantics | Unsupported grammar fails explicitly |

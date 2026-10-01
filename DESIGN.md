@@ -88,6 +88,15 @@ unselected nets. Every generated inter-layer bend retains its newly generated vi
 even when the preceding snapshot used the same via ID. Routing evidence must describe
 the retained output, not connections discarded during replacement.
 
+Canonical Cell initialization requires explicit dimensions; fabricated 1000/10000
+DBU defaults are removed. The DEF adapter accepts standard-owned LEF masters,
+requires exact SIZE conversion using explicit DEF units, and rejects ambiguous,
+missing or contradictory master geometry before constructing a successful snapshot.
+Complete explicit dimension extensions are retained only for unqualified geometry
+interchange; non-N orientation and unresolved pin/via semantics remain explicit
+pending paths. [MasterGeometry](Sources/PhysicalDesignCore/MasterGeometry/DESIGN.md)
+owns this construction contract.
+
 DEF decoding keeps each supported `+ ROUTED` clause's points on its declared layer;
 coordinates from later clauses cannot create connecting or zero-length segments.
 The supported DEF subset is not a lossless execution-state serialization: cell pin

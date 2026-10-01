@@ -1,13 +1,14 @@
 import Foundation
 import CircuiteFoundation
+import LEF
 
 public struct PhysicalDesignDEFParser: Sendable {
     public static let parserID = "physical-design-def-parser"
-    public static let parserVersion = "1.0.0"
+    public static let parserVersion = "2.0.0"
 
     public init() {}
 
-    public func parse(_ data: Data) -> PhysicalDesignDEFParseResult {
+    public func parse(_ data: Data, cellMasters: [LEFMacroDef] = []) -> PhysicalDesignDEFParseResult {
         guard let source = String(data: data, encoding: .utf8) else {
             return PhysicalDesignDEFParseResult(
                 snapshot: nil,
@@ -21,12 +22,13 @@ public struct PhysicalDesignDEFParser: Sendable {
                 )]
             )
         }
-        var state = State()
+        var state = State(masterGeometry: PhysicalDesignMasterGeometry(cellMasters))
         state.parse(source)
         return state.result()
     }
 
     private struct State {
+        let masterGeometry: PhysicalDesignMasterGeometry
         private var tokens: [PhysicalDesignDEFToken] = []
         private var index = 0
         private var diagnostics: [PhysicalDesignDEFDiagnostic] = []
@@ -44,6 +46,7 @@ public struct PhysicalDesignDEFParser: Sendable {
         private var routes: [PhysicalDesignSnapshot.Route] = []
         private var pinIndexByKey: [String: Int] = [:]
         private var topPinNameToID: [String: String] = [:]
+        private var hasUnits = false
         private var hasDesign = false
         private var hasDieArea = false
         private var finishedDesign = false
@@ -261,7 +264,14 @@ public struct PhysicalDesignDEFParser: Sendable {
                 )
                 return
             }
+            guard !hasUnits, cells.isEmpty else {
+                addDiagnostic(severity: .error, code: "def_units_conflicting",
+                    message: "DEF units must be declared once before component geometry.",
+                    token: token, section: "header", suggestedActions: ["declare_one_exact_units_scale"])
+                return
+            }
             unitsPerMicron = Int(value)
+            hasUnits = true
         }
 
         private mutating func parseDieArea(_ token: PhysicalDesignDEFToken) {
@@ -385,8 +395,8 @@ public struct PhysicalDesignDEFParser: Sendable {
             let master = item[1].text
             var x: Int64 = 0
             var y: Int64 = 0
-            var width: Int64 = 1_000
-            var height: Int64 = 10_000
+            var widths: [Int64] = []
+            var heights: [Int64] = []
             var placed = false
             var locked = false
             var hasPlacement = false
@@ -399,22 +409,30 @@ public struct PhysicalDesignDEFParser: Sendable {
                         x = point.0
                         y = point.1
                         hasPlacement = true
+                        // FIXME(INCOMPLETE_IMPLEMENTATION): DEF API/CLI placement currently supports N only. Non-N master origin, pin and obstruction transforms require exact process geometry and behavioral verification before this branch can succeed.
+                        guard position + 5 < item.count, uppercased[position + 5] == "N" else {
+                            addDiagnostic(severity: .error, code: "def_component_orientation_unsupported",
+                                message: "Component \(id) requires an explicit supported N orientation.",
+                                token: item[position], section: "COMPONENTS", entity: id,
+                                suggestedActions: ["provide_supported_orientation_or_implement_exact_process_transforms"])
+                            return
+                        }
                     }
                 }
                 if uppercased[position] == "SIZE", position + 3 < item.count,
                    let parsedWidth = integer(item[position + 1], section: "COMPONENTS"),
                    uppercased[position + 2] == "BY",
                    let parsedHeight = integer(item[position + 3], section: "COMPONENTS") {
-                    width = parsedWidth
-                    height = parsedHeight
+                    widths.append(parsedWidth)
+                    heights.append(parsedHeight)
                 }
                 if uppercased[position] == "XCI_CELL_WIDTH", position + 1 < item.count,
                    let parsedWidth = integer(item[position + 1], section: "COMPONENTS") {
-                    width = parsedWidth
+                    widths.append(parsedWidth)
                 }
                 if uppercased[position] == "XCI_CELL_HEIGHT", position + 1 < item.count,
                    let parsedHeight = integer(item[position + 1], section: "COMPONENTS") {
-                    height = parsedHeight
+                    heights.append(parsedHeight)
                 }
             }
             if !hasPlacement {
@@ -428,20 +446,36 @@ public struct PhysicalDesignDEFParser: Sendable {
                     suggestedActions: ["provide_component_placement_or_mark_it_unplaced"]
                 )
             }
-            let hasGeometryExtension = item.contains { token in
-                let value = token.text.uppercased()
-                return value == "SIZE" || value == "XCI_CELL_WIDTH" || value == "XCI_CELL_HEIGHT"
+            guard widths.count <= 1, heights.count <= 1, masterGeometry.isEmpty || hasUnits else {
+                addDiagnostic(severity: .error, code: "def_cell_geometry_unresolved",
+                    message: "Component \(id) requires unique dimensions and explicit DEF units for master resolution.",
+                    token: item[0], section: "COMPONENTS", entity: id,
+                    suggestedActions: ["declare_exact_units_and_remove_duplicate_dimensions"])
+                return
             }
-            if !hasGeometryExtension {
-                addDiagnostic(
-                    severity: .warning,
-                    code: "def_cell_geometry_defaulted",
-                    message: "Component \(id) does not carry a SIZE extension; canonical cell geometry defaults to 1000 by 10000 database units.",
-                    token: item[0],
-                    section: "COMPONENTS",
-                    entity: id,
-                    suggestedActions: ["provide_lef_geometry_or_a_supported_size_extension"]
-                )
+            var width = widths.first
+            var height = heights.first
+            if !masterGeometry.isEmpty {
+                do {
+                    let resolved = try masterGeometry.dimensions(of: master, units: unitsPerMicron)
+                    guard (width == nil || width == resolved.width), (height == nil || height == resolved.height) else {
+                        throw PhysicalDesignTechnologyError.invalid("Explicit DEF dimensions contradict LEF master \(master).")
+                    }
+                    width = resolved.width
+                    height = resolved.height
+                } catch {
+                    addDiagnostic(severity: .error, code: "def_cell_geometry_unresolved",
+                        message: error.localizedDescription, token: item[0], section: "COMPONENTS", entity: id,
+                        suggestedActions: ["provide_one_exact_master_with_grid_representable_size"])
+                    return
+                }
+            }
+            guard let width, let height else {
+                addDiagnostic(severity: .error, code: "def_cell_geometry_unresolved",
+                    message: "Component \(id) requires an exact LEF master or complete explicit geometry-smoke dimensions.",
+                    token: item[0], section: "COMPONENTS", entity: id,
+                    suggestedActions: ["supply_the_exact_cell_library"])
+                return
             }
             if cells.contains(where: { $0.id == id }) {
                 addDiagnostic(
@@ -840,6 +874,7 @@ public struct PhysicalDesignDEFParser: Sendable {
             )
         }
 
+        // FIXME(INCOMPLETE_IMPLEMENTATION): DEF API/CLI and interchange imports currently synthesize unresolved component pins at the cell origin. Exact LEF port, direction and layer resolution must be connected before imported pins can support qualified physical correctness.
         private mutating func ensurePin(cellID: String?, name: String, token: PhysicalDesignDEFToken) -> String {
             let key = pinKey(cellID: cellID, name: name)
             if let existingIndex = pinIndexByKey[key] {

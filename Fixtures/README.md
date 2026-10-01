@@ -4,7 +4,8 @@ The schema-6 positive request exercises native geometry-smoke floorplanning and
 emits verified JSON, DEF, design diff and manifest artifacts. The retained Verilog,
 SDC and synthetic process metadata in `inputs/` have exact byte-count/digest-bound
 identities. They are regression inputs, not foundry PDK or timing qualification.
-`positive-interchange.def` covers the supported DEF parser subset.
+`positive-interchange.def` covers the supported DEF parser subset and requires an
+explicit `INV_X1` LEF master (1 by 1 micron); DEF alone does not define cell size.
 
 | Request | Expected result |
 |---|---|

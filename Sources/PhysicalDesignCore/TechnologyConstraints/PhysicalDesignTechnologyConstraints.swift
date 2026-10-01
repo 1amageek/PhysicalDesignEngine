@@ -65,16 +65,16 @@ enum PhysicalDesignTechnologyConstraints {
             }
             let selectedPitch = direction == .horizontal ? layer.pitch?.y : layer.pitch?.x
             let selectedOffset = direction == .horizontal ? layer.offset?.y : layer.offset?.x
-            let pitch = try dbu(selectedPitch, units: snapshot.unitsPerMicron, field: "\(layer.name).PITCH", positive: true)
-            let offset = try dbu(selectedOffset, units: snapshot.unitsPerMicron, field: "\(layer.name).OFFSET")
-            let defaultWidth = try dbu(layer.width, units: snapshot.unitsPerMicron, field: "\(layer.name).WIDTH", positive: true)
-            let width = try layer.minwidth.map { try dbu($0, units: snapshot.unitsPerMicron, field: "\(layer.name).MINWIDTH", positive: true) } ?? defaultWidth
-            let spacing = try dbu(layer.spacing, units: snapshot.unitsPerMicron, field: "\(layer.name).SPACING")
+            let pitch = try PhysicalDesignProcessInputs.dbu(selectedPitch, units: snapshot.unitsPerMicron, field: "\(layer.name).PITCH", positive: true)
+            let offset = try PhysicalDesignProcessInputs.dbu(selectedOffset, units: snapshot.unitsPerMicron, field: "\(layer.name).OFFSET")
+            let defaultWidth = try PhysicalDesignProcessInputs.dbu(layer.width, units: snapshot.unitsPerMicron, field: "\(layer.name).WIDTH", positive: true)
+            let width = try layer.minwidth.map { try PhysicalDesignProcessInputs.dbu($0, units: snapshot.unitsPerMicron, field: "\(layer.name).MINWIDTH", positive: true) } ?? defaultWidth
+            let spacing = try PhysicalDesignProcessInputs.dbu(layer.spacing, units: snapshot.unitsPerMicron, field: "\(layer.name).SPACING")
             guard constraints.routeWidth >= width, constraints.routeSpacing >= spacing else {
                 throw PhysicalDesignTechnologyError.invalid("Configured width/spacing is below LEF constraints for \(layer.name).")
             }
             if let maximum = layer.maxwidth,
-               constraints.routeWidth > (try dbu(maximum, units: snapshot.unitsPerMicron, field: "\(layer.name).MAXWIDTH", positive: true)) {
+               constraints.routeWidth > (try PhysicalDesignProcessInputs.dbu(maximum, units: snapshot.unitsPerMicron, field: "\(layer.name).MAXWIDTH", positive: true)) {
                 throw PhysicalDesignTechnologyError.invalid("Configured width exceeds LEF MAXWIDTH for \(layer.name).")
             }
             let nativeDirection = direction.rawValue.lowercased()
@@ -104,19 +104,6 @@ enum PhysicalDesignTechnologyConstraints {
         output.implementationState = state
         output.metadata["technologyLEFContentIDs"] = sourceIDs
         return output
-    }
-
-    private static func dbu(_ value: Double?, units: Int, field: String, positive: Bool = false) throws -> Int64 {
-        guard let value, value.isFinite, value >= 0, units > 0, units < 9_007_199_254_740_992 else {
-            throw PhysicalDesignTechnologyError.invalid("\(field) requires a finite nonnegative micron value.")
-        }
-        let scaled = value * Double(units)
-        let rounded = scaled.rounded()
-        guard scaled.isFinite, scaled < 9_007_199_254_740_992,
-              abs(rounded - scaled) <= scaled.ulp, !positive || rounded > 0 else {
-            throw PhysicalDesignTechnologyError.invalid("\(field) cannot be represented as an exact positive/nonnegative integer DBU value.")
-        }
-        return Int64(rounded)
     }
 
     private static func normalizedRemainder(_ value: Int64, _ divisor: Int64) -> Int64 {

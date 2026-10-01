@@ -4,7 +4,9 @@
 
 PhysicalDesignCore is the package's state, executor, mutation and persistence module.
 Parent: [package design](../../DESIGN.md). Child:
-[TechnologyConstraints](TechnologyConstraints/DESIGN.md).
+[TechnologyConstraints](TechnologyConstraints/DESIGN.md),
+[ProcessInputs](ProcessInputs/DESIGN.md), and
+[MasterGeometry](MasterGeometry/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -18,6 +20,7 @@ release and database persistence remain outside this module.
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Execution and artifact invariants | Public stage behavior | Production remains blocked |
 | [TechnologyConstraints](TechnologyConstraints/DESIGN.md) | child | Verified snapshot preparation | PDK/LEF to native tracks | No process qualification claim |
+| [MasterGeometry](MasterGeometry/DESIGN.md) | child | Required exact LEF master dimensions | Canonical cell construction | No fabricated dimensions |
 | [ProcessInputs](ProcessInputs/DESIGN.md) | child | Explicit asset-ID-bound standard views | Shared exact physical source intake | Input identity and manifest role are validated before projection |
 | [PDKKit](../../../PDKKit/DESIGN.md) | depends on | PDKCore manifest values | Process identity and layer mappings | Use the fixed package implementation |
 | [swift-mask-data](../../../swift-mask-data/DESIGN.md) | depends on | LEF reader and typed axis values | Standard view parsing | Common codec owns loss admission; native profiles own rule support |
@@ -35,6 +38,9 @@ The package design owns stage/result and artifact contracts. With explicit track
 every generated signal/ECO/clock segment must lie on at least one declared track
 of the same layer and direction: coordinate minus origin is nonnegative, divisible
 by spacing and less than count in track units. Checked subtraction rejects overflow.
+Canonical cells require explicit dimensions. The DEF standard-format adapter
+resolves admitted LEF masters or requires complete explicit smoke dimensions;
+missing or contradictory geometry fails before snapshot publication.
 The no-track geometry-smoke convention remains an explicitly incomplete path.
 Off-grid pin access is unsupported and blocks; it is not rounded or snapped.
 

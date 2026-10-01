@@ -53,7 +53,7 @@ let package = Package(
                 .product(name: "PDKCore", package: "PDKKit"),
                 .product(name: "LEF", package: "swift-mask-data")
             ],
-            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md"]
+            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md"]
         ),
         .target(
             name: "FloorplanEngine",

@@ -3,6 +3,7 @@ import Testing
 import CircuiteFoundation
 import LogicIR
 import PDKCore
+import LEF
 import PhysicalDesignCLISupport
 import FloorplanEngine
 @testable import PhysicalDesignCore
@@ -291,7 +292,7 @@ struct NativeExecutionTests {
             )
         )
         let data = try Data(contentsOf: fixtureURL)
-        let result = PhysicalDesignDEFParser().parse(data)
+        let result = PhysicalDesignDEFParser().parse(data, cellMasters: [.init(name: "INV_X1", width: 1, height: 1)])
 
         #expect(result.isValid)
         #expect(result.snapshot?.topCell == "interchange_top")

@@ -149,8 +149,8 @@ enum PhysicalDesignFixtureFactory {
         let row = PhysicalDesignSnapshot.Row(id: "row_0", originX: 10_000, originY: 10_000, siteWidth: 100, height: 1_000, siteCount: 800)
         let upperRow = PhysicalDesignSnapshot.Row(id: "row_1", originX: 10_000, originY: 11_000, siteWidth: 100, height: 1_000, siteCount: 800)
         let cells = [
-            PhysicalDesignSnapshot.Cell(id: "U1", master: "NAND2_X1", x: 20_000, y: 10_000, height: 1_000, placed: includePlacement),
-            PhysicalDesignSnapshot.Cell(id: "U2", master: "BUF_X1", x: 30_000, y: 11_000, height: 1_000, placed: includePlacement)
+            PhysicalDesignSnapshot.Cell(id: "U1", master: "NAND2_X1", x: 20_000, y: 10_000, width: 1_000, height: 1_000, placed: includePlacement),
+            PhysicalDesignSnapshot.Cell(id: "U2", master: "BUF_X1", x: 30_000, y: 11_000, width: 1_000, height: 1_000, placed: includePlacement)
         ]
         let pins = [
             PhysicalDesignSnapshot.Pin(id: "CLK_SRC", cellID: "U1", name: "CK", x: 20_500, y: 10_500, netID: "CLK", direction: "output"),
