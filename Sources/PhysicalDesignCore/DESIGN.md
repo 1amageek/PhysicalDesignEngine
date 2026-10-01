@@ -18,6 +18,7 @@ release and database persistence remain outside this module.
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Execution and artifact invariants | Public stage behavior | Production remains blocked |
 | [TechnologyConstraints](TechnologyConstraints/DESIGN.md) | child | Verified snapshot preparation | PDK/LEF to native tracks | No process qualification claim |
+| [ProcessInputs](ProcessInputs/DESIGN.md) | child | Explicit asset-ID-bound standard views | Shared exact physical source intake | Input identity and manifest role are validated before projection |
 | [PDKKit](../../../PDKKit/DESIGN.md) | depends on | PDKCore manifest values | Process identity and layer mappings | Use the fixed package implementation |
 | [swift-mask-data](../../../swift-mask-data/DESIGN.md) | depends on | LEF reader and typed axis values | Standard view parsing | Common codec owns loss admission; native profiles own rule support |
 

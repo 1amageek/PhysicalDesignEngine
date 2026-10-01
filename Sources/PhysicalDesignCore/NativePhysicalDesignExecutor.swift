@@ -73,8 +73,13 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
 
         do {
             try Task.checkCancellation()
+            let processInputs = try await PhysicalDesignProcessInputs.load(request: request, store: artifactStore)
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Native source intake retains exact cell LEF views, but canonical cell/pin/site/via resolution is not yet connected to mutation. API/CLI requests with cell views must remain blocked until source-bound geometry preparation and output validation are behaviorally verified.
+            if let processInputs, !processInputs.cellViews.isEmpty {
+                throw PhysicalDesignTechnologyError.unsupported("Native cell/pin/site/via process geometry preparation is not complete.")
+            }
             let loaded = try await loadSnapshot(from: request)
-            let preparedSnapshot = try await PhysicalDesignTechnologyConstraints.prepare(loaded.snapshot, request: request, store: artifactStore)
+            let preparedSnapshot = try PhysicalDesignTechnologyConstraints.prepare(loaded.snapshot, request: request, processInputs: processInputs)
             let timingModel = try await loadClockTimingModel(from: request)
             try Task.checkCancellation()
             let outcome = await mutationEngine.apply(
@@ -385,7 +390,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             executionIntent: request.executionIntent,
             clockTimingModel: request.clockTimingModel,
             claims: outcome.claims,
-            technologyLEFs: request.inputBindings.filter { $0.descriptor.kind == .technology && $0.descriptor.format == .lef }
+            processAssets: request.processAssets
         )
         let manifestDiagnostics = manifest.validationDiagnostics()
         guard manifestDiagnostics.isEmpty else {

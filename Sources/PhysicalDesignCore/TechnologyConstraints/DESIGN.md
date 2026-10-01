@@ -8,8 +8,8 @@ LEF subset; pin access, via stacks, advanced spacing and process qualification r
 
 ## Responsibilities and Boundaries
 
-This component owns exact technology binding, DBU conversion, layer projection and
-track preparation. PDKKit owns manifest decoding; the fixed LEF product owns parsing.
+This component owns DBU conversion, layer projection and track preparation.
+[ProcessInputs](../ProcessInputs/DESIGN.md) owns exact source admission and parsing.
 The native mutation engine owns routing and grid admission.
 
 ## Related Designs
@@ -17,29 +17,25 @@ The native mutation engine owns routing and grid admission.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [PhysicalDesignCore](../DESIGN.md) | parent / used by | Snapshot and artifact store | Executor input preparation | Preserve original snapshot for diff generation |
+| [ProcessInputs](../ProcessInputs/DESIGN.md) | depends on | Admitted manifest and technology views | Shared parsed inputs | No repeated read or parsing |
 | [PDKKit](../../../../PDKKit/DESIGN.md) | depends on | PDKManifestCodec, manifest values | Exact process/layer identity | Do not infer layer numbers from names |
 | [swift-mask-data](../../../../swift-mask-data/DESIGN.md) | depends on | LEFLibraryReader, shared typed axis values | Exact technology routing view | Common codec rejects unretained grammar; engine rejects unsupported rules |
 
 ## Architecture
 
 ```text
-technology/LEF input bindings + PDK manifest binding
-    -> verified bytes -> manifest identity + declared asset digest/size + layer mapping
+ProcessInputs admitted manifest and technology views
+    -> explicit asset ID cross-view layer mapping
     -> LEF typed constraints -> select track axis -> integer DBU -> validate or generate tracks
 ```
 
 ## Contracts and Invariants
 
-Only input bindings with kind `technology` and format `lef` activate this path.
-Absence preserves the existing geometry-smoke path for snapshots without technology
-provenance. Prepared snapshots retain technology content IDs in metadata; later
-stages must supply technology bindings again. Dropping those bindings must fail.
-Every consumed binding must be retained in request provenance and the saved run
-manifest's `technologyLEFs` field, including its availability. Presence cannot fall back to
-synthetic constraints. Each supplied LEF must match exactly one manifest technology
-asset by SHA-256 and byte count; its LEF cross-view mapping must include each used
-canonical layer. The decoded manifest process/version and retained digest must
-match the request. Configured layer numbers map directly to unique routing-layer
+Technology views admitted by ProcessInputs activate this path. Absence preserves
+geometry-smoke only for snapshots without retained technology provenance. Later
+stages must supply the same explicit source asset map through request and run
+manifest `processAssets`, including availability. Each view's manifest cross-view
+mapping must include every configured canonical routing layer. Configured layer numbers map directly to unique routing-layer
 definitions; name/alias matching is exact and unambiguous. Canonical layer IDs and
 LEF layer names cannot be reused by another configured layer.
 
@@ -78,8 +74,8 @@ remain in run provenance. No persistent cache or shared mutable state is introdu
 ## Failure, Concurrency, and Constraints
 
 Input length is bounded by retained artifact size. Parser storage is linear
-in input bytes; each view is read once and uses the common codec's semantic-loss
-gate without repeating tokenization. Layer/track work
+in input bytes; ProcessInputs reads and parses each selected view once; this consumer does not
+repeat source admission or tokenization. Layer/track work
 is bounded by supplied views and configured layers, not track count. Cancellation is
 checked between views. Semantic errors are typed; failed preparation emits no revision.
 

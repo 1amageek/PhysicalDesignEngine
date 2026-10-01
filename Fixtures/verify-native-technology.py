@@ -45,8 +45,7 @@ def verify(executable):
             manifest_binding = next(item for item in bindings if item["logicalID"].endswith("/run-manifest.json"))
             manifest = json.loads(read(manifest_binding))
             assert template["pdk"]["digest"] == manifest["pdk"]["digest"]
-            technology = [b for b in template["inputBindings"] if b["reference"]["descriptor"]["format"] == "lef"]
-            assert manifest.get("technologyLEFs") == technology, "Technology input availability was not retained"
+            assert manifest["processAssets"] == template["processAssets"], "Process asset identity and availability were not retained"
             return binding, json.loads(read(binding)), manifest
 
         for binding in template["inputBindings"]:
@@ -63,7 +62,8 @@ def verify(executable):
             request.update(stage=stage, runID="verify-technology-" + stage, initialSnapshot=None)
             request["inputLayout"] = dict(layoutArtifact=binding, topCell=snapshot["topCell"],
                                            layoutDigest=hashlib.sha256(read(binding)).hexdigest())
-            request["inputBindings"] = [b for b in request["inputBindings"] if b["reference"]["descriptor"]["format"] != "lef"] + manifest["technologyLEFs"]
+            request["inputBindings"] = [b for b in request["inputBindings"] if b["reference"]["descriptor"]["format"] != "lef"] + [manifest["processAssets"][key] for key in sorted(manifest["processAssets"])]
+            request["processAssets"] = manifest["processAssets"]
             request["inputBindings"].append(binding)
             request["inputs"].append(binding["reference"])
             binding, snapshot, manifest = execute(request)
@@ -95,6 +95,7 @@ def verify(executable):
         request.update(runID="verify-omitted-technology", initialSnapshot=snapshot)
         technology = next(b for b in request["inputBindings"] if b["reference"]["descriptor"]["format"] == "lef")
         request["inputBindings"].remove(technology)
+        request["processAssets"] = {}
         request["inputs"].remove(technology["reference"])
         execute(request, "blocked", "physical_technology_invalid")
         technology_path = root.joinpath(*technology["availability"]["relativePath"])

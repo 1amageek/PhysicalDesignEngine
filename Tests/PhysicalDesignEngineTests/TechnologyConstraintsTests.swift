@@ -8,8 +8,8 @@ import PhysicalDesignEngine
 @Suite("Native technology constraints")
 struct TechnologyConstraintsTests {
     @Test("technology LEF is bound to the PDK and drives retained tracks", arguments: [
-        "valid", "missing-pitch", "missing-offset", "wrong-process", "wrong-asset-digest",
-        "unmapped", "ambiguous-layer", "off-dbu", "double-pitch", "double-offset", "vertical-grid",
+        "valid", "cell-view", "wrong-role", "explicit-identical-assets", "missing-pitch", "missing-offset", "wrong-process", "wrong-asset-digest",
+        "unmapped", "ambiguous-layer", "off-dbu", "double-pitch", "double-offset", "vertical-grid", "wrong-asset-id", "undeclared-source",
         "qualified-spacing", "spacing-table", "insufficient-width", "insufficient-spacing",
         "conflicting-tracks", "invalid-encoding", "wrong-version", "wrong-manifest-digest",
         "wrong-asset-size", "empty-lef", "nonfinite", "missing-direction", "malformed-lef", "tiny-core", "aligned-explicit", "shared-layer", "missing-provenance", "invalid-default-width", "unit-precision"
@@ -40,14 +40,20 @@ struct TechnologyConstraintsTests {
             .init(layerID: "H", name: "canonicalH", number: 2, purpose: .metal, isRoutingLayer: true, aliases: ["metH"]),
             .init(layerID: "V", name: scenario == "shared-layer" ? "metH" : "metV", number: scenario == "ambiguous-layer" ? 2 : 3, purpose: .metal, isRoutingLayer: true)
         ]
-        let manifest = PDKManifest(
+        var manifest = PDKManifest(
             processID: scenario == "wrong-process" ? "another-process" : "fixture-130nm", version: scenario == "wrong-version" ? "2" : "1",
-            assets: [.init(assetID: "tech", role: .technology, path: "technology.lef", kind: .technology, format: .lef,
+            assets: [.init(assetID: "tech", role: scenario == "cell-view" ? .cell : scenario == "wrong-role" ? .other : .technology, path: "technology.lef", kind: .technology, format: .lef,
                            sha256: scenario == "wrong-asset-digest" ? String(repeating: "0", count: 64) : technology.reference.digest.hexadecimalValue,
                            byteCount: Int64(data.count) + (scenario == "wrong-asset-size" ? 1 : 0))],
             layers: layers,
             crossViewMappings: [.init(mappingID: "routing", view: .lef, assetID: "tech", layerIDs: scenario == "unmapped" ? ["H"] : ["H", "V"])]
         )
+        if scenario == "explicit-identical-assets" {
+            var sameBytes = manifest.assets[0]
+            sameBytes.assetID = "same-bytes-cell"
+            sameBytes.role = .cell
+            manifest.assets.append(sameBytes)
+        }
         let manifestBinding = try await store.registerInput(try PDKManifestCodec.encode(manifest), relativePath: "inputs/process.json", kind: .technology, format: .json)
         var configuration = PhysicalDesignFixtureFactory.configuration
         configuration.dieWidth = 180_000
@@ -73,7 +79,29 @@ struct TechnologyConstraintsTests {
                                    processID: "fixture-130nm", version: "1", digest: scenario == "wrong-manifest-digest" ? String(repeating: "0", count: 64) : manifestBinding.reference.digest.hexadecimalValue)
         request.inputs.append(contentsOf: [manifestBinding.reference, technology.reference])
         request.inputBindings.append(contentsOf: [manifestBinding, technology])
+        request.processAssets = ["tech": technology]
         if scenario == "missing-provenance" { request.inputs.removeAll { $0 == technology.reference } }
+        if scenario == "wrong-asset-id" || scenario == "undeclared-source" {
+            let encoder = JSONEncoder()
+            let canonical = PhysicalDesignRequest(
+                runID: request.runID, inputBindings: request.inputBindings, design: request.design,
+                constraints: request.constraints, requestedModeIDs: request.requestedModeIDs,
+                pdk: request.pdk, stage: request.stage, configuration: request.configuration,
+                initialSnapshot: request.initialSnapshot
+            )
+            var object = try #require(JSONSerialization.jsonObject(with: encoder.encode(canonical)) as? [String: Any])
+            object["processAssets"] = scenario == "undeclared-source" ? [:] : [
+                "unknown-asset": try JSONSerialization.jsonObject(with: encoder.encode(technology))
+            ]
+            request = try JSONDecoder().decode(PhysicalDesignRequest.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+        if scenario == "cell-view" || scenario == "explicit-identical-assets" {
+            if scenario == "explicit-identical-assets" { request.processAssets["same-bytes-cell"] = technology }
+            let admitted = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
+            #expect(admitted.cellViews.count == 1)
+            #expect(admitted.technologyViews.count == (scenario == "cell-view" ? 0 : 1))
+            #expect(admitted.cellViews.values.first?.layers.count == 2)
+        }
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
         if ["valid", "aligned-explicit", "double-pitch", "double-offset", "vertical-grid"].contains(scenario) {
             #expect(result.status == .completed, "\(result.diagnostics)")
@@ -94,12 +122,21 @@ struct TechnologyConstraintsTests {
             #expect(result.provenance.inputs.contains(technology.reference))
             let manifestBinding = try #require(result.payload.runManifest)
             let saved = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: await store.read(manifestBinding))
-            #expect(saved.technologyLEFs == [technology])
+            #expect(saved.processAssets == ["tech": technology])
+            var changedSource = request
+            changedSource.runID = "test-changed-source-\(scenario)"
+            changedSource.initialSnapshot = output
+            changedSource.initialSnapshot?.metadata["technologyLEFContentIDs"] = "another-content-identity"
+            let changed = try await PhysicalDesignEngine(artifactStore: store).execute(changedSource)
+            #expect(changed.status == .blocked)
+            #expect(changed.artifacts.isEmpty)
+            #expect(changed.diagnostics.contains { $0.code.rawValue == "physical_technology_invalid" })
             var omitted = request
             omitted.runID = "test-omitted-technology-\(scenario)"
             omitted.initialSnapshot = output
             omitted.inputs.removeAll { $0 == technology.reference }
             omitted.inputBindings.removeAll { $0 == technology }
+            omitted.processAssets = [:]
             let replay = try await PhysicalDesignEngine(artifactStore: store).execute(omitted)
             #expect(replay.status == .blocked)
             #expect(replay.artifacts.isEmpty)

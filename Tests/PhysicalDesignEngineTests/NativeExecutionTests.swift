@@ -17,6 +17,19 @@ struct NativeExecutionTests {
         let encoded = try codec.encode(request)
         let decoded = try codec.decode(PhysicalDesignRequest.self, from: encoded)
         #expect(decoded == request)
+        var wire = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let inputs = try #require(wire["inputs"] as? [Any])
+        wire["inputs"] = Array(inputs.reversed())
+        #expect(try codec.decode(PhysicalDesignRequest.self, from: JSONSerialization.data(withJSONObject: wire)) == request)
+        wire["inputs"] = inputs + [inputs[0]]
+        #expect(throws: DecodingError.self) {
+            try codec.decode(PhysicalDesignRequest.self, from: JSONSerialization.data(withJSONObject: wire))
+        }
+        wire["inputs"] = inputs
+        wire.removeValue(forKey: "processAssets")
+        #expect(throws: DecodingError.self) {
+            try codec.decode(PhysicalDesignRequest.self, from: JSONSerialization.data(withJSONObject: wire))
+        }
         #expect(try codec.decode(PhysicalDesignSnapshot.self, from: codec.encode(request.initialSnapshot!)) == request.initialSnapshot!)
 
     }
@@ -89,9 +102,10 @@ struct NativeExecutionTests {
         #expect(manifest.proposedLayout?.layoutDigest == result.payload.physicalDesign?.layoutDigest)
         #expect(manifest.artifacts.count == 3)
         var legacy = try #require(JSONSerialization.jsonObject(with: manifestData) as? [String: Any])
-        legacy.removeValue(forKey: "technologyLEFs")
-        let legacyDecoded = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: JSONSerialization.data(withJSONObject: legacy))
-        #expect(legacyDecoded.technologyLEFs.isEmpty)
+        legacy.removeValue(forKey: "processAssets")
+        #expect(throws: DecodingError.self) {
+            try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: JSONSerialization.data(withJSONObject: legacy))
+        }
     }
 
     @Test("review packet round trip validates current artifacts")

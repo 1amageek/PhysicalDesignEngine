@@ -8,51 +8,36 @@ enum PhysicalDesignTechnologyConstraints {
     static func prepare(
         _ snapshot: PhysicalDesignSnapshot,
         request: PhysicalDesignRequest,
-        store: any PhysicalDesignArtifactStore
-    ) async throws -> PhysicalDesignSnapshot {
-        let bindings = request.inputBindings.filter { $0.descriptor.kind == .technology && $0.descriptor.format == .lef }
-        guard !bindings.isEmpty else {
+        processInputs: PhysicalDesignProcessInputs?
+    ) throws -> PhysicalDesignSnapshot {
+        guard let processInputs, !processInputs.technologyViews.isEmpty else {
             guard snapshot.metadata["technologyLEFContentIDs"] == nil else {
                 throw PhysicalDesignTechnologyError.invalid("A technology-prepared snapshot requires retained technology LEF inputs for every subsequent stage.")
             }
             return snapshot
         }
-        guard bindings.allSatisfy({ $0.descriptor.role == .input && $0.reference.digest.algorithm == .sha256 }),
-              request.pdk.manifest.digest.algorithm == .sha256,
-              Set(bindings.map(\.reference)).isSubset(of: Set(request.inputs)),
-              snapshot.validationDiagnostics().isEmpty,
+        guard snapshot.validationDiagnostics().isEmpty,
               request.configuration.validationDiagnostics().isEmpty else {
-            throw PhysicalDesignTechnologyError.invalid("Technology preparation requires valid configuration, snapshot and input-role LEF bindings.")
+            throw PhysicalDesignTechnologyError.invalid("Technology preparation requires valid configuration and snapshot geometry.")
         }
-        let manifestData = try await store.read(request.requireBinding(for: request.pdk.manifest))
-        let manifest: PDKManifest
-        do { manifest = try PDKManifestCodec.decode(data: manifestData) }
-        catch { throw PhysicalDesignTechnologyError.invalid("PDK manifest decoding failed: \(error.localizedDescription)") }
-        guard manifest.processID == request.pdk.processID, manifest.version == request.pdk.version,
-              request.pdk.digest.lowercased() == request.pdk.manifest.digest.hexadecimalValue else {
-            throw PhysicalDesignTechnologyError.invalid("Retained PDK manifest identity does not match the selected process, version or digest.")
+        let sourceIDs = processInputs.technologyViews.keys.compactMap {
+            request.processAssets[$0]?.reference.id.description
+        }.sorted().joined(separator: ",")
+        if let retained = snapshot.metadata["technologyLEFContentIDs"], retained != sourceIDs {
+            throw PhysicalDesignTechnologyError.invalid("A prepared snapshot cannot resume with changed technology source identities.")
         }
+        let manifest = processInputs.manifest
         var views: [(document: LEFDocument, layerIDs: Set<String>)] = []
-        for binding in bindings {
-            try Task.checkCancellation()
-            let assets = manifest.assets.filter {
-                $0.role == .technology && $0.format == .lef
-                    && $0.sha256?.lowercased() == binding.reference.digest.hexadecimalValue
-                    && $0.byteCount.flatMap(UInt64.init(exactly:)) == binding.reference.byteCount
+        for assetID in processInputs.technologyViews.keys.sorted() {
+            guard let document = processInputs.technologyViews[assetID] else {
+                throw PhysicalDesignTechnologyError.invalid("A selected technology view must remain available during preparation.")
             }
-            guard assets.count == 1, let asset = assets.first else {
-                throw PhysicalDesignTechnologyError.invalid("Technology LEF \(binding.path) must match exactly one manifest technology asset by digest and byte count.")
+            guard !document.layers.contains(where: { $0.spacingTable != nil }) else {
+                throw PhysicalDesignTechnologyError.unsupported("Technology SPACINGTABLE is not implemented by native routing.")
             }
-            let data = try await store.read(binding)
-            let document: LEFDocument
-            do {
-                document = try LEFLibraryReader.read(data)
-                guard !document.layers.contains(where: { $0.spacingTable != nil }) else {
-                    throw PhysicalDesignTechnologyError.unsupported("Technology SPACINGTABLE is not implemented by native routing.")
-                }
-            } catch let error as PhysicalDesignTechnologyError { throw error }
-            catch { throw PhysicalDesignTechnologyError.invalid("Technology LEF parsing failed: \(error.localizedDescription)") }
-            let layerIDs = Set(manifest.crossViewMappings.filter { $0.assetID == asset.assetID && $0.view == .lef }.flatMap(\.layerIDs))
+            let layerIDs = Set(manifest.crossViewMappings.filter {
+                $0.assetID == assetID && $0.view == .lef
+            }.flatMap(\.layerIDs))
             views.append((document, layerIDs))
         }
         let core = try coreRectangle(snapshot: snapshot, request: request)
@@ -117,7 +102,7 @@ enum PhysicalDesignTechnologyConstraints {
         }
         if suppliedTracks.isEmpty { state.tracks = generatedTracks }
         output.implementationState = state
-        output.metadata["technologyLEFContentIDs"] = bindings.map { $0.reference.id.description }.sorted().joined(separator: ",")
+        output.metadata["technologyLEFContentIDs"] = sourceIDs
         return output
     }
 

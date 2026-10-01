@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "runID": "fixture-floorplan-001",
   "executionIntent": "geometrySmoke",
   "inputs": [
@@ -224,5 +224,6 @@
         ]
       }
     }
-  ]
+  ],
+  "processAssets": {}
 }

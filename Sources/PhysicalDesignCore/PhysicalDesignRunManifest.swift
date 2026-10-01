@@ -4,7 +4,7 @@ import PDKCore
 import CircuiteFoundation
 
 public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 5
+    public static let currentSchemaVersion = 6
 
     public var schemaVersion: Int
     public var runID: String
@@ -14,7 +14,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var constraints: PhysicalDesignArtifactBinding
     public var requestedModeIDs: [String]
     public var pdk: PDKReference
-    public var technologyLEFs: [PhysicalDesignArtifactBinding]
+    public var processAssets: [String: PhysicalDesignArtifactBinding]
     public var baseLayout: PhysicalDesignReference?
     public var proposedLayout: PhysicalDesignReference?
     public var designDiff: PhysicalDesignArtifactBinding?
@@ -44,7 +44,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         case constraints
         case requestedModeIDs
         case pdk
-        case technologyLEFs
+        case processAssets
         case baseLayout
         case proposedLayout
         case designDiff
@@ -93,7 +93,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         productionConfiguration: PhysicalDesignProductionConfiguration? = nil,
         processEvidence: PhysicalDesignArtifactBinding? = nil,
         claims: PhysicalDesignCapabilityClaims,
-        technologyLEFs: [PhysicalDesignArtifactBinding] = []
+        processAssets: [String: PhysicalDesignArtifactBinding] = [:]
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -103,7 +103,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         self.constraints = constraints
         self.requestedModeIDs = requestedModeIDs
         self.pdk = pdk
-        self.technologyLEFs = technologyLEFs
+        self.processAssets = processAssets
         self.baseLayout = baseLayout
         self.proposedLayout = proposedLayout
         self.designDiff = designDiff
@@ -142,7 +142,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         constraints = try container.decode(PhysicalDesignArtifactBinding.self, forKey: .constraints)
         requestedModeIDs = try container.decode([String].self, forKey: .requestedModeIDs)
         pdk = try container.decode(PDKReference.self, forKey: .pdk)
-        technologyLEFs = try container.decodeIfPresent([PhysicalDesignArtifactBinding].self, forKey: .technologyLEFs) ?? []
+        processAssets = try container.decode([String: PhysicalDesignArtifactBinding].self, forKey: .processAssets)
         baseLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .baseLayout)
         proposedLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .proposedLayout)
         designDiff = try container.decodeIfPresent(PhysicalDesignArtifactBinding.self, forKey: .designDiff)
@@ -196,8 +196,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         if pdk.processID.isEmpty || pdk.version.isEmpty || pdk.digest.isEmpty {
             diagnostics.append("PDK provenance is incomplete")
         }
-        if technologyLEFs.contains(where: { $0.descriptor.role != .input || $0.descriptor.kind != .technology || $0.descriptor.format != .lef }) {
-            diagnostics.append("technology LEF provenance requires input technology/LEF bindings")
+        if processAssets.keys.contains(where: { $0.isEmpty }) || processAssets.values.contains(where: { $0.descriptor.role != .input || $0.descriptor.format != .lef }) {
+            diagnostics.append("process provenance requires nonempty manifest asset IDs and input LEF bindings")
         }
         let sourceFields = [sourceLayoutDigest, sourceParserID, sourceParserVersion]
         if sourceLayoutFormat == nil && sourceFields.contains(where: { $0 != nil }) {

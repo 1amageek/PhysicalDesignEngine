@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "runID": "fixture-native-technology-floorplan",
   "executionIntent": "geometrySmoke",
   "inputs": [
@@ -280,5 +280,28 @@
         ]
       }
     }
-  ]
+  ],
+  "processAssets": {
+    "tech": {
+      "logicalID": "Fixtures/inputs/technology.lef",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020d5cf02dba44209f434f36e81611a1e3032ac14a75cad3e9ba78605aafb6096c2000000000000018d",
+        "descriptor": {
+          "role": "input",
+          "kind": "technology",
+          "format": "lef"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020d5cf02dba44209f434f36e81611a1e3032ac14a75cad3e9ba78605aafb6096c2000000000000018d",
+        "rootID": "physical-design-project",
+        "relativePath": [
+          "Fixtures",
+          "inputs",
+          "technology.lef"
+        ]
+      }
+    }
+  }
 }

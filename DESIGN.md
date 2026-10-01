@@ -47,7 +47,7 @@ flowchart LR
 
 ## Contracts and Invariants
 
-Request schema 5 rejects legacy schema values. Exactly one initial snapshot or
+Request schema 6 rejects legacy schema values. Exactly one initial snapshot or
 retained layout supplies the physical state. A completed mutation must pass snapshot
 validation; blocked mutations publish no successful revision. Geometry, timing and
 production claims remain distinct. `productionImplementation` fails with
@@ -129,7 +129,9 @@ macOS package or by macOS-only verification evidence.
 Technology input preparation and declared-grid validation are specified by
 [PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md) and its
 [TechnologyConstraints component](Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
-The optional technology path uses existing schema-5 input bindings, keeps native
+Schema-6 requests and run manifests retain an explicit manifest asset ID to source
+binding map (`processAssets`). ProcessInputs admits and parses these sources once
+for routing and cell geometry consumers. The technology path keeps native
 production blocked, and adds a direct dependency on the fixed swift-mask-data LEF
 product. It consumes the shared scalar/X-Y pitch and offset representation;
 horizontal tracks select Y and vertical tracks select X. The standard codec now

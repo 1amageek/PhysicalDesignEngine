@@ -4,12 +4,13 @@ import LogicIR
 import PDKCore
 
 public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 5
+    public static let currentSchemaVersion = 6
 
     public var schemaVersion: Int
     public var runID: String
     public var inputs: [ArtifactReference]
     public var inputBindings: [PhysicalDesignArtifactBinding]
+    public var processAssets: [String: PhysicalDesignArtifactBinding]
 
     public var design: LogicDesignReference
     public var constraints: PhysicalDesignArtifactBinding
@@ -36,7 +37,8 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         initialSnapshot: PhysicalDesignSnapshot? = nil,
         executionIntent: PhysicalDesignExecutionIntent = .geometrySmoke,
         clockTimingModel: PhysicalDesignClockTimingModelReference? = nil,
-        productionConfiguration: PhysicalDesignProductionConfiguration? = nil
+        productionConfiguration: PhysicalDesignProductionConfiguration? = nil,
+        processAssets: [String: PhysicalDesignArtifactBinding] = [:]
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -51,6 +53,7 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         self.executionIntent = executionIntent
         self.clockTimingModel = clockTimingModel
         self.productionConfiguration = productionConfiguration
+        self.processAssets = processAssets
         let timingArtifacts = clockTimingModel.map { [$0.modelArtifact] + $0.sourceArtifacts } ?? []
         let productionArtifacts = productionConfiguration?.inputArtifacts ?? []
         let prerequisiteBindings = [constraints]
@@ -58,6 +61,7 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
             + timingArtifacts
             + productionArtifacts
             + inputBindings
+            + processAssets.keys.sorted().compactMap { processAssets[$0] }
         var retainedBindings: [PhysicalDesignArtifactBinding] = []
         for binding in prerequisiteBindings where !retainedBindings.contains(binding) {
             retainedBindings.append(binding)
@@ -77,6 +81,7 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         case runID
         case inputs
         case inputBindings
+        case processAssets
         case design
         case constraints
         case requestedModeIDs
@@ -113,8 +118,14 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
             initialSnapshot: try container.decodeIfPresent(PhysicalDesignSnapshot.self, forKey: .initialSnapshot),
             executionIntent: try container.decode(PhysicalDesignExecutionIntent.self, forKey: .executionIntent),
             clockTimingModel: try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel),
-            productionConfiguration: try container.decodeIfPresent(PhysicalDesignProductionConfiguration.self, forKey: .productionConfiguration)
+            productionConfiguration: try container.decodeIfPresent(PhysicalDesignProductionConfiguration.self, forKey: .productionConfiguration),
+            processAssets: try container.decode([String: PhysicalDesignArtifactBinding].self, forKey: .processAssets)
         )
+        let declaredInputs = try container.decode([ArtifactReference].self, forKey: .inputs)
+        guard declaredInputs.count == inputs.count, Set(declaredInputs) == Set(inputs) else {
+            throw DecodingError.dataCorruptedError(forKey: .inputs, in: container,
+                debugDescription: "Declared inputs must match the exact request prerequisites.")
+        }
     }
 
     public func requireBinding(
