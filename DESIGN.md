@@ -147,6 +147,14 @@ horizontal tracks select Y and vertical tracks select X. The standard codec now
 owns numeric arity and semantic-loss admission, so native preparation does not
 repeat tokenization. Native production qualification remains independent.
 
+[ProcessGeometry](Sources/PhysicalDesignCore/ProcessGeometry/DESIGN.md) projects
+exact mapped cell pins/OBS, sites and fixed via stacks with the shared standard DEF
+orientations and MaskGeometry representation. It retains signed ORIGIN, canonical
+layer identity and source content references. Geometry backend range, invalid
+polygons, unsupported MASK/generated-rule families and contradictory layer types
+fail explicitly. Its projection is behaviorally verified; native mutation/output
+consumption remains pending and cell-qualified execution stays blocked.
+
 ## Verification and Change Impact
 
 [NativeExecutionTests](Tests/PhysicalDesignEngineTests/NativeExecutionTests.swift)

@@ -51,9 +51,11 @@ let package = Package(
                 .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
                 .product(name: "LogicIR", package: "LogicDesign"),
                 .product(name: "PDKCore", package: "PDKKit"),
-                .product(name: "LEF", package: "swift-mask-data")
+                .product(name: "LEF", package: "swift-mask-data"),
+                .product(name: "DEF", package: "swift-mask-data"),
+                .product(name: "MaskGeometry", package: "swift-mask-data")
             ],
-            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md"]
+            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md", "ProcessGeometry/DESIGN.md"]
         ),
         .target(
             name: "FloorplanEngine",

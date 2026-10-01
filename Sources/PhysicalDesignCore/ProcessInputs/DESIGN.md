@@ -17,6 +17,7 @@ external tool execution is introduced.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [PhysicalDesignCore](../DESIGN.md) | Parent / used by | Request, artifact store, typed errors | Native execution intake | Decode before geometry mutation |
+| [ProcessGeometry](../ProcessGeometry/DESIGN.md) | Used by | Exact signed DBU conversion and admitted sources | Layer and physical shape projection | Native shape backend range is checked separately |
 | [MasterGeometry](../MasterGeometry/DESIGN.md) | Used by | Exact integer DBU conversion | Master dimensions | Positive SIZE is required |
 | [TechnologyConstraints](../TechnologyConstraints/DESIGN.md) | Used by | Exact source view and layer mapping | Routing-grid preparation | Do not parse the same source again |
 | [PDKKit](../../../../PDKKit/DESIGN.md) | Depends on | Manifest asset IDs, roles and cross-view mapping | Process authority | Equal digests do not select an asset ID |
@@ -40,6 +41,9 @@ flowchart LR
 - Every selected source appears in input bindings and provenance inputs. A LEF
   binding without an explicit asset selection is rejected rather than inferred
   by digest, file name or aliases.
+- DBU conversion retains exact integer values below the Double exactness boundary.
+  Physical coordinates permit signed values; dimensions and routing constraints
+  enforce their positive/nonnegative domains. One ULP admits multiplication noise.
 - The manifest binding, digest, process ID and version match the request.
   Asset digest, size and LEF format match its exact selected binding.
 - Current intake admits explicit technology and cell roles. Other roles and

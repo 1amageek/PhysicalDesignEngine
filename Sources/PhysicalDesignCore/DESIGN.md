@@ -5,8 +5,9 @@
 PhysicalDesignCore is the package's state, executor, mutation and persistence module.
 Parent: [package design](../../DESIGN.md). Child:
 [TechnologyConstraints](TechnologyConstraints/DESIGN.md),
-[ProcessInputs](ProcessInputs/DESIGN.md), and
-[MasterGeometry](MasterGeometry/DESIGN.md).
+[ProcessInputs](ProcessInputs/DESIGN.md),
+[MasterGeometry](MasterGeometry/DESIGN.md), and
+[ProcessGeometry](ProcessGeometry/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -20,6 +21,7 @@ release and database persistence remain outside this module.
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Execution and artifact invariants | Public stage behavior | Production remains blocked |
 | [TechnologyConstraints](TechnologyConstraints/DESIGN.md) | child | Verified snapshot preparation | PDK/LEF to native tracks | No process qualification claim |
+| [ProcessGeometry](ProcessGeometry/DESIGN.md) | child | Exact mapped cell/pin/site/via shapes | Native process projection | Projection alone does not prove native closure |
 | [MasterGeometry](MasterGeometry/DESIGN.md) | child | Required exact LEF master dimensions | Canonical cell construction | No fabricated dimensions |
 | [ProcessInputs](ProcessInputs/DESIGN.md) | child | Explicit asset-ID-bound standard views | Shared exact physical source intake | Input identity and manifest role are validated before projection |
 | [PDKKit](../../../PDKKit/DESIGN.md) | depends on | PDKCore manifest values | Process identity and layer mappings | Use the fixed package implementation |
@@ -28,8 +30,9 @@ release and database persistence remain outside this module.
 ## Architecture
 
 ```text
-NativePhysicalDesignExecutor -> TechnologyConstraints -> prepared snapshot
-    -> PhysicalDesignNativeMutationEngine -> immutable artifact store
+NativePhysicalDesignExecutor -> ProcessInputs -> TechnologyConstraints -> mutation -> artifacts
+    -> MasterGeometry during source-bound DEF decode
+ProcessInputs -> ProcessGeometry projection (native mutation/output connection pending)
 ```
 
 ## Contracts and Invariants
