@@ -17,6 +17,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
     public var ecoAction: PhysicalECOAction
     public var ecoTargetCellID: String?
     public var ecoReplacementMaster: String?
+    public var ecoBufferMaster: String?
     public var ecoTargetNetID: String?
     public var ecoDeltaX: Int64
     public var ecoDeltaY: Int64
@@ -41,6 +42,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         case ecoAction
         case ecoTargetCellID
         case ecoReplacementMaster
+        case ecoBufferMaster
         case ecoTargetNetID
         case ecoDeltaX
         case ecoDeltaY
@@ -66,6 +68,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         ecoAction: PhysicalECOAction = .resizeCell,
         ecoTargetCellID: String? = nil,
         ecoReplacementMaster: String? = nil,
+        ecoBufferMaster: String? = nil,
         ecoTargetNetID: String? = nil,
         ecoDeltaX: Int64 = 0,
         ecoDeltaY: Int64 = 0,
@@ -89,6 +92,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         self.ecoAction = ecoAction
         self.ecoTargetCellID = ecoTargetCellID
         self.ecoReplacementMaster = ecoReplacementMaster
+        self.ecoBufferMaster = ecoBufferMaster
         self.ecoTargetNetID = ecoTargetNetID
         self.ecoDeltaX = ecoDeltaX
         self.ecoDeltaY = ecoDeltaY
@@ -115,6 +119,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         ecoAction = try container.decode(PhysicalECOAction.self, forKey: .ecoAction)
         ecoTargetCellID = try container.decodeIfPresent(String.self, forKey: .ecoTargetCellID)
         ecoReplacementMaster = try container.decodeIfPresent(String.self, forKey: .ecoReplacementMaster)
+        ecoBufferMaster = try container.decodeIfPresent(String.self, forKey: .ecoBufferMaster)
         ecoTargetNetID = try container.decodeIfPresent(String.self, forKey: .ecoTargetNetID)
         ecoDeltaX = try container.decode(Int64.self, forKey: .ecoDeltaX)
         ecoDeltaY = try container.decode(Int64.self, forKey: .ecoDeltaY)
@@ -129,6 +134,9 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         var diagnostics: [String] = []
         if let ecoReplacementMaster, ecoReplacementMaster.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append("ECO replacement master must be non-empty when selected")
+        }
+        if let ecoBufferMaster, ecoBufferMaster.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            diagnostics.append("ECO buffer master must be non-empty when selected")
         }
         if dieWidth <= 0 || dieHeight <= 0 {
             diagnostics.append("die dimensions must be positive")

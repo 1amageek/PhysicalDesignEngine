@@ -539,30 +539,16 @@ struct NativeExecutionTests {
         })
     }
 
-    @Test("CTS materializes clock buffers, branch nets and route constraints")
+    @Test("source-free CTS cannot fabricate buffer dimensions or pins")
     func ctsMaterialization() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.implementationConstraints?.clockBufferDistanceThresholdDBU = 0
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(
-            PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis, snapshot: PhysicalDesignFixtureFactory.snapshot())
+            PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: configuration)
         )
-        #expect(result.status == .completed)
-        let output = try await decodedSnapshot(from: result, store: store)
-        #expect(output.cells.contains { $0.isClockBuffer })
-        #expect(output.nets.contains { $0.id.hasPrefix("CLK_branch_") && $0.isClock })
-        #expect(output.implementationState?.clockRouteConstraints.isEmpty == false)
-        #expect(output.implementationState?.clockRouteConstraints.allSatisfy { $0.maximumLength == 40_000 } == true)
-        #expect(output.clockTrees.contains { !$0.bufferCellIDs.isEmpty })
-        #expect(output.clockTrees.allSatisfy { $0.longestPathLengthDBU >= $0.shortestPathLengthDBU })
-        #expect(output.clockTrees.allSatisfy { $0.timingEstimate == nil })
-        #expect(result.payload.claims.geometry == .verified)
-        #expect(result.payload.claims.timing == .blocked)
-        #expect(result.payload.claims.production == .blocked)
-        #expect(result.diagnostics.contains { $0.code.rawValue == "cts_timing_characterization_missing" })
-        #expect(output.routes.contains { $0.netID == "CLK" })
-        #expect(output.routes.contains { $0.netID.hasPrefix("CLK_branch_") })
-        #expect(output.routes.flatMap(\.segments).allSatisfy { segment in
-            segment.x1 != segment.x2 || segment.y1 != segment.y2
-        })
+        #expect(result.status == .blocked && result.artifactBindings.isEmpty)
+        #expect(result.diagnostics.contains { $0.code.rawValue == "native_cell_source_invalid" })
     }
 
     @Test("CTS timing estimates require verified PDK RC cell and corner characterization")
@@ -822,29 +808,18 @@ struct NativeExecutionTests {
         #expect(output.nets.first { $0.id == "VSS" }?.pinIDs.count == 2)
     }
 
-    @Test("buffer ECO splits connectivity and reroutes both branches")
+    @Test("source-free ECO cannot fabricate a buffer master or pin geometry")
     func bufferEcoSplitsAndReroutesNet() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
         var configuration = PhysicalDesignFixtureFactory.configuration
         configuration.ecoAction = .bufferInsertion
+        configuration.ecoBufferMaster = "BUF_EXACT"
         configuration.ecoTargetNetID = "DATA"
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(
-            PhysicalDesignFixtureFactory.request(
-                stage: .timingECO,
-                snapshot: PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false),
-                configuration: configuration
-            )
+            PhysicalDesignFixtureFactory.request(stage: .timingECO, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: configuration)
         )
-
-        #expect(result.status == .completed)
-        let output = try await decodedSnapshot(from: result, store: store)
-        let bufferID = "eco_buf_DATA"
-        #expect(output.cells.contains { $0.id == bufferID && $0.placed })
-        #expect(output.nets.contains { $0.id == "DATA_eco_branch" })
-        #expect(output.nets.first { $0.id == "DATA" }?.pinIDs.contains("pin_\(bufferID)_A") == true)
-        #expect(output.nets.first { $0.id == "DATA_eco_branch" }?.pinIDs.contains("pin_\(bufferID)_Y") == true)
-        #expect(output.routes.contains { $0.netID == "DATA" })
-        #expect(output.routes.contains { $0.netID == "DATA_eco_branch" })
+        #expect(result.status == .blocked && result.artifactBindings.isEmpty)
+        #expect(result.diagnostics.contains { $0.code.rawValue == "native_cell_source_invalid" })
     }
 
     @Test("illegal ECO movement is blocked without an artifact")
@@ -937,11 +912,8 @@ struct NativeExecutionTests {
         let antennaResult = try await PhysicalDesignEngine(artifactStore: store).execute(
             PhysicalDesignFixtureFactory.request(stage: .antennaRepair, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: antennaConfiguration)
         )
-        #expect(antennaResult.status == .completed)
-        let antennaOutput = try await decodedSnapshot(from: antennaResult, store: store)
-        #expect(antennaOutput.cells.contains { $0.master == "ANTENNA_DIODE" })
-        #expect(antennaOutput.antennaRepairs.contains { $0.strategy == PhysicalDesignAntennaRepairStrategy.protectionDevice.rawValue })
-        #expect(antennaOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.antennaRepair.rawValue && $0.verified } == true)
+        #expect(antennaResult.status == .blocked && antennaResult.artifactBindings.isEmpty)
+        #expect(antennaResult.diagnostics.contains { $0.code.rawValue == "antenna_protection_feedback_unimplemented" })
     }
 
     @Test("fill, redundant-via and hotspot repairs are constrained and proven")

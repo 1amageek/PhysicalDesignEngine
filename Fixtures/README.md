@@ -96,3 +96,16 @@ translated footprint outside the construction core. It does not establish
 process cut/enclosure DRC or legal width-aware pin access.
 Run `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter 'constructedFixedVias|viaFootprintAuthority'`
 for these source-bound regressions.
+
+ECO `buffer_insertion` requires `configuration.ecoBufferMaster` and exact cell
+sources. CTS uses `implementationConstraints.clockBufferMaster`. The admitted
+buffer profile has one input and one output signal/clock port; actual names,
+oriented SIZE and compatible SITE drive cell and pin construction. Source-free
+buffering, additional control ports and unavailable source sites fail explicitly.
+ECO insertion saves the exact split-net candidate, invalidates prior routes/clock
+evidence and returns `run_global_routing`; routing runs as its own subsequent stage.
+CTS uses the actual selected ports and creates fresh clock routes. Antenna
+`protection_device` fails with `antenna_protection_feedback_unimplemented` until
+source device insertion and derived post-repair antenna evidence are implemented.
+Run `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter sourceInsertedCells`
+to exercise source-bound API save/resume, CTS, routing follow-up and rejection paths.

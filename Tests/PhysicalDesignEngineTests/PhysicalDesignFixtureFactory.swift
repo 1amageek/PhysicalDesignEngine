@@ -23,7 +23,8 @@ enum PhysicalDesignFixtureFactory {
         fillWindowSize: 20_000,
         fillSpacing: 2_000,
         ecoAction: .resizeCell,
-        deterministicSeed: 0
+        deterministicSeed: 0,
+        implementationConstraints: .init(clockBufferDistanceThresholdDBU: .max)
     )
 
     static func artifact(

@@ -92,6 +92,21 @@ and each segment-layer boundary. A bend via alone cannot bridge a different pin
 layer at an endpoint. Repeated same-net transitions at the same position/pair are
 retained once; no process-free pin layer is inferred.
 
+CTS and ECO inserted buffers require a selected exact source master with one
+declared input and one output signal/clock port. Port names are not assumed to be
+A/Y. Instance dimensions, orientation and placement come from its source SIZE and
+compatible SITE row. One bounded native placement helper owns core/cell/blockage
+admission; process-aware pin access and obstruction closure remain B5.
+`ecoBufferMaster` selects the ECO source; `clockBufferMaster` selects the CTS source.
+Source-free buffer insertion fails. ECO insertion publishes the exact split-net
+geometry candidate with invalidated route/clock evidence and an explicit routing
+follow-up; it does not implicitly run a second mutating routing stage. CTS creates
+fresh clock geometry using actual buffer pin positions and drops invalidated
+non-clock routes/proofs when it inserts cells. Functional equivalence and timing
+closure remain separate. Antenna protection insertion stays explicitly unsupported
+until B7 can derive and recheck antenna metrics; no fabricated diode or ratio
+improvement is a successful protection result.
+
 ## State, Ownership, and Lifecycle
 
 Native placement and ECO movement share one checked cell-owned pin translation.

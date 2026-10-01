@@ -86,6 +86,10 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
   reference point for DEF intake and explicit master replacement. Identity and net
   connectivity remain caller-owned; coordinates, direction and layer come from the
   selected source port. This point does not prove wire-width-aware legal access.
+- The buffer source profile requires exactly one input and one output signal/clock
+  port, excluding power/ground ports. Actual port names and poses drive native
+  insertion; extra control/inout ports fail explicitly. This physical interface
+  does not establish the selected master's logical function or timing closure.
 - The returned physical reference identifies canonical JSON, retaining all state and
   process references. DEF is an interchange artifact with its own bounded semantics,
   not a lossless resume authority.

@@ -161,7 +161,10 @@ fail explicitly. Canonical geometry admission surrounds mutation and preserves e
 process identity across JSON resume. Floorplan and compatible-site placement consume
 the source declarations. Explicit ECO master replacement adopts exact selected SIZE
 and PORTs after matching the complete physical interface; source-free resize fails.
-Unsupported inserted masters and unnamed vias fail output admission.
+CTS/ECO insertion consumes exact selected buffer masters, ports and compatible sites;
+source-free buffering fails. ECO split-net geometry and subsequent routing are
+separate mutations. Antenna protection remains explicitly blocked until derived
+post-repair feedback is implemented. Unsupported masters and unnamed vias fail output admission.
 Native routing/access/CTS/ECO closure and full standard interchange
 remain pending, and production capability remains independently blocked.
 

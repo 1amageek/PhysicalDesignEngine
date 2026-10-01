@@ -193,6 +193,17 @@ struct PhysicalDesignProcessGeometry: Sendable {
         return master
     }
 
+    func bufferPorts(master name: String) throws -> (input: String, output: String) {
+        let ports = try requireMaster(name).pins.values.filter { $0.definition.use != .power && $0.definition.use != .ground }
+        let inputs = ports.filter { $0.definition.direction == .input }
+        let outputs = ports.filter { $0.definition.direction == .output }
+        guard ports.count == 2, inputs.count == 1, outputs.count == 1,
+              ports.allSatisfy({ $0.definition.use == nil || $0.definition.use == .signal || $0.definition.use == .clock }) else {
+            throw PhysicalDesignTechnologyError.unsupported("Buffer master \(name) requires one declared input and one output signal/clock port.")
+        }
+        return (inputs[0].definition.name, outputs[0].definition.name)
+    }
+
     func dimensions(master name: String, orientation: DEFOrientation) throws -> (width: Int64, height: Int64) {
         let master = try requireMaster(name)
         let rotated = [DEFOrientation.e, .w, .fe, .fw].contains(orientation)

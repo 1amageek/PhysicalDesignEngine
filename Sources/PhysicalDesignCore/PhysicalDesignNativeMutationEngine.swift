@@ -1,5 +1,6 @@
 import Foundation
 import CircuiteFoundation
+import DEF
 
 public struct PhysicalDesignNativeMutationEngine: Sendable {
     public struct Outcome: Sendable, Hashable {
@@ -600,12 +601,45 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         snapshot.vias.removeAll()
         snapshot.clockTrees.removeAll()
         snapshot.implementationState?.clockRouteConstraints.removeAll()
-        snapshot.implementationState?.routingEvidence = nil
-        snapshot.implementationState?.placementProof = nil
-        snapshot.implementationState?.repairProofs.removeAll()
+        if var state = snapshot.implementationState {
+            invalidateCellGeometryProofs(in: &state)
+            snapshot.implementationState = state
+        }
         snapshot.metadata["routingStatus"] = "requires_routing"
         snapshot.metadata["clockTreeStatus"] = "requires_clock_tree_synthesis"
         snapshot.metadata["clockTimingStatus"] = "invalidated_by_cell_geometry"
+    }
+
+    private func invalidateCellGeometryProofs(in state: inout PhysicalDesignImplementationState) {
+        state.routingEvidence = nil
+        state.placementProof = nil
+        state.repairProofs.removeAll()
+    }
+
+    private func insertedCell(id: String, master name: String, near point: (x: Int64, y: Int64),
+        snapshot: PhysicalDesignSnapshot, geometry: PhysicalDesignProcessGeometry, isClockBuffer: Bool = false) throws -> PhysicalDesignSnapshot.Cell {
+        let master = try geometry.requireMaster(name)
+        guard master.definition.macroClass == .core, let core = snapshot.core else {
+            throw PhysicalDesignTechnologyError.unsupported("Inserted master \(name) requires source CORE placement geometry.")
+        }
+        let rows = snapshot.rows.sorted {
+            let lhs = absoluteDifference($0.originY, point.y), rhs = absoluteDifference($1.originY, point.y)
+            return lhs == rhs ? $0.id < $1.id : lhs < rhs
+        }
+        for row in rows {
+            for orientation in DEFOrientation.allCases {
+                let size = try geometry.dimensions(master: name, orientation: orientation)
+                var cell = PhysicalDesignSnapshot.Cell(id: id, master: name, x: row.originX, y: row.originY,
+                    width: size.width, height: size.height, placed: true, isClockBuffer: isClockBuffer, orientation: orientation)
+                guard cell.height == row.height, cell.width.isMultiple(of: row.siteWidth), geometry.canPlace(cell, on: row),
+                      let location = legalBufferPlacement(near: point, core: core, rows: [row], cells: snapshot.cells,
+                        blockages: snapshot.blockages, width: cell.width, height: cell.height) else { continue }
+                cell.x = location.x
+                cell.y = location.y
+                return cell
+            }
+        }
+        throw PhysicalDesignTechnologyError.invalid("Inserted master \(name) has no compatible unblocked source site location.")
     }
 
     private func resolveVia(_ via: PhysicalDesignSnapshot.Via, processGeometry: PhysicalDesignProcessGeometry?,
@@ -731,61 +765,31 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     sinkBufferMasters.append([])
                     continue
                 }
-                let targetY = midpoint(source.y, sink.y)
-                guard let row = output.rows.sorted(by: { $0.id < $1.id }).min(by: { lhs, rhs in
-                    absoluteDifference(lhs.originY, targetY) < absoluteDifference(rhs.originY, targetY)
-                }) else {
-                    return blocked(
-                        code: "cts_rows_missing",
-                        message: "Clock buffering requires placement rows to materialize buffer cells.",
-                        entity: net.id,
-                        actions: ["run_floorplan_before_clock_tree_synthesis"]
-                    )
-                }
-                let width = max(configuration.siteWidth * 2, implementationConstraints.routeWidth)
-                let x = max(row.originX, min(midpoint(source.x, sink.x), row.originX + row.siteCount * row.siteWidth - width))
-                let y = row.originY
-                let bufferGeometry = PhysicalDesignSnapshot.Rect(x: x, y: y, width: width, height: row.height)
-                guard !output.blockages.contains(where: { $0.intersects(bufferGeometry) }) else {
-                    return blocked(
-                        code: "cts_buffer_blocked",
-                        message: "Clock buffer location for sink \(sink.id) intersects a placement blockage.",
-                        entity: sink.id,
-                        actions: ["move_the_blockage", "increase_clock_buffer_placement_area"]
-                    )
+                guard let processGeometry else {
+                    return blocked(code: "native_cell_source_invalid", message: "Clock buffer insertion requires exact selected process sources.",
+                        entity: net.id, actions: ["supply_exact_buffer_master_sources"])
                 }
                 let bufferID = "cts_buf_\(net.id)_\(bufferIndex)"
-                let inputPinID = "pin_\(bufferID)_A"
-                let outputPinID = "pin_\(bufferID)_Y"
                 let branchNetID = "\(net.id)_branch_\(bufferIndex)"
-                output.cells.append(PhysicalDesignSnapshot.Cell(
-                    id: bufferID,
-                    master: implementationConstraints.clockBufferMaster,
-                    x: x,
-                    y: y,
-                    width: width,
-                    height: row.height,
-                    placed: true,
-                    isClockBuffer: true
-                ))
-                output.pins.append(PhysicalDesignSnapshot.Pin(
-                    id: inputPinID,
-                    cellID: bufferID,
-                    name: "A",
-                    x: x,
-                    y: y + row.height / 2,
-                    netID: net.id,
-                    direction: "input"
-                ))
-                output.pins.append(PhysicalDesignSnapshot.Pin(
-                    id: outputPinID,
-                    cellID: bufferID,
-                    name: "Y",
-                    x: x + width,
-                    y: y + row.height / 2,
-                    netID: branchNetID,
-                    direction: "output"
-                ))
+                let buffer: PhysicalDesignSnapshot.Cell
+                let inputPin: PhysicalDesignSnapshot.Pin
+                let outputPin: PhysicalDesignSnapshot.Pin
+                do {
+                    let ports = try processGeometry.bufferPorts(master: implementationConstraints.clockBufferMaster)
+                    buffer = try insertedCell(id: bufferID, master: implementationConstraints.clockBufferMaster,
+                        near: (midpoint(source.x, sink.x), midpoint(source.y, sink.y)), snapshot: output,
+                        geometry: processGeometry, isClockBuffer: true)
+                    inputPin = try processGeometry.referencePin(.init(id: "pin_\(bufferID)_\(ports.input)", cellID: bufferID,
+                        name: ports.input, netID: net.id), for: buffer)
+                    outputPin = try processGeometry.referencePin(.init(id: "pin_\(bufferID)_\(ports.output)", cellID: bufferID,
+                        name: ports.output, netID: branchNetID), for: buffer)
+                } catch {
+                    return blocked(code: "native_cell_source_invalid", message: error.localizedDescription,
+                        entity: net.id, actions: ["select_exact_compatible_buffer_geometry"])
+                }
+                output.cells.append(buffer)
+                output.pins.append(contentsOf: [inputPin, outputPin])
+                let inputPinID = inputPin.id, outputPinID = outputPin.id
                 if let sinkPinIndex = output.pins.firstIndex(where: { $0.id == sink.id }) {
                     output.pins[sinkPinIndex].netID = branchNetID
                 }
@@ -797,10 +801,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 parentPinIDs.append(inputPinID)
                 bufferCellIDs.append(bufferID)
                 sinkPathLengths.append(
-                    manhattan(source.x, source.y, x, y + row.height / 2)
-                        + manhattan(x + width, y + row.height / 2, sink.x, sink.y)
+                    manhattan(source.x, source.y, inputPin.x, inputPin.y)
+                        + manhattan(outputPin.x, outputPin.y, sink.x, sink.y)
                 )
-                sinkBufferMasters.append([implementationConstraints.clockBufferMaster])
+                sinkBufferMasters.append([buffer.master])
                 implementationState.clockRouteConstraints.append(PhysicalDesignImplementationState.ClockRouteConstraint(
                     id: "clock_route_\(branchNetID)",
                     netID: branchNetID,
@@ -869,6 +873,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         for index in implementationState.clockRouteConstraints.indices
             where clockTreeIDs.contains(implementationState.clockRouteConstraints[index].netID) {
             implementationState.clockRouteConstraints[index].layer = horizontalLayer
+            implementationState.clockRouteConstraints[index].width = implementationConstraints.routeWidth
+            implementationState.clockRouteConstraints[index].spacing = implementationConstraints.routeSpacing
+            implementationState.clockRouteConstraints[index].maximumLength = implementationConstraints.clockRouteMaximumLengthDBU
         }
         var clockRouteGeometries = output.routes
             .filter { !clockTreeIDs.contains($0.netID) }
@@ -879,6 +886,12 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             }
         var materializedClockRoutes: [PhysicalDesignSnapshot.Route] = []
         var materializedClockVias: [PhysicalDesignSnapshot.Via] = []
+        let insertedCells = output.cells != input.cells
+        if insertedCells {
+            invalidateCellGeometryProofs(in: &implementationState)
+            clockRouteGeometries.removeAll()
+            output.metadata["routingStatus"] = "requires_routing"
+        }
         for tree in output.clockTrees {
             let materialization: ClockRouteMaterialization
             do {
@@ -909,8 +922,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             materializedClockRoutes.append(contentsOf: materialization.routes)
             materializedClockVias.append(contentsOf: materialization.vias)
         }
-        output.routes = output.routes.filter { !clockTreeIDs.contains($0.netID) } + materializedClockRoutes
-        output.vias = output.vias.filter { !clockTreeIDs.contains($0.netID) } + materializedClockVias
+        output.routes = (insertedCells ? [] : output.routes.filter { !clockTreeIDs.contains($0.netID) }) + materializedClockRoutes
+        output.vias = (insertedCells ? [] : output.vias.filter { !clockTreeIDs.contains($0.netID) }) + materializedClockVias
         if timingModel == nil {
             for index in output.clockTrees.indices {
                 output.clockTrees[index].timingEstimate = nil
@@ -975,7 +988,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             endpoints.append(contentsOf: net.pinIDs.filter { $0 != tree.sourcePinID }.map { (netID: tree.netID, sourcePinID: tree.sourcePinID, sinkPinID: $0) })
         }
         for bufferCellID in tree.bufferCellIDs {
-            let outputPinID = "pin_\(bufferCellID)_Y"
+            let outputs = snapshot.pins.filter { $0.cellID == bufferCellID && $0.direction.lowercased() == "output" }
+            guard outputs.count == 1, let outputPinID = outputs.first?.id else { return nil }
             guard let branchNet = snapshot.nets.first(where: { $0.pinIDs.contains(outputPinID) }) else { return nil }
             endpoints.append(contentsOf: branchNet.pinIDs.filter { $0 != outputPinID }.map { (netID: branchNet.id, sourcePinID: outputPinID, sinkPinID: $0) })
         }
@@ -1474,7 +1488,6 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         var output = input
-        var netsToRoute: [String] = []
         switch configuration.ecoAction {
         // FIXME(INCOMPLETE_IMPLEMENTATION): Native timingECO/drcRepair master replacement verifies physical ports and placement only. Logical equivalence and characterized timing must be established before production ECO completion.
         case .resizeCell:
@@ -1595,130 +1608,66 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 return Outcome(snapshot: nil, status: .blocked, diagnostics: [failure], candidateActions: ["repair_pin_geometry"])
             }
             if cell != output.cells[index] { invalidateCellGeometryDependents(in: &output) }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Native ECO buffer insertion creates an exact physical connectivity candidate only. Functional equivalence and characterized timing must be established before production ECO completion.
         case .bufferInsertion:
             guard let netID = configuration.ecoTargetNetID,
                   let netIndex = output.nets.firstIndex(where: { $0.id == netID }) else {
-                return blocked(
-                    code: "eco_target_net_missing",
-                    message: "Buffer insertion requires an existing target net.",
-                    actions: ["set_eco_target_net_id"]
-                )
+                return blocked(code: "eco_target_net_missing", message: "Buffer insertion requires an existing target net.", actions: ["set_eco_target_net_id"])
             }
-            guard let core = output.core, !output.rows.isEmpty else {
-                return blocked(
-                    code: "eco_buffer_placement_context_missing",
-                    message: "Buffer insertion requires core geometry and placement rows.",
-                    actions: ["run_floorplan_before_buffer_insertion"]
-                )
+            guard let processGeometry, let master = configuration.ecoBufferMaster else {
+                return blocked(code: "native_cell_source_invalid", message: "ECO buffer insertion requires an explicit master and exact process sources.",
+                    actions: ["select_eco_buffer_master_and_sources"])
             }
+            let ports: (input: String, output: String)
+            do { ports = try processGeometry.bufferPorts(master: master) }
+            catch { return blocked(code: "native_cell_source_invalid", message: error.localizedDescription, actions: ["select_exact_buffer_ports"]) }
             let bufferID = "eco_buf_\(netID)"
-            let originalNet = output.nets[netIndex]
-            guard originalNet.pinIDs.count >= 2 else {
-                return blocked(
-                    code: "eco_buffer_connectivity_insufficient",
-                    message: "Buffer insertion requires a target net with at least a source and sink.",
-                    entity: netID,
-                    actions: ["repair_net_connectivity"]
-                )
-            }
-            let pinByID = Dictionary(uniqueKeysWithValues: output.pins.map { ($0.id, $0) })
-            let sourcePinID = originalNet.pinIDs.first(where: { pinByID[$0]?.direction.lowercased() == "output" }) ?? originalNet.pinIDs[0]
-            let sinkPinIDs = originalNet.pinIDs.filter { $0 != sourcePinID }
             let branchNetID = "\(netID)_eco_branch"
-            let inputPinID = "pin_\(bufferID)_A"
-            let outputPinID = "pin_\(bufferID)_Y"
-            if output.cells.contains(where: { $0.id == bufferID }) {
-                guard output.nets.contains(where: { $0.id == branchNetID }),
-                      output.pins.contains(where: { $0.id == inputPinID && $0.cellID == bufferID && $0.netID == netID }),
-                      output.pins.contains(where: { $0.id == outputPinID && $0.cellID == bufferID && $0.netID == branchNetID }),
-                      output.nets[netIndex].pinIDs == [sourcePinID, inputPinID],
-                      output.nets.first(where: { $0.id == branchNetID })?.pinIDs == [outputPinID] + sinkPinIDs,
-                      output.routes.contains(where: { $0.netID == netID }),
-                      output.routes.contains(where: { $0.netID == branchNetID }) else {
-                    return blocked(
-                        code: "eco_buffer_existing_incomplete",
-                        message: "The existing ECO buffer \(bufferID) does not have complete split-net connectivity and cannot be treated as a completed no-op.",
-                        entity: netID,
-                        actions: ["resume_from_the_last_immutable_revision", "repair_eco_connectivity"]
-                    )
+            let inputPinID = "pin_\(bufferID)_\(ports.input)"
+            let outputPinID = "pin_\(bufferID)_\(ports.output)"
+            let originalNet = output.nets[netIndex]
+            let pinByID = Dictionary(uniqueKeysWithValues: output.pins.map { ($0.id, $0) })
+            let drivers = originalNet.pinIDs.filter { pinByID[$0]?.direction.lowercased() == "output" }
+            guard !originalNet.isClock, drivers.count == 1, let sourcePinID = drivers.first,
+                  let source = pinByID[sourcePinID] else {
+                return blocked(code: "eco_buffer_source_unsupported", message: "ECO buffering requires one declared output driver on a non-clock net.",
+                    entity: netID, actions: ["repair_driver_connectivity", "use_clock_tree_synthesis_for_clock_nets"])
+            }
+            if let existing = output.cells.first(where: { $0.id == bufferID }) {
+                guard existing.master == master, let branch = output.nets.first(where: { $0.id == branchNetID }),
+                      originalNet.pinIDs == [sourcePinID, inputPinID], branch.pinIDs.first == outputPinID, branch.pinIDs.count >= 2,
+                      pinByID[inputPinID]?.cellID == bufferID && pinByID[outputPinID]?.cellID == bufferID,
+                      pinByID[inputPinID]?.name == ports.input && pinByID[inputPinID]?.direction.lowercased() == "input" && pinByID[inputPinID]?.netID == netID,
+                      pinByID[outputPinID]?.name == ports.output && pinByID[outputPinID]?.direction.lowercased() == "output" && pinByID[outputPinID]?.netID == branchNetID,
+                      branch.pinIDs.dropFirst().allSatisfy({ pinByID[$0]?.cellID != bufferID && pinByID[$0]?.direction.lowercased() == "input" }) else {
+                    return blocked(code: "eco_buffer_existing_incomplete", message: "Existing ECO buffer identity or split-net connectivity is incomplete.",
+                        entity: netID, actions: ["resume_from_the_last_immutable_revision", "repair_eco_connectivity"])
                 }
-                return completed(
-                    output,
-                    actions: ["run_timing_analysis", "run_drc"],
-                    metrics: metrics(for: output),
-                    note: "The requested ECO buffer and both routed branch nets already exist in the canonical snapshot."
-                )
+                return completed(output, actions: ["run_global_routing", "run_timing_analysis", "run_drc"], metrics: metrics(for: output),
+                    note: "The exact selected ECO buffer and split-net geometry already exist; routing and closure are separate stages.")
             }
-            guard !output.nets.contains(where: { $0.id == branchNetID }) else {
-                return blocked(
-                    code: "eco_buffer_branch_exists",
-                    message: "The target net already has the reserved ECO branch net \(branchNetID).",
-                    entity: netID,
-                    actions: ["resume_from_the_existing_eco_revision"]
-                )
+            let sinkPinIDs = originalNet.pinIDs.filter { $0 != sourcePinID }
+            guard !sinkPinIDs.isEmpty, sinkPinIDs.allSatisfy({ pinByID[$0]?.direction.lowercased() == "input" }),
+                  !output.nets.contains(where: { $0.id == branchNetID }) else {
+                return blocked(code: "eco_buffer_connectivity_unsupported", message: "ECO buffer insertion requires input sinks and an unused branch identity.",
+                    entity: netID, actions: ["repair_net_connectivity"])
             }
-            let location = output.pins.first(where: { $0.id == sourcePinID })
-            guard let placement = legalBufferPlacement(
-                near: location,
-                core: core,
-                rows: output.rows,
-                cells: output.cells,
-                blockages: output.blockages,
-                width: configuration.siteWidth * 2,
-                height: configuration.rowHeight
-            ) else {
-                return blocked(
-                    code: "eco_buffer_placement_unavailable",
-                    message: "No legal row location is available for the ECO buffer on net \(netID).",
-                    entity: netID,
-                    actions: ["increase_core_area", "move_blockages", "reduce_buffer_width"]
-                )
+            do {
+                let buffer = try insertedCell(id: bufferID, master: master, near: (source.x, source.y), snapshot: output, geometry: processGeometry)
+                let inputPin = try processGeometry.referencePin(.init(id: inputPinID, cellID: bufferID, name: ports.input, netID: netID), for: buffer)
+                let outputPin = try processGeometry.referencePin(.init(id: outputPinID, cellID: bufferID, name: ports.output, netID: branchNetID), for: buffer)
+                invalidateCellGeometryDependents(in: &output)
+                output.cells.append(buffer)
+                output.pins.append(contentsOf: [inputPin, outputPin])
+            } catch {
+                return blocked(code: "native_cell_source_invalid", message: error.localizedDescription,
+                    entity: netID, actions: ["select_exact_compatible_buffer_geometry"])
             }
-            output.cells.append(
-                PhysicalDesignSnapshot.Cell(
-                    id: bufferID,
-                    master: "BUF_ECO",
-                    x: placement.x,
-                    y: placement.y,
-                    width: configuration.siteWidth * 2,
-                    height: configuration.rowHeight,
-                    placed: true,
-                    isClockBuffer: false
-                )
-            )
-            let inputX = placement.x
-            let inputY = placement.y + configuration.rowHeight / 2
-            let outputX = placement.x + configuration.siteWidth * 2
-            output.pins.append(PhysicalDesignSnapshot.Pin(
-                id: inputPinID,
-                cellID: bufferID,
-                name: "A",
-                x: inputX,
-                y: inputY,
-                netID: netID,
-                direction: "input"
-            ))
-            output.pins.append(PhysicalDesignSnapshot.Pin(
-                id: outputPinID,
-                cellID: bufferID,
-                name: "Y",
-                x: outputX,
-                y: inputY,
-                netID: branchNetID,
-                direction: "output"
-            ))
-            for index in output.pins.indices where sinkPinIDs.contains(output.pins[index].id) {
-                output.pins[index].netID = branchNetID
-            }
+            let sinks = Set(sinkPinIDs)
+            for index in output.pins.indices where sinks.contains(output.pins[index].id) { output.pins[index].netID = branchNetID }
             output.nets[netIndex].pinIDs = [sourcePinID, inputPinID]
-            output.nets.append(PhysicalDesignSnapshot.Net(
-                id: branchNetID,
-                pinIDs: [outputPinID] + sinkPinIDs,
-                isClock: originalNet.isClock,
-                antennaRatio: originalNet.antennaRatio,
-                maximumAntennaRatio: originalNet.maximumAntennaRatio
-            ))
-            netsToRoute = [netID, branchNetID]
+            output.nets.append(.init(id: branchNetID, pinIDs: [outputPinID] + sinkPinIDs, isClock: false,
+                antennaRatio: originalNet.antennaRatio, maximumAntennaRatio: originalNet.maximumAntennaRatio))
         case .rerouteNet:
             guard let netID = configuration.ecoTargetNetID,
                   output.nets.contains(where: { $0.id == netID }) else {
@@ -1748,13 +1697,6 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             }
             output.blockages.append(geometry)
         }
-        for netID in netsToRoute {
-            let routingOutcome = routing(output, configuration: configuration, mode: "eco", onlyNetID: netID, processGeometry: processGeometry)
-            guard let routed = routingOutcome.snapshot, routingOutcome.status == .completed else {
-                return routingOutcome
-            }
-            output = routed
-        }
         if let verificationDiagnostic = verifyAndRecordRepair(
             input: input,
             output: &output,
@@ -1772,9 +1714,12 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
         output.metadata[stage == .drcRepair ? "drcRepairStatus" : "timingECOStatus"] = "applied"
+        let actions = output.cells != input.cells
+            ? ["run_global_routing"] + (output.nets.contains(where: \.isClock) ? ["run_clock_tree_synthesis"] : []) + ["run_timing_analysis", "run_drc"]
+            : ["run_timing_analysis", "run_drc"]
         return completed(
             output,
-            actions: ["run_timing_analysis", "run_drc"],
+            actions: actions,
             metrics: metrics(for: output)
         )
     }
@@ -1862,58 +1807,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                         return blocked(code: "antenna_reroute_illegal", message: "Antenna reroute candidate for net \(netID) leaves the core or intersects a blockage.", entity: netID, actions: ["move_the_blockage", "select_the_protection_device_strategy"])
                     }
                     output.routes[routeIndex].segments.append(segment)
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Native antenna protection lacks source-qualified device insertion and re-extracted antenna metrics. A fabricated diode or synthetic ratio reduction must not become a successful protection result before native feedback is implemented.
                 case .protectionDevice:
-                    let protectionID = "antenna_protect_\(netID)"
-                    guard let core = output.core, !output.rows.isEmpty else {
-                        return blocked(code: "antenna_protection_placement_context_missing", message: "Antenna protection devices require core geometry and placement rows.", entity: netID, actions: ["run_floorplan", "run_placement"])
-                    }
-                    if !output.cells.contains(where: { $0.id == protectionID }) {
-                        let width = max(configuration.siteWidth, configuration.siteWidth * 2)
-                        guard let placement = legalBufferPlacement(
-                            near: output.pins.first(where: { $0.netID == netID }),
-                            core: core,
-                            rows: output.rows,
-                            cells: output.cells,
-                            blockages: output.blockages,
-                            width: width,
-                            height: configuration.rowHeight
-                        ) else {
-                            return blocked(code: "antenna_protection_location_unavailable", message: "No legal placement row is available for the antenna protection device on net \(netID).", entity: netID, actions: ["move_the_blockage", "increase_core_area", "select_the_jumper_strategy"])
-                        }
-                        let geometry = PhysicalDesignSnapshot.Rect(x: placement.x, y: placement.y, width: width, height: configuration.rowHeight)
-                        output.cells.append(PhysicalDesignSnapshot.Cell(
-                            id: protectionID,
-                            master: "ANTENNA_DIODE",
-                            x: geometry.x,
-                            y: geometry.y,
-                            width: geometry.width,
-                            height: geometry.height,
-                            placed: true
-                        ))
-                    }
-                    let pinID = "pin_\(protectionID)_A"
-                    if !output.pins.contains(where: { $0.id == pinID }) {
-                        guard let protection = output.cells.first(where: { $0.id == protectionID }) else {
-                            return blocked(
-                                code: "antenna_protection_cell_missing",
-                                message: "The antenna protection device was selected but is missing from the canonical snapshot.",
-                                entity: netID,
-                                actions: ["repair_antenna_snapshot", "rerun_antenna_repair"]
-                            )
-                        }
-                        output.pins.append(PhysicalDesignSnapshot.Pin(
-                            id: pinID,
-                            cellID: protectionID,
-                            name: "A",
-                            x: protection.x,
-                            y: protection.y + protection.height / 2,
-                            netID: netID,
-                            direction: "input"
-                        ))
-                    }
-                    if !output.nets[index].pinIDs.contains(pinID) {
-                        output.nets[index].pinIDs.append(pinID)
-                    }
+                    return blocked(code: "antenna_protection_feedback_unimplemented", message: "Antenna protection requires exact source device insertion and derived post-repair antenna evidence.",
+                        entity: netID, actions: ["implement_native_antenna_feedback"])
                 }
             }
             strategies.append(strategy)
@@ -2387,7 +2284,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
     }
 
     private func legalBufferPlacement(
-        near pin: PhysicalDesignSnapshot.Pin?,
+        near point: (x: Int64, y: Int64),
         core: PhysicalDesignSnapshot.Rect,
         rows: [PhysicalDesignSnapshot.Row],
         cells: [PhysicalDesignSnapshot.Cell],
@@ -2396,36 +2293,20 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         height: Int64
     ) -> (x: Int64, y: Int64)? {
         guard width > 0, height > 0 else { return nil }
-        let edgeClearance = max(1, width / 2)
-        let targetX = pin?.x ?? core.x
-        for row in rows.sorted(by: { $0.id < $1.id }) where height <= row.height {
+        for row in rows where height == row.height {
             let rowEnd = min(row.originX + row.siteCount * row.siteWidth, core.maxX)
             let maximumX = rowEnd - width
             guard maximumX >= row.originX else { continue }
-            let rawStart = max(row.originX, min(maximumX, targetX))
-            let alignedStart = row.originX + max(0, rawStart - row.originX + row.siteWidth - 1) / row.siteWidth * row.siteWidth
-            let candidates = [
-                alignedStart,
-                row.originX,
-                maximumX
-            ] + stride(
-                from: row.originX,
-                through: maximumX,
-                by: Int(exactly: max(Int64(1), row.siteWidth)) ?? 1
-            ).filter {
-                abs($0 - targetX) <= max(core.width, core.height)
-            }
-            for x in candidates where x >= row.originX && x <= maximumX {
+            let count = (maximumX - row.originX) / row.siteWidth + 1
+            let start = (max(row.originX, min(maximumX, point.x)) - row.originX) / row.siteWidth
+            // ponytail: bounded linear site scan without a candidate array; add an obstacle index only when measured row budgets require it.
+            for offset in 0..<count {
+                let x = row.originX + ((start + offset) % count) * row.siteWidth
                 let geometry = PhysicalDesignSnapshot.Rect(x: x, y: row.originY, width: width, height: height)
-                guard core.contains(geometry.expanded(by: edgeClearance)), !blockages.contains(where: { $0.intersects(geometry) }) else { continue }
-                guard !cells.contains(where: { cell in
-                    cell.placed && PhysicalDesignSnapshot.Rect(
-                        x: cell.x,
-                        y: cell.y,
-                        width: cell.width,
-                        height: cell.height
-                    ).intersects(geometry)
-                }) else { continue }
+                guard core.contains(geometry), !blockages.contains(where: { $0.intersects(geometry) }),
+                      !cells.contains(where: { cell in
+                          cell.placed && PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height).intersects(geometry)
+                      }) else { continue }
                 return (x, row.originY)
             }
         }

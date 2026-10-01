@@ -321,6 +321,102 @@ struct ProcessGeometryTests {
         #expect(throws: PhysicalDesignTechnologyError.self) { try geometry.validate(snapshot) }
     }
 
+    @Test("inserted buffers use exact source dimensions ports and sites", arguments: ["eco", "clock", "buffer-interface", "buffer-site", "buffer-height", "missing", "blocked"])
+    func sourceInsertedCells(scenario: String) async throws {
+        let (geometry, base, store) = try await fixture(replacement: scenario.hasPrefix("buffer") ? scenario : "buffer")
+        var request = nativeRequest(base)
+        request.stage = scenario == "clock" ? .clockTreeSynthesis : .timingECO
+        request.configuration.ecoAction = .bufferInsertion
+        request.configuration.ecoTargetNetID = "N"
+        request.configuration.ecoBufferMaster = scenario == "missing" ? nil : "BUF_EXACT"
+        request.configuration.implementationConstraints?.clockBufferMaster = "BUF_EXACT"
+        request.configuration.implementationConstraints?.clockBufferDistanceThresholdDBU = 1000
+        request.configuration.implementationConstraints?.clockRouteLayer = 2
+        var input = try geometry.bind(.init(topCell: base.design.topDesignName,
+            die: .init(x: 0, y: 0, width: 10000, height: 10000), core: .init(x: 0, y: 0, width: 10000, height: 10000),
+            rows: [1000, 2000].map { y in .init(id: "row_\(y)", originX: 0, originY: Int64(y), siteWidth: 100, height: 1000, siteCount: 100, siteName: "unit") },
+            cells: [
+                .init(id: "U1", master: "INV_X1", x: 500, y: 1000, width: 2000, height: 1000, placed: true),
+                .init(id: "U2", master: "INV_X1", x: 3900, y: 2000, width: 2000, height: 1000, placed: true)
+            ], pins: [
+                .init(id: "Y", cellID: "U1", name: "Y", x: 700, y: 1100, netID: "N", direction: "output", accessLayer: 2),
+                .init(id: "A", cellID: "U2", name: "A", x: 4100, y: 2000, netID: "N", direction: "input", accessLayer: 2)
+            ], nets: [.init(id: "N", pinIDs: ["Y", "A"], isClock: scenario == "clock")],
+            implementationState: .init(tracks: [
+                .init(id: "H", layer: 2, direction: "horizontal", origin: 100, spacing: 200, count: 50),
+                .init(id: "V", layer: 3, direction: "vertical", origin: 100, spacing: 400, count: 25)
+            ])))
+        if scenario == "blocked" {
+            input.blockages = [
+                .init(x: 0, y: 1000, width: 500, height: 1000), .init(x: 2500, y: 1000, width: 7500, height: 1000),
+                .init(x: 0, y: 2000, width: 3900, height: 1000), .init(x: 5900, y: 2000, width: 4100, height: 1000)
+            ]
+        }
+        try geometry.validate(input)
+        let mutation = PhysicalDesignNativeMutationEngine()
+        if scenario == "eco" || scenario == "clock" {
+            input.cells[0].locked = true
+            input.cells[1].locked = true
+            var preparation = request
+            preparation.stage = .placement
+            input = try #require(await mutation.applyPrepared(preparation, to: input, processGeometry: geometry).snapshot)
+            #expect(input.implementationState?.placementProof != nil)
+            preparation.stage = .globalRouting
+            input = try #require(await mutation.applyPrepared(preparation, to: input, processGeometry: geometry).snapshot)
+            #expect(input.implementationState?.routingEvidence != nil)
+        }
+        let result = await mutation.applyPrepared(request, to: input, processGeometry: geometry)
+        if scenario == "eco" || scenario == "clock" {
+            #expect(result.status == .completed, "\(result.diagnostics)")
+            let output = try #require(result.snapshot)
+            let cell = try #require(output.cells.first { $0.master == "BUF_EXACT" })
+            let pins = output.pins.filter { $0.cellID == cell.id }
+            #expect(cell.width == 800 && cell.height == 1000 && cell.orientation == .n && cell.placed)
+            #expect(Set(pins.map(\.name)) == ["DIN", "Q"])
+            #expect(pins.first { $0.name == "DIN" }?.x == cell.x + 100)
+            #expect(pins.first { $0.name == "Q" }?.x == cell.x + 500)
+            #expect(pins.allSatisfy { $0.y == cell.y + 100 && $0.accessLayer == 2 })
+            #expect(output.implementationState?.placementProof == nil && output.implementationState?.routingEvidence == nil)
+            try geometry.validate(output)
+            if scenario == "eco" {
+                #expect(output.routes.isEmpty && output.vias.isEmpty && output.clockTrees.isEmpty)
+                #expect(result.candidateActions.contains("run_global_routing"))
+                request.initialSnapshot = input
+                let apiResult = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+                #expect(apiResult.status == .completed, "\(apiResult.diagnostics)")
+                let binding = try #require(apiResult.payload.physicalDesign?.layoutArtifact)
+                let decoded = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: await store.read(binding))
+                #expect(decoded.cells == output.cells && decoded.pins == output.pins)
+                let reference = try #require(apiResult.payload.physicalDesign)
+                let replay = try await PhysicalDesignEngine(artifactStore: store).execute(resumed(request, from: reference, runID: "source-buffer-replay", stage: .timingECO))
+                #expect(replay.status == .completed, "\(replay.diagnostics)")
+                var malformed = decoded
+                let outputIndex = try #require(malformed.pins.firstIndex { $0.cellID == cell.id && $0.name == "Q" })
+                malformed.pins[outputIndex].name = "DIN"
+                malformed.pins[outputIndex].direction = "input"
+                malformed.pins[outputIndex].x = cell.x + 100
+                try geometry.validate(malformed)
+                let rejected = await mutation.applyPrepared(request, to: malformed, processGeometry: geometry)
+                #expect(rejected.status == .blocked && rejected.snapshot == nil)
+                #expect(rejected.diagnostics.contains { $0.code.rawValue == "eco_buffer_existing_incomplete" })
+                var routing = request
+                routing.stage = .globalRouting
+                let routed = await mutation.applyPrepared(routing, to: decoded, processGeometry: geometry)
+                #expect(routed.status == .completed, "\(routed.diagnostics)")
+                #expect(Set(routed.snapshot?.routes.map(\.netID) ?? []) == ["N", "N_eco_branch"])
+                #expect(routed.snapshot?.vias.allSatisfy { $0.master == "hv" } == true)
+            } else {
+                #expect(output.clockTrees.first?.bufferCellIDs == [cell.id])
+                #expect(output.routes.contains { $0.netID == "N_branch_0" })
+                #expect(output.vias.allSatisfy { $0.master == "hv" })
+                #expect(result.claims.timing == .blocked && result.claims.production == .blocked)
+            }
+        } else {
+            #expect(result.status == .blocked && result.snapshot == nil)
+            #expect(result.diagnostics.contains { $0.code.rawValue == "native_cell_source_invalid" }, "\(result.diagnostics)")
+        }
+    }
+
     @Test("contradictory canonical geometry cannot enter or leave process-bound mutation", arguments: [
         "width", "orientation-size", "missing-layer", "wrong-layer", "direction", "pin-outside", "missing-site", "site-size",
         "off-site", "missing-via", "via-layers", "via-footprint", "coordinate-overflow"
@@ -605,12 +701,24 @@ struct ProcessGeometryTests {
               PIN A DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 0.1 0.2 0.3 0.4 ; END END A
             END INV_X2
             """
+            if replacement.hasPrefix("buffer") {
+                macro = """
+                MACRO BUF_EXACT
+                  CLASS CORE ; SIZE 0.8 BY 1 ; SYMMETRY X Y ; SITE unit ;
+                  PIN DIN DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 0.1 0.1 0.2 0.2 ; END END DIN
+                  PIN Q DIRECTION OUTPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 0.5 0.1 0.6 0.2 ; END END Q
+                END BUF_EXACT
+                """
+            }
             switch replacement {
             case "ports": macro = macro.replacingOccurrences(of: "PIN A ", with: "PIN B ").replacingOccurrences(of: "END A", with: "END B")
             case "direction": macro = macro.replacingOccurrences(of: "DIRECTION OUTPUT", with: "DIRECTION INPUT")
             case "use": macro = macro.replacingOccurrences(of: "USE SIGNAL", with: "USE CLOCK")
             case "height": macro = macro.replacingOccurrences(of: "SIZE 3 BY 1", with: "SIZE 3 BY 2")
             case "symmetry": macro = macro.replacingOccurrences(of: "SYMMETRY X Y ;", with: "SYMMETRY X ;")
+            case "buffer-interface": macro = macro.replacingOccurrences(of: "END BUF_EXACT", with: "PIN ENABLE DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 0.3 0.1 0.4 0.2 ; END END ENABLE\nEND BUF_EXACT")
+            case "buffer-site": macro = macro.replacingOccurrences(of: "SITE unit ;", with: "")
+            case "buffer-height": macro = macro.replacingOccurrences(of: "SIZE 0.8 BY 1", with: "SIZE 0.8 BY 2")
             default: break
             }
             cells = cells.replacingOccurrences(of: "END LIBRARY", with: macro + "\nEND LIBRARY")
@@ -629,7 +737,7 @@ struct ProcessGeometryTests {
             .init(assetID: "cells", role: .cell, path: "cells.lef", kind: .technology, format: .lef, sha256: cellsBinding.reference.digest.hexadecimalValue, byteCount: Int64(cells.utf8.count))
         ], layers: layers, crossViewMappings: [
             .init(mappingID: "tech", view: .lef, assetID: "tech", layerIDs: layerIDs),
-            .init(mappingID: "cells", view: .lef, assetID: "cells", physicalNames: scenario == "unmapped-master" ? [] : (replacement == nil ? ["INV_X1"] : ["INV_X1", "INV_X2"]), layerIDs: scenario == "unmapped-layer" ? ["V", "C"] : layerIDs)
+            .init(mappingID: "cells", view: .lef, assetID: "cells", physicalNames: scenario == "unmapped-master" ? [] : (replacement == nil ? ["INV_X1"] : ["INV_X1", replacement?.hasPrefix("buffer") == true ? "BUF_EXACT" : "INV_X2"]), layerIDs: scenario == "unmapped-layer" ? ["V", "C"] : layerIDs)
         ])
         let manifestBinding = try await store.registerInput(try PDKManifestCodec.encode(manifest), relativePath: "inputs/process.json", kind: .technology, format: .json)
         let base = PhysicalDesignFixtureFactory.request(stage: .floorplan)
