@@ -133,3 +133,9 @@ Routing retains the existing cancellation and single-bend algorithm boundaries.
 and the component tests exercise retained bytes and stage failures. Grid changes
 affect signal routing, ECO rerouting and CTS. Technology changes affect all stages
 that receive technology LEF. Verify these paths before package/CLI integration.
+
+Output artifact writes require an explicit producer-owned logical ID. Native stage IDs
+name the stage and output role; immutable content identity remains in the reference,
+and storage paths remain in availability. The store preserves the requested ID
+rather than deriving it from a path. This separates semantic output names from
+locations and keeps host identifier validation independent of local filenames.

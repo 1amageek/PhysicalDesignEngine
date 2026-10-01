@@ -32,7 +32,7 @@ public struct PhysicalDesignArtifactReferenceBuilder: Sendable {
             )
         )
         return try PhysicalDesignArtifactBinding(
-            logicalID: write.relativePath,
+            logicalID: write.logicalID,
             reference: reference,
             availability: .local(
                 artifactID: reference.id,

@@ -307,6 +307,7 @@ struct NativeExecutionTests {
         let sourceData = Data(try PhysicalDesignDEFWriter().write(sourceSnapshot).utf8)
         let sourceReference = try await store.write(
             sourceData,
+            logicalID: "fixture.def",
             relativePath: "inputs/base.def",
             kind: .layout,
             format: .def,
@@ -1011,6 +1012,7 @@ struct NativeExecutionTests {
         let snapshotData = try PhysicalDesignJSONCodec().encode(PhysicalDesignFixtureFactory.snapshot())
         let storedReference = try await store.write(
             snapshotData,
+            logicalID: "fixture.snapshot",
             relativePath: "inputs/base.json",
             kind: .layout,
             format: .json,

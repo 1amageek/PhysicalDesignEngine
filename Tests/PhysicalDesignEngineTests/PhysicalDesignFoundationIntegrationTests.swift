@@ -75,11 +75,28 @@ struct PhysicalDesignFoundationIntegrationTests {
         }
     }
 
+    @Test("producer logical IDs are independent of content identity and storage location")
+    func outputLogicalIdentity() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let data = Data("same bytes".utf8)
+        let first = try await store.write(data, logicalID: "physical.floorplan.snapshot", relativePath: "runs/a/revision.json", kind: .layout, format: .json, runID: "a")
+        let second = try await store.write(data, logicalID: "physical.place.snapshot", relativePath: "runs/b/revision.json", kind: .layout, format: .json, runID: "b")
+        #expect(first.reference == second.reference)
+        #expect(first.logicalID == "physical.floorplan.snapshot" && second.logicalID == "physical.place.snapshot")
+        #expect(first.path != second.path)
+        #expect(try await store.read(first) == data)
+        #expect(try await store.read(second) == data)
+        await #expect(throws: PhysicalDesignArtifactBindingError.self) {
+            try await store.write(data, logicalID: "", relativePath: "runs/a/invalid.json", kind: .layout, format: .json, runID: "a")
+        }
+    }
+
     @Test("artifact stores refuse to overwrite an immutable path")
     func artifactStoreIsImmutable() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
         _ = try await store.write(
             Data("first".utf8),
+            logicalID: "fixture.output",
             relativePath: "runs/immutable/revision.json",
             kind: .layout,
             format: .json,
@@ -89,6 +106,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         do {
             _ = try await store.write(
                 Data("second".utf8),
+                logicalID: "fixture.output",
                 relativePath: "runs/immutable/revision.json",
                 kind: .layout,
                 format: .json,
@@ -116,6 +134,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         let store = FileSystemPhysicalDesignArtifactStore(projectRoot: root)
         _ = try await store.write(
             Data("first".utf8),
+            logicalID: "fixture.output",
             relativePath: "runs/immutable/revision.json",
             kind: .layout,
             format: .json,
@@ -125,6 +144,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         do {
             _ = try await store.write(
                 Data("second".utf8),
+                logicalID: "fixture.output",
                 relativePath: "runs/immutable/revision.json",
                 kind: .layout,
                 format: .json,
@@ -141,6 +161,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         let store = InMemoryPhysicalDesignArtifactStore()
         _ = try await store.write(
             Data("retained".utf8),
+            logicalID: "fixture.output",
             relativePath: "runs/batch/second.json",
             kind: .report,
             format: .json,
@@ -149,6 +170,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         let batch = [
             PhysicalDesignArtifactWrite(
                 data: Data("first".utf8),
+                logicalID: "fixture.batch",
                 relativePath: "runs/batch/first.json",
                 kind: .report,
                 format: .json,
@@ -156,6 +178,7 @@ struct PhysicalDesignFoundationIntegrationTests {
             ),
             PhysicalDesignArtifactWrite(
                 data: Data("replacement".utf8),
+                logicalID: "fixture.batch",
                 relativePath: "runs/batch/second.json",
                 kind: .report,
                 format: .json,
@@ -189,6 +212,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         let store = FileSystemPhysicalDesignArtifactStore(projectRoot: root)
         _ = try await store.write(
             Data("retained".utf8),
+            logicalID: "fixture.output",
             relativePath: "runs/batch/second.json",
             kind: .report,
             format: .json,
@@ -197,6 +221,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         let batch = [
             PhysicalDesignArtifactWrite(
                 data: Data("first".utf8),
+                logicalID: "fixture.batch",
                 relativePath: "runs/batch/first.json",
                 kind: .report,
                 format: .json,
@@ -204,6 +229,7 @@ struct PhysicalDesignFoundationIntegrationTests {
             ),
             PhysicalDesignArtifactWrite(
                 data: Data("replacement".utf8),
+                logicalID: "fixture.batch",
                 relativePath: "runs/batch/second.json",
                 kind: .report,
                 format: .json,
@@ -249,6 +275,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         do {
             _ = try await store.write(
                 Data("escaped".utf8),
+                logicalID: "fixture.output",
                 relativePath: "escape/revision.json",
                 kind: .layout,
                 format: .json,

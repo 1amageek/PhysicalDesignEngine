@@ -346,6 +346,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let snapshotPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.json"
         let snapshotReference = try await artifactStore.write(
             snapshotData,
+            logicalID: "physical.\(request.stage.rawValue).snapshot",
             relativePath: snapshotPath,
             kind: .layout,
             format: .json,
@@ -356,6 +357,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let defPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.def"
         let defReference = try await artifactStore.write(
             defData,
+            logicalID: "physical.\(request.stage.rawValue).def",
             relativePath: defPath,
             kind: .layout,
             format: .def,
@@ -381,6 +383,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let diffPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/design-diff.json"
         let diffReference = try await artifactStore.write(
             diffData,
+            logicalID: "physical.\(request.stage.rawValue).diff",
             relativePath: diffPath,
             kind: .designDiff,
             format: .json,
@@ -426,6 +429,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         let manifestPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/run-manifest.json"
         let manifestReference = try await artifactStore.write(
             manifestData,
+            logicalID: "physical.\(request.stage.rawValue).manifest",
             relativePath: manifestPath,
             kind: .report,
             format: .json,

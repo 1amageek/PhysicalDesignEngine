@@ -15,6 +15,7 @@ public protocol PhysicalDesignArtifactStore: Sendable {
 extension PhysicalDesignArtifactStore {
     public func write(
         _ data: Data,
+        logicalID: String,
         relativePath: String,
         kind: ArtifactKind,
         format: ArtifactFormat,
@@ -23,6 +24,7 @@ extension PhysicalDesignArtifactStore {
         let references = try await write([
             PhysicalDesignArtifactWrite(
                 data: data,
+                logicalID: logicalID,
                 relativePath: relativePath,
                 kind: kind,
                 format: format,
