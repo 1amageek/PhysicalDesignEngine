@@ -114,7 +114,7 @@
     "deterministicSeed": 7
   },
   "initialSnapshot": {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "topCell": "fixture_top",
     "unitsPerMicron": 1000,
     "die": null,
@@ -131,7 +131,8 @@
         "placed": false,
         "locked": false,
         "isClockBuffer": false,
-        "isFiller": false
+        "isFiller": false,
+        "orientation": "N"
       },
       {
         "id": "U2",
@@ -143,7 +144,8 @@
         "placed": false,
         "locked": false,
         "isClockBuffer": false,
-        "isFiller": false
+        "isFiller": false,
+        "orientation": "N"
       }
     ],
     "pins": [],
@@ -158,7 +160,8 @@
     "antennaRepairs": [],
     "metadata": {
       "fixture": "positive"
-    }
+    },
+    "processAssets": {}
   },
   "inputBindings": [
     {

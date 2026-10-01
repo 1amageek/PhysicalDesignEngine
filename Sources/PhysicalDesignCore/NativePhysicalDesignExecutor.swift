@@ -75,18 +75,25 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             try Task.checkCancellation()
             let processInputs = try await PhysicalDesignProcessInputs.load(request: request, store: artifactStore)
             let loaded = try await loadSnapshot(from: request, processInputs: processInputs)
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Native source intake retains exact cell LEF views, but canonical cell/pin/site/via resolution is not yet connected to mutation. API/CLI requests with cell views must remain blocked until source-bound geometry preparation and output validation are behaviorally verified.
+            let processGeometry: PhysicalDesignProcessGeometry?
             if let processInputs, !processInputs.cellViews.isEmpty {
-                throw PhysicalDesignTechnologyError.unsupported("Native cell/pin/site/via process geometry preparation is not complete.")
+                processGeometry = try PhysicalDesignProcessGeometry(inputs: processInputs, request: request, units: loaded.snapshot.unitsPerMicron)
+            } else {
+                guard loaded.snapshot.processManifest == nil, loaded.snapshot.processAssets.isEmpty else {
+                    throw PhysicalDesignTechnologyError.invalid("A process-bound snapshot cannot resume without its exact cell and technology sources.")
+                }
+                processGeometry = nil
             }
-            let preparedSnapshot = try PhysicalDesignTechnologyConstraints.prepare(loaded.snapshot, request: request, processInputs: processInputs)
+            let sourceBound = try processGeometry?.bind(loaded.snapshot) ?? loaded.snapshot
+            let preparedSnapshot = try PhysicalDesignTechnologyConstraints.prepare(sourceBound, request: request, processInputs: processInputs)
             let timingModel = try await loadClockTimingModel(from: request)
             try Task.checkCancellation()
-            let outcome = await mutationEngine.apply(
+            let outcome = await mutationEngine.applyPrepared(
                 request,
                 to: preparedSnapshot,
                 clockTimingModel: timingModel,
-                clockTimingModelReference: request.clockTimingModel
+                clockTimingModelReference: request.clockTimingModel,
+                processGeometry: processGeometry
             )
             switch outcome.status {
             case .blocked, .cancelled:
@@ -135,7 +142,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                     output: output,
                     outcome: outcome,
                     startedAt: startedAt,
-                    source: loaded
+                    source: loaded,
+                    processGeometry: processGeometry
                 )
             }
         } catch is CancellationError {
@@ -171,6 +179,11 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 startedAt: startedAt,
                 seed: request.configuration.deterministicSeed
             )
+        } catch let error as PhysicalDesignDEFExportError {
+            return try envelope(request: request, status: .blocked,
+                diagnostics: [diagnostic(severity: .error, code: "physical_def_export_unsupported", message: String(describing: error),
+                    actions: ["provide_supported_exact_standard_interchange"])],
+                payload: emptyPayload, startedAt: startedAt, seed: request.configuration.deterministicSeed)
         } catch let error as PhysicalDesignClockTimingModelError {
             return try envelope(
                 request: request,
@@ -315,8 +328,11 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         output: PhysicalDesignSnapshot,
         outcome: PhysicalDesignNativeMutationEngine.Outcome,
         startedAt: Date,
-        source: LoadedSnapshot
+        source: LoadedSnapshot,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) async throws -> PhysicalDesignResult {
+        // Admission and standard export must finish before any revision is persisted.
+        let defData = Data(try defWriter.write(output, processGeometry: processGeometry).utf8)
         let snapshotData = try codec.encode(output)
         let snapshotPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.json"
         let snapshotReference = try await artifactStore.write(
@@ -328,7 +344,6 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         )
         try await verifyWrittenArtifact(snapshotReference, expectedData: snapshotData)
 
-        let defData = Data(defWriter.write(output).utf8)
         let defPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.def"
         let defReference = try await artifactStore.write(
             defData,
@@ -340,9 +355,9 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         try await verifyWrittenArtifact(defReference, expectedData: defData)
 
         let physicalReference = PhysicalDesignReference(
-            layoutArtifact: defReference,
+            layoutArtifact: snapshotReference,
             topCell: output.topCell,
-            layoutDigest: defReference.reference.digest.hexadecimalValue
+            layoutDigest: snapshotReference.reference.digest.hexadecimalValue
         )
         let diff = try diffBuilder.build(
             runID: request.runID,
@@ -616,6 +631,9 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         if before.core != after.core { count += 1 }
         if before.rows != after.rows { count += max(before.rows.count, after.rows.count) }
         if before.cells != after.cells { count += max(before.cells.count, after.cells.count) }
+        if before.pins != after.pins { count += max(before.pins.count, after.pins.count) }
+        if before.processManifest != after.processManifest { count += 1 }
+        if before.processAssets != after.processAssets { count += max(before.processAssets.count, after.processAssets.count) }
         if before.nets != after.nets { count += max(before.nets.count, after.nets.count) }
         if before.powerStructures != after.powerStructures { count += max(before.powerStructures.count, after.powerStructures.count) }
         if before.clockTrees != after.clockTrees { count += max(before.clockTrees.count, after.clockTrees.count) }

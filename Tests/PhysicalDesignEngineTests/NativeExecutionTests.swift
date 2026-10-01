@@ -77,7 +77,7 @@ struct NativeExecutionTests {
         #expect(decodedResult.evidence.id == evidenceID)
 
         let layoutReference = try #require(result.payload.physicalDesign?.layoutArtifact)
-        #expect(layoutReference.descriptor.format == .def)
+        #expect(layoutReference.descriptor.format == .json)
         #expect(layoutReference.descriptor.kind == .layout)
         #expect(result.payload.physicalDesign?.layoutDigest == layoutReference.reference.digest.hexadecimalValue)
         let revisionReference = try #require(result.artifactBindings.first {
@@ -237,7 +237,7 @@ struct NativeExecutionTests {
                 pads: [PhysicalDesignImplementationState.Pad(id: "pad_pin_IN", pinID: "pin_IN", side: "left", geometry: PhysicalDesignSnapshot.Rect(x: 0, y: 5_000, width: 100, height: 100), placed: true)]
             )
         )
-        let def = PhysicalDesignDEFWriter().write(snapshot)
+        let def = try PhysicalDesignDEFWriter().write(snapshot)
         let result = PhysicalDesignDEFParser().parse(Data(def.utf8))
 
         let parsed = try #require(result.snapshot)
@@ -304,7 +304,7 @@ struct NativeExecutionTests {
     func defInputExecution() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
         let sourceSnapshot = PhysicalDesignFixtureFactory.snapshot()
-        let sourceData = Data(PhysicalDesignDEFWriter().write(sourceSnapshot).utf8)
+        let sourceData = Data(try PhysicalDesignDEFWriter().write(sourceSnapshot).utf8)
         let sourceReference = try await store.write(
             sourceData,
             relativePath: "inputs/base.def",
@@ -366,7 +366,7 @@ struct NativeExecutionTests {
         let output = try await decodedSnapshot(from: result, store: store)
         let core = try #require(output.core)
         let tracks = try #require(output.implementationState?.tracks)
-        let defBinding = try #require(result.payload.physicalDesign?.layoutArtifact)
+        let defBinding = try #require(result.artifactBindings.first { $0.descriptor.format == .def })
         let parsed = try PhysicalDesignDEFParser().parse(await store.read(defBinding))
         let retainedTracks = try #require(parsed.snapshot?.implementationState?.tracks)
         for track in tracks {
@@ -786,7 +786,7 @@ struct NativeExecutionTests {
         )
         #expect(result.status == .completed)
         let output = try await decodedSnapshot(from: result, store: store)
-        let binding = try #require(result.payload.physicalDesign?.layoutArtifact)
+        let binding = try #require(result.artifactBindings.first { $0.descriptor.format == .def })
         let data = try await store.read(binding)
         let parsed = PhysicalDesignDEFParser().parse(data)
         #expect(parsed.isValid, "\(parsed.diagnostics)")

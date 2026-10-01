@@ -47,6 +47,11 @@ flowchart LR
 
 ## Contracts and Invariants
 
+Native canonical snapshot schema 2 retains exact process source references and physical
+identities. Source-bound geometry admission surrounds mutation; canonical JSON is the
+resume reference. Standard DEF export is independently bounded and cannot replace
+process identity, orientation or other canonical state during same-run continuation.
+
 Request schema 6 rejects legacy schema values. Exactly one initial snapshot or
 retained layout supplies the physical state. A completed mutation must pass snapshot
 validation; blocked mutations publish no successful revision. Geometry, timing and
@@ -152,8 +157,11 @@ exact mapped cell pins/OBS, sites and fixed via stacks with the shared standard 
 orientations and MaskGeometry representation. It retains signed ORIGIN, canonical
 layer identity and source content references. Geometry backend range, invalid
 polygons, unsupported MASK/generated-rule families and contradictory layer types
-fail explicitly. Its projection is behaviorally verified; native mutation/output
-consumption remains pending and cell-qualified execution stays blocked.
+fail explicitly. Canonical geometry admission surrounds mutation and preserves exact
+process identity across JSON resume. Floorplan and compatible-site placement consume
+the source declarations; unsupported inserted/resized masters and unnamed vias fail
+output admission. Native routing/access/CTS/ECO closure and full standard interchange
+remain pending, and production capability remains independently blocked.
 
 ## Verification and Change Impact
 

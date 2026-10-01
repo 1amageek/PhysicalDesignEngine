@@ -1,4 +1,6 @@
 import Foundation
+import CircuiteFoundation
+import DEF
 
 public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
     public struct Rect: Sendable, Hashable, Codable {
@@ -55,6 +57,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
 
     public struct Row: Sendable, Hashable, Codable {
         public var id: String
+        public var siteName: String?
+        public var orientation: DEFOrientation
         public var originX: Int64
         public var originY: Int64
         public var siteWidth: Int64
@@ -67,9 +71,13 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             originY: Int64,
             siteWidth: Int64,
             height: Int64,
-            siteCount: Int64
+            siteCount: Int64,
+            siteName: String? = nil,
+            orientation: DEFOrientation = .n
         ) {
             self.id = id
+            self.siteName = siteName
+            self.orientation = orientation
             self.originX = originX
             self.originY = originY
             self.siteWidth = siteWidth
@@ -81,6 +89,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
     public struct Cell: Sendable, Hashable, Codable {
         public var id: String
         public var master: String
+        public var orientation: DEFOrientation
         public var x: Int64
         public var y: Int64
         public var width: Int64
@@ -100,10 +109,12 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             placed: Bool = false,
             locked: Bool = false,
             isClockBuffer: Bool = false,
-            isFiller: Bool = false
+            isFiller: Bool = false,
+            orientation: DEFOrientation = .n
         ) {
             self.id = id
             self.master = master
+            self.orientation = orientation
             self.x = x
             self.y = y
             self.width = width
@@ -123,6 +134,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var y: Int64
         public var netID: String?
         public var direction: String
+        public var accessLayer: Int?
 
         public init(
             id: String,
@@ -131,7 +143,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             x: Int64 = 0,
             y: Int64 = 0,
             netID: String? = nil,
-            direction: String = "input"
+            direction: String = "input",
+            accessLayer: Int? = nil
         ) {
             self.id = id
             self.cellID = cellID
@@ -140,6 +153,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             self.y = y
             self.netID = netID
             self.direction = direction
+            self.accessLayer = accessLayer
         }
     }
 
@@ -254,6 +268,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
 
     public struct Via: Sendable, Hashable, Codable {
         public var id: String
+        public var master: String?
         public var netID: String
         public var x: Int64
         public var y: Int64
@@ -268,7 +283,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             y: Int64,
             lowerLayer: Int,
             upperLayer: Int,
-            isRedundant: Bool = false
+            isRedundant: Bool = false,
+            master: String? = nil
         ) {
             self.id = id
             self.netID = netID
@@ -277,6 +293,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             self.lowerLayer = lowerLayer
             self.upperLayer = upperLayer
             self.isRedundant = isRedundant
+            self.master = master
         }
     }
 
@@ -355,9 +372,11 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
     public var antennaRepairs: [AntennaRepair]
     public var metadata: [String: String]
     public var implementationState: PhysicalDesignImplementationState?
+    public var processManifest: ArtifactReference?
+    public var processAssets: [String: ArtifactReference]
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         topCell: String,
         unitsPerMicron: Int = 1_000,
         die: Rect? = nil,
@@ -375,7 +394,9 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         hotspots: [Hotspot] = [],
         antennaRepairs: [AntennaRepair] = [],
         metadata: [String: String] = [:],
-        implementationState: PhysicalDesignImplementationState? = nil
+        implementationState: PhysicalDesignImplementationState? = nil,
+        processManifest: ArtifactReference? = nil,
+        processAssets: [String: ArtifactReference] = [:]
     ) {
         self.schemaVersion = schemaVersion
         self.topCell = topCell
@@ -396,6 +417,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         self.antennaRepairs = antennaRepairs
         self.metadata = metadata
         self.implementationState = implementationState
+        self.processManifest = processManifest
+        self.processAssets = processAssets
     }
 
     public static func empty(topCell: String) -> Self {
@@ -404,8 +427,11 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
 
     public func validationDiagnostics() -> [String] {
         var diagnostics: [String] = []
-        if schemaVersion != 1 {
+        if schemaVersion != 2 {
             diagnostics.append("unsupported physical snapshot schema version")
+        }
+        if (processManifest == nil) != processAssets.isEmpty || processAssets.keys.contains(where: { $0.isEmpty }) {
+            diagnostics.append("process manifest and asset references must form one complete source binding")
         }
         if topCell.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append("top cell is empty")

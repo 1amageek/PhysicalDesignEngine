@@ -175,6 +175,15 @@ struct PhysicalDesignProcessGeometry: Sendable {
         return master
     }
 
+    func viaShapes(master name: String, x: Int64, y: Int64) throws -> [IRBoundary] {
+        guard let via = vias[name] else { throw PhysicalDesignTechnologyError.invalid("Fixed via \(name) is absent from the selected process views.") }
+        return try via.shapes.map { shape in
+            var translated = shape
+            translated.points = try shape.points.map { try Self.translated(Int64($0.x), Int64($0.y), x: x, y: y) }
+            return translated
+        }
+    }
+
     private func transform(_ shapes: [IRBoundary], master: Master, orientation: DEFOrientation, x: Int64, y: Int64) throws -> [IRBoundary] {
         let rotation = DEFIRConverter.orientationToTransform(orientation)
         func rotate(_ x: Int64, _ y: Int64) throws -> (Int64, Int64) {

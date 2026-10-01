@@ -35,6 +35,21 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         clockTimingModel: PhysicalDesignClockTimingModel? = nil,
         clockTimingModelReference: PhysicalDesignClockTimingModelReference? = nil
     ) async -> Outcome {
+        guard request.processAssets.isEmpty, input.processManifest == nil, input.processAssets.isEmpty else {
+            return blocked(code: "process_geometry_unresolved", message: "Process-bound mutation requires exact source intake through the native executor.",
+                actions: ["execute_with_the_exact_process_artifact_store"])
+        }
+        return await applyPrepared(request, to: input, clockTimingModel: clockTimingModel,
+            clockTimingModelReference: clockTimingModelReference, processGeometry: nil)
+    }
+
+    func applyPrepared(
+        _ request: PhysicalDesignRequest,
+        to input: PhysicalDesignSnapshot,
+        clockTimingModel: PhysicalDesignClockTimingModel? = nil,
+        clockTimingModelReference: PhysicalDesignClockTimingModelReference? = nil,
+        processGeometry: PhysicalDesignProcessGeometry?
+    ) async -> Outcome {
         if Task.isCancelled {
             return Outcome(
                 snapshot: input,
@@ -66,14 +81,22 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
 
+        if let processGeometry {
+            do { try processGeometry.validate(input, requirePlacementRows: request.stage != .floorplan) }
+            catch { return blocked(code: "process_geometry_invalid", message: error.localizedDescription, actions: ["repair_exact_process_geometry"]) }
+        } else if input.processManifest != nil || !input.processAssets.isEmpty {
+            return blocked(code: "process_geometry_unresolved", message: "Process-bound mutation requires exact source intake through the native executor.",
+                actions: ["execute_with_the_exact_process_artifact_store"])
+        }
+
         let outcome: Outcome
         switch request.stage {
         case .floorplan:
-            outcome = floorplan(input, configuration: request.configuration)
+            outcome = floorplan(input, configuration: request.configuration, processGeometry: processGeometry)
         case .powerPlanning:
             outcome = powerPlanning(input, configuration: request.configuration)
         case .placement:
-            outcome = placement(input, configuration: request.configuration)
+            outcome = placement(input, configuration: request.configuration, processGeometry: processGeometry)
         case .clockTreeSynthesis:
             outcome = clockTreeSynthesis(
                 input,
@@ -96,7 +119,12 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .hotspotRepair:
             outcome = hotspotRepair(input, configuration: request.configuration)
         }
-        return validateCompletedOutcome(outcome)
+        let validated = validateCompletedOutcome(outcome)
+        if validated.status == .completed, let snapshot = validated.snapshot, let processGeometry {
+            do { try processGeometry.validate(snapshot) }
+            catch { return blocked(code: "process_geometry_invalid", message: error.localizedDescription, actions: ["repair_native_output_geometry"]) }
+        }
+        return validated
     }
 
     private func validateCompletedOutcome(_ outcome: Outcome) -> Outcome {
@@ -114,9 +142,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func floorplan(
         _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
+        configuration: PhysicalDesignConfiguration,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         var output = input
+        let siteName: String?
+        do { siteName = output.rows.isEmpty ? try processGeometry?.floorplanSite(for: output, configuration: configuration) : nil }
+        catch { return blocked(code: "process_site_invalid", message: error.localizedDescription, actions: ["select_exact_floorplan_site_geometry"]) }
         if output.die == nil {
             output.die = PhysicalDesignSnapshot.Rect(
                 x: 0,
@@ -142,7 +174,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     originY: core.y + index * configuration.rowHeight,
                     siteWidth: configuration.siteWidth,
                     height: configuration.rowHeight,
-                    siteCount: max(1, core.width / configuration.siteWidth)
+                    siteCount: max(1, core.width / configuration.siteWidth),
+                    siteName: siteName
                 )
             }
         }
@@ -350,7 +383,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func placement(
         _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
+        configuration: PhysicalDesignConfiguration,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         guard !input.cells.isEmpty else {
             return blocked(
@@ -405,6 +439,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     height: cell.height
                 )
                 let fitsInRow = cell.height <= row.height && alignedX + cell.width <= rowEnd
+                    && (processGeometry?.canPlace(cell, on: row) ?? true)
                 if fitsInRow, output.blockages.contains(where: { $0.intersects(candidate) }) {
                     blockageConflictCount += 1
                     cursorX = alignedX + max(cell.width, configuration.siteWidth) + configuration.placementSpacing

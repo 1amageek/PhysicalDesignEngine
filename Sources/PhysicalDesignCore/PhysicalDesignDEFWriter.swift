@@ -3,8 +3,32 @@ import Foundation
 public struct PhysicalDesignDEFWriter: Sendable {
     public init() {}
 
-    public func write(_ snapshot: PhysicalDesignSnapshot) -> String {
-        let die = snapshot.die ?? PhysicalDesignSnapshot.Rect(x: 0, y: 0, width: 1, height: 1)
+    public func write(_ snapshot: PhysicalDesignSnapshot) throws -> String {
+        try write(snapshot, processGeometry: nil)
+    }
+
+    func write(_ snapshot: PhysicalDesignSnapshot, processGeometry: PhysicalDesignProcessGeometry?) throws -> String {
+        let issues = snapshot.validationDiagnostics()
+        guard issues.isEmpty, let die = snapshot.die else {
+            throw PhysicalDesignDEFExportError.invalidSnapshot(issues.isEmpty ? "DEF export requires explicit die geometry." : issues.joined(separator: "; "))
+        }
+        if snapshot.processManifest != nil {
+            // Mutation already admitted this output; export checks identity and loss without repeating shape projection.
+            guard let processGeometry, snapshot.processManifest == processGeometry.manifestReference,
+                  snapshot.processAssets == processGeometry.sources else { throw PhysicalDesignDEFExportError.unresolvedProcessSources }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Native process-bound DEF output currently preserves floorplan/cell geometry and connectivity only. Routed metal/vias, top-level port shapes and special nets need exact standard interchange before this API/CLI path may export them successfully.
+            guard snapshot.routes.isEmpty, snapshot.vias.isEmpty, snapshot.powerStructures.isEmpty,
+                  snapshot.pins.allSatisfy({ $0.cellID != nil }) else {
+                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Exact routed/via/top-port/special-net DEF interchange is not complete.")
+            }
+        }
+        func layerName(_ number: Int) throws -> String {
+            guard let processGeometry else { return "M\(number)" }
+            guard let native = Int16(exactly: number), let definition = processGeometry.layers[native] else {
+                throw PhysicalDesignDEFExportError.invalidSnapshot("Layer \(number) has no exact process mapping.")
+            }
+            return definition.name
+        }
         let sortedRows = snapshot.rows.sorted { $0.id < $1.id }
         let sortedCells = snapshot.cells.sorted { $0.id < $1.id }
         let topPins = snapshot.pins.filter { $0.cellID == nil }.sorted { $0.id < $1.id }
@@ -22,18 +46,22 @@ public struct PhysicalDesignDEFWriter: Sendable {
             "DIEAREA ( \(die.x) \(die.y) ) ( \(die.maxX) \(die.maxY) ) ;"
         ]
         for row in sortedRows {
-            lines.append("ROW \(row.id) coreSite \(row.originX) \(row.originY) N DO \(max(1, row.siteCount)) BY 1 STEP \(row.siteWidth) \(row.height) ;")
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Unqualified smoke rows have no LEF site source. The explicit smoke STEP-y height is retained until every such caller supplies a standard site definition; it does not prove process correctness.
+            let stepY = processGeometry == nil ? row.height : 0
+            lines.append("ROW \(row.id) \(row.siteName ?? "coreSite") \(row.originX) \(row.originY) \(row.orientation.rawValue) DO \(row.siteCount) BY 1 STEP \(row.siteWidth) \(stepY) ;")
         }
         for track in snapshot.implementationState?.tracks.sorted(by: { $0.id < $1.id }) ?? [] {
             let axis = track.direction.lowercased() == "vertical" ? "X" : "Y"
-            lines.append("TRACKS \(axis) \(track.origin) DO \(track.count) STEP \(track.spacing) LAYER M\(track.layer) ;")
+            lines.append("TRACKS \(axis) \(track.origin) DO \(track.count) STEP \(track.spacing) LAYER \(try layerName(track.layer)) ;")
         }
         lines.append(contentsOf: [
             "COMPONENTS \(sortedCells.count) ;"
         ])
         for cell in sortedCells {
-            let placement = cell.placed ? "PLACED" : "UNPLACED"
-            lines.append("- \(cell.id) \(cell.master) + \(placement) ( \(cell.x) \(cell.y) ) N + PROPERTY XCI_CELL_WIDTH \"\(cell.width)\" + PROPERTY XCI_CELL_HEIGHT \"\(cell.height)\" ;")
+            let placement = cell.placed ? (cell.locked ? "FIXED" : "PLACED") : "UNPLACED"
+            let location = cell.placed ? " ( \(cell.x) \(cell.y) ) \(cell.orientation.rawValue)" : ""
+            let dimensions = processGeometry == nil ? " + PROPERTY XCI_CELL_WIDTH \"\(cell.width)\" + PROPERTY XCI_CELL_HEIGHT \"\(cell.height)\"" : ""
+            lines.append("- \(cell.id) \(cell.master) + \(placement)\(location)\(dimensions) ;")
         }
         lines.append("END COMPONENTS")
 

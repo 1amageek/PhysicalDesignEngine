@@ -1,7 +1,9 @@
 # PhysicalDesignEngine Fixtures
 
 The schema-6 positive request exercises native geometry-smoke floorplanning and
-emits verified JSON, DEF, design diff and manifest artifacts. The retained Verilog,
+emits verified JSON, DEF, design diff and manifest artifacts. The returned physical
+reference identifies schema-2 JSON as the lossless resume authority; DEF is the
+separate standard interchange artifact. The retained Verilog,
 SDC and synthetic process metadata in `inputs/` have exact byte-count/digest-bound
 identities. They are regression inputs, not foundry PDK or timing qualification.
 `positive-interchange.def` covers the supported DEF parser subset and requires an

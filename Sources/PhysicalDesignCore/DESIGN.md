@@ -32,10 +32,17 @@ release and database persistence remain outside this module.
 ```text
 NativePhysicalDesignExecutor -> ProcessInputs -> TechnologyConstraints -> mutation -> artifacts
     -> MasterGeometry during source-bound DEF decode
-ProcessInputs -> ProcessGeometry projection (native mutation/output connection pending)
+ProcessInputs -> ProcessGeometry -> canonical input admission -> mutation -> output admission
+    -> JSON resume reference + bounded DEF interchange + diff/manifest
 ```
 
 ## Contracts and Invariants
+
+Canonical snapshot schema 2 retains standard cell orientation, source-bound process
+references, pin layer, row site and fixed-via master. ProcessGeometry admits exact
+source geometry before and after mutation. Public bare mutation cannot bypass intake.
+The native result's physical reference is JSON for lossless same-source resume; DEF
+remains the separate bounded standard interchange artifact.
 
 The package design owns stage/result and artifact contracts. With explicit tracks,
 every generated signal/ECO/clock segment must lie on at least one declared track
