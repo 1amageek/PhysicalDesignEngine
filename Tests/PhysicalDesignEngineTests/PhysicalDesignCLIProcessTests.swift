@@ -22,7 +22,7 @@ struct PhysicalDesignCLIProcessTests {
     }
 
     @Test("retained requests execute through the CLI", arguments: [
-        "positive-floorplan-request", "negative-missing-snapshot-request", "negative-native-production-request"
+        "positive-floorplan-request", "positive-technology-floorplan-request", "negative-missing-snapshot-request", "negative-native-production-request"
     ])
     func retainedRequestFixtures(name: String) async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "physical-cli-\(UUID().uuidString)")
@@ -48,11 +48,20 @@ struct PhysicalDesignCLIProcessTests {
         let output = stdout.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         let result = try codec.decode(PhysicalDesignResult.self, from: output)
-        if name == "positive-floorplan-request" {
+        if name.hasPrefix("positive-") {
             #expect(process.terminationStatus == 0)
             #expect(result.status == .completed)
             #expect(result.artifactBindings.count == 4)
             for binding in result.artifactBindings { _ = try await store.read(binding) }
+            if name == "positive-technology-floorplan-request" {
+                let binding = try #require(result.artifactBindings.first { $0.path.hasSuffix("revision.json") })
+                let snapshot = try codec.decode(PhysicalDesignSnapshot.self, from: await store.read(binding))
+                let tracks = try #require(snapshot.implementationState?.tracks)
+                #expect(tracks.first { $0.layer == 2 }?.spacing == 200)
+                #expect(tracks.first { $0.layer == 3 }?.spacing == 400)
+                #expect(tracks.allSatisfy { $0.origin == 10_100 && $0.count == 400 })
+                #expect(snapshot.metadata["technologyLEFContentIDs"] != nil)
+            }
         } else {
             #expect(process.terminationStatus != 0)
             #expect(result.status == .blocked)

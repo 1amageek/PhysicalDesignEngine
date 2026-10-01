@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "processID": "fixture-130nm",
+  "version": "1",
+  "displayName": "Synthetic scalar native technology",
+  "assets": [
+    {
+      "assetID": "tech",
+      "role": "technology",
+      "path": "technology.lef",
+      "kind": "technology",
+      "format": "lef",
+      "required": true,
+      "sha256": "d5cf02dba44209f434f36e81611a1e3032ac14a75cad3e9ba78605aafb6096c2",
+      "byteCount": 397,
+      "cornerIDs": [],
+      "metadata": {}
+    }
+  ],
+  "layers": [
+    {
+      "layerID": "H",
+      "name": "canonicalH",
+      "number": 2,
+      "purpose": "metal",
+      "isRoutingLayer": true,
+      "aliases": [
+        "metH"
+      ]
+    },
+    {
+      "layerID": "V",
+      "name": "metV",
+      "number": 3,
+      "purpose": "metal",
+      "isRoutingLayer": true,
+      "aliases": []
+    }
+  ],
+  "devices": [],
+  "corners": [],
+  "crossViewMappings": [
+    {
+      "mappingID": "routing",
+      "view": "lef",
+      "assetID": "tech",
+      "logicalNames": [],
+      "physicalNames": [],
+      "layerIDs": [
+        "H",
+        "V"
+      ],
+      "deviceIDs": [],
+      "cornerIDs": []
+    }
+  ],
+  "metadata": {
+    "qualification": "synthetic_geometry_only"
+  }
+}

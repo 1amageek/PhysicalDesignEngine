@@ -16,29 +16,8 @@ struct TechnologyConstraintsTests {
     ])
     func technologyPreparation(scenario: String) async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
-        var text = """
-        VERSION 5.8 ;
-        UNITS
-          DATABASE MICRONS 2000 ;
-        END UNITS
-        LAYER metH
-          TYPE ROUTING ;
-          DIRECTION HORIZONTAL ;
-          PITCH 0.2 ;
-          OFFSET 0.1 ;
-          WIDTH 0.1 ;
-          SPACING 0.1 ;
-        END metH
-        LAYER metV
-          TYPE ROUTING ;
-          DIRECTION VERTICAL ;
-          PITCH 0.4 ;
-          OFFSET 0.1 ;
-          WIDTH 0.1 ;
-          SPACING 0.1 ;
-        END metV
-        END LIBRARY
-        """
+        let fixtures = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+        var text = try String(contentsOf: fixtures.appending(path: "inputs/technology.lef"), encoding: .utf8)
         switch scenario {
         case "missing-pitch": text = text.replacingOccurrences(of: "PITCH 0.2 ;", with: "")
         case "missing-offset": text = text.replacingOccurrences(of: "OFFSET 0.1 ;", with: "")
@@ -55,7 +34,7 @@ struct TechnologyConstraintsTests {
         default: break
         }
         let data = scenario == "invalid-encoding" ? Data([0xff]) : Data(text.utf8)
-        let technology = try await store.registerInput(data, relativePath: "inputs/technology.lef", kind: .technology, format: .lef)
+        let technology = try await store.registerInput(data, relativePath: "inputs/relocated/technology.lef", kind: .technology, format: .lef)
         let layers: [PDKLayerDefinition] = [
             .init(layerID: "H", name: "canonicalH", number: 2, purpose: .metal, isRoutingLayer: true, aliases: ["metH"]),
             .init(layerID: "V", name: scenario == "shared-layer" ? "metH" : "metV", number: scenario == "ambiguous-layer" ? 2 : 3, purpose: .metal, isRoutingLayer: true)
@@ -112,6 +91,9 @@ struct TechnologyConstraintsTests {
             #expect(vertical.count == (scenario == "valid" ? 400 : 450))
             if scenario == "aligned-explicit" { #expect(tracks == snapshot.implementationState?.tracks) }
             #expect(result.provenance.inputs.contains(technology.reference))
+            let manifestBinding = try #require(result.payload.runManifest)
+            let saved = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: await store.read(manifestBinding))
+            #expect(saved.technologyLEFs == [technology])
             var omitted = request
             omitted.runID = "test-omitted-technology-\(scenario)"
             omitted.initialSnapshot = output

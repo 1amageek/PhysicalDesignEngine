@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 5,
+  "runID": "fixture-native-technology-floorplan",
+  "executionIntent": "geometrySmoke",
+  "inputs": [
+    {
+      "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002015d1422d9634c06cb33d92f6eae2eb27bd93c0e8a1e27a1b576a5c7a8a63963800000000000000b5",
+      "descriptor": {
+        "role": "input",
+        "kind": "netlist",
+        "format": "verilog"
+      }
+    },
+    {
+      "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020f7138cc5f4c932c34bbf711890546e708e1efcfd21c3851add2479554ef5c3fb0000000000000044",
+      "descriptor": {
+        "role": "input",
+        "kind": "constraint",
+        "format": "sdc"
+      }
+    },
+    {
+      "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600202de17c8f960f5f7513c31608aefcee614cfc0368842fd189060f2df77b3274c600000000000004ab",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "json"
+      }
+    },
+    {
+      "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020d5cf02dba44209f434f36e81611a1e3032ac14a75cad3e9ba78605aafb6096c2000000000000018d",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "lef"
+      }
+    }
+  ],
+  "design": {
+    "artifact": {
+      "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002015d1422d9634c06cb33d92f6eae2eb27bd93c0e8a1e27a1b576a5c7a8a63963800000000000000b5",
+      "descriptor": {
+        "role": "input",
+        "kind": "netlist",
+        "format": "verilog"
+      }
+    },
+    "topDesignName": "fixture_top",
+    "designDigest": "15d1422d9634c06cb33d92f6eae2eb27bd93c0e8a1e27a1b576a5c7a8a639638"
+  },
+  "constraints": {
+    "logicalID": "Fixtures/inputs/constraints.sdc",
+    "reference": {
+      "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020f7138cc5f4c932c34bbf711890546e708e1efcfd21c3851add2479554ef5c3fb0000000000000044",
+      "descriptor": {
+        "role": "input",
+        "kind": "constraint",
+        "format": "sdc"
+      }
+    },
+    "availability": {
+      "kind": "local",
+      "artifactID": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020f7138cc5f4c932c34bbf711890546e708e1efcfd21c3851add2479554ef5c3fb0000000000000044",
+      "rootID": "physical-design-project",
+      "relativePath": [
+        "Fixtures",
+        "inputs",
+        "constraints.sdc"
+      ]
+    }
+  },
+  "requestedModeIDs": [
+    "func"
+  ],
+  "pdk": {
+    "manifest": {
+      "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600202de17c8f960f5f7513c31608aefcee614cfc0368842fd189060f2df77b3274c600000000000004ab",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "json"
+      }
+    },
+    "processID": "fixture-130nm",
+    "version": "1",
+    "digest": "2de17c8f960f5f7513c31608aefcee614cfc0368842fd189060f2df77b3274c6",
+    "manifestLocator": {
+      "location": {
+        "storage": "workspaceRelative",
+        "value": "Fixtures/inputs/technology-pdk.json"
+      },
+      "role": "input",
+      "kind": "technology",
+      "format": "json"
+    }
+  },
+  "stage": "floorplan",
+  "configuration": {
+    "dieWidth": 180000,
+    "dieHeight": 100000,
+    "coreMargin": 10000,
+    "rowHeight": 1000,
+    "siteWidth": 100,
+    "placementSpacing": 20,
+    "preferredRoutingLayers": [
+      2,
+      3
+    ],
+    "maximumRoutingLayer": 5,
+    "targetUtilization": 0.7,
+    "powerNetNames": [
+      "VDD",
+      "VSS"
+    ],
+    "maximumAntennaRatio": 300,
+    "fillWindowSize": 5000,
+    "fillSpacing": 500,
+    "ecoAction": "resize_cell",
+    "ecoDeltaX": 0,
+    "ecoDeltaY": 0,
+    "deterministicSeed": 7
+  },
+  "initialSnapshot": {
+    "schemaVersion": 1,
+    "topCell": "fixture_top",
+    "unitsPerMicron": 1000,
+    "die": null,
+    "core": null,
+    "rows": [],
+    "cells": [
+      {
+        "id": "U1",
+        "master": "NAND2_X1",
+        "x": 20000,
+        "y": 10000,
+        "width": 1000,
+        "height": 1000,
+        "placed": true,
+        "locked": false,
+        "isClockBuffer": false,
+        "isFiller": false
+      },
+      {
+        "id": "U2",
+        "master": "BUF_X1",
+        "x": 30000,
+        "y": 11000,
+        "width": 1000,
+        "height": 1000,
+        "placed": true,
+        "locked": false,
+        "isClockBuffer": false,
+        "isFiller": false
+      }
+    ],
+    "pins": [
+      {
+        "id": "A",
+        "cellID": "U1",
+        "name": "A",
+        "x": 20100,
+        "y": 10500,
+        "netID": "DATA",
+        "direction": "output"
+      },
+      {
+        "id": "Y",
+        "cellID": "U2",
+        "name": "Y",
+        "x": 30500,
+        "y": 11100,
+        "netID": "DATA",
+        "direction": "input"
+      }
+    ],
+    "nets": [
+      {
+        "id": "DATA",
+        "pinIDs": [
+          "A",
+          "Y"
+        ],
+        "isClock": false
+      }
+    ],
+    "blockages": [],
+    "powerStructures": [],
+    "clockTrees": [],
+    "routes": [],
+    "vias": [],
+    "fills": [],
+    "hotspots": [],
+    "antennaRepairs": [],
+    "metadata": {
+      "fixture": "positive"
+    }
+  },
+  "inputBindings": [
+    {
+      "logicalID": "Fixtures/inputs/mapped-design.v",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002015d1422d9634c06cb33d92f6eae2eb27bd93c0e8a1e27a1b576a5c7a8a63963800000000000000b5",
+        "descriptor": {
+          "role": "input",
+          "kind": "netlist",
+          "format": "verilog"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e740000010006736861323536002015d1422d9634c06cb33d92f6eae2eb27bd93c0e8a1e27a1b576a5c7a8a63963800000000000000b5",
+        "rootID": "physical-design-project",
+        "relativePath": [
+          "Fixtures",
+          "inputs",
+          "mapped-design.v"
+        ]
+      }
+    },
+    {
+      "logicalID": "Fixtures/inputs/constraints.sdc",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020f7138cc5f4c932c34bbf711890546e708e1efcfd21c3851add2479554ef5c3fb0000000000000044",
+        "descriptor": {
+          "role": "input",
+          "kind": "constraint",
+          "format": "sdc"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020f7138cc5f4c932c34bbf711890546e708e1efcfd21c3851add2479554ef5c3fb0000000000000044",
+        "rootID": "physical-design-project",
+        "relativePath": [
+          "Fixtures",
+          "inputs",
+          "constraints.sdc"
+        ]
+      }
+    },
+    {
+      "logicalID": "Fixtures/inputs/technology-pdk.json",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600202de17c8f960f5f7513c31608aefcee614cfc0368842fd189060f2df77b3274c600000000000004ab",
+        "descriptor": {
+          "role": "input",
+          "kind": "technology",
+          "format": "json"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e74000001000673686132353600202de17c8f960f5f7513c31608aefcee614cfc0368842fd189060f2df77b3274c600000000000004ab",
+        "rootID": "physical-design-project",
+        "relativePath": [
+          "Fixtures",
+          "inputs",
+          "technology-pdk.json"
+        ]
+      }
+    },
+    {
+      "logicalID": "Fixtures/inputs/technology.lef",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020d5cf02dba44209f434f36e81611a1e3032ac14a75cad3e9ba78605aafb6096c2000000000000018d",
+        "descriptor": {
+          "role": "input",
+          "kind": "technology",
+          "format": "lef"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020d5cf02dba44209f434f36e81611a1e3032ac14a75cad3e9ba78605aafb6096c2000000000000018d",
+        "rootID": "physical-design-project",
+        "relativePath": [
+          "Fixtures",
+          "inputs",
+          "technology.lef"
+        ]
+      }
+    }
+  ]
+}

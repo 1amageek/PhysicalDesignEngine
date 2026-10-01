@@ -34,7 +34,8 @@ Only input bindings with kind `technology` and format `lef` activate this path.
 Absence preserves the existing geometry-smoke path for snapshots without technology
 provenance. Prepared snapshots retain technology content IDs in metadata; later
 stages must supply technology bindings again. Dropping those bindings must fail.
-Every consumed binding must be retained in request provenance. Presence cannot fall back to
+Every consumed binding must be retained in request provenance and the saved run
+manifest's `technologyLEFs` field, including its availability. Presence cannot fall back to
 synthetic constraints. Each supplied LEF must match exactly one manifest technology
 asset by SHA-256 and byte count; its LEF cross-view mapping must include each used
 canonical layer. The decoded manifest process/version and retained digest must

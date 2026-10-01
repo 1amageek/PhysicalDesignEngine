@@ -21,7 +21,7 @@ OpenROAD alone cannot complete PhysicalDesignEngine.
 ## Current Verification
 
 Verification uses Swift 6.4.0 on macOS arm64. All 56 package tests in five suites
-pass, including three retained CLI request cases, with a 120-second process timeout. The routing corrections fail against
+pass, including four retained CLI request cases, with a 120-second process timeout. The routing corrections fail against
 the old code and pass against the current code. Existing native API, artifact,
 review, stage and characterized-CTS regressions pass. The CLI process test requires
 an explicitly built executable and `BUILT_PRODUCTS_DIR` when the SwiftPM test runner
@@ -42,6 +42,13 @@ layer ambiguity, unsupported projections, DBU precision, minimum geometry constr
 explicit-track compatibility and retained-stage omission. Declared-grid admission
 is verified by 24 cases across signal routing, ECO and CTS, including last-track
 acceptance and rejection of off-phase, pre-origin, past-count and overflowing offsets.
+
+The checked-in technology CLI integration replays exact saved manifest bindings
+through floorplan, global and detailed routing. It verifies every input/output
+identity, source-derived grids and preserved routes/vias. Wrong process, omitted
+or tampered source, off-grid access and production intent fail without artifacts.
+Technology availability survives source relocation; older non-technology schema-5
+manifests still decode without the additive technology field.
 
 No WASM, Embedded, foundry PDK, production timing closure or platform release claim
 is inferred from this macOS package verification. Remaining native implementation

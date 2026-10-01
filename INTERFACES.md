@@ -34,6 +34,9 @@ artifact bindings and a domain payload. A completed native stage writes
 `revision.json`, `revision.def`, `design-diff.json` and `run-manifest.json`.
 `PhysicalDesignRunManifest` is schema 5. JSON contains the complete execution
 state; DEF carries the supported interchange subset described by the design.
+The additive schema-5 manifest field `technologyLEFs` retains exact input bindings
+and availability used by native technology preparation. Earlier non-technology
+manifests decode this field as an empty list; new technology runs persist it.
 
 Input-role bindings with kind `technology` and format `lef` activate native scalar
 technology preparation without adding a schema field. Their source/constraint

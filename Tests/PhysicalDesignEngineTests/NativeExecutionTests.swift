@@ -88,6 +88,10 @@ struct NativeExecutionTests {
         #expect(manifest.validationDiagnostics().isEmpty)
         #expect(manifest.proposedLayout?.layoutDigest == result.payload.physicalDesign?.layoutDigest)
         #expect(manifest.artifacts.count == 3)
+        var legacy = try #require(JSONSerialization.jsonObject(with: manifestData) as? [String: Any])
+        legacy.removeValue(forKey: "technologyLEFs")
+        let legacyDecoded = try PhysicalDesignJSONCodec().decode(PhysicalDesignRunManifest.self, from: JSONSerialization.data(withJSONObject: legacy))
+        #expect(legacyDecoded.technologyLEFs.isEmpty)
     }
 
     @Test("review packet round trip validates current artifacts")

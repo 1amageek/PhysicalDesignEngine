@@ -14,6 +14,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
     public var constraints: PhysicalDesignArtifactBinding
     public var requestedModeIDs: [String]
     public var pdk: PDKReference
+    public var technologyLEFs: [PhysicalDesignArtifactBinding]
     public var baseLayout: PhysicalDesignReference?
     public var proposedLayout: PhysicalDesignReference?
     public var designDiff: PhysicalDesignArtifactBinding?
@@ -43,6 +44,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         case constraints
         case requestedModeIDs
         case pdk
+        case technologyLEFs
         case baseLayout
         case proposedLayout
         case designDiff
@@ -90,7 +92,8 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         clockTimingModel: PhysicalDesignClockTimingModelReference? = nil,
         productionConfiguration: PhysicalDesignProductionConfiguration? = nil,
         processEvidence: PhysicalDesignArtifactBinding? = nil,
-        claims: PhysicalDesignCapabilityClaims
+        claims: PhysicalDesignCapabilityClaims,
+        technologyLEFs: [PhysicalDesignArtifactBinding] = []
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -100,6 +103,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         self.constraints = constraints
         self.requestedModeIDs = requestedModeIDs
         self.pdk = pdk
+        self.technologyLEFs = technologyLEFs
         self.baseLayout = baseLayout
         self.proposedLayout = proposedLayout
         self.designDiff = designDiff
@@ -138,6 +142,7 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
         constraints = try container.decode(PhysicalDesignArtifactBinding.self, forKey: .constraints)
         requestedModeIDs = try container.decode([String].self, forKey: .requestedModeIDs)
         pdk = try container.decode(PDKReference.self, forKey: .pdk)
+        technologyLEFs = try container.decodeIfPresent([PhysicalDesignArtifactBinding].self, forKey: .technologyLEFs) ?? []
         baseLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .baseLayout)
         proposedLayout = try container.decodeIfPresent(PhysicalDesignReference.self, forKey: .proposedLayout)
         designDiff = try container.decodeIfPresent(PhysicalDesignArtifactBinding.self, forKey: .designDiff)
@@ -190,6 +195,9 @@ public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
             .map { "design provenance: \($0.message)" })
         if pdk.processID.isEmpty || pdk.version.isEmpty || pdk.digest.isEmpty {
             diagnostics.append("PDK provenance is incomplete")
+        }
+        if technologyLEFs.contains(where: { $0.descriptor.role != .input || $0.descriptor.kind != .technology || $0.descriptor.format != .lef }) {
+            diagnostics.append("technology LEF provenance requires input technology/LEF bindings")
         }
         let sourceFields = [sourceLayoutDigest, sourceParserID, sourceParserVersion]
         if sourceLayoutFormat == nil && sourceFields.contains(where: { $0 != nil }) {

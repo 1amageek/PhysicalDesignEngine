@@ -31,6 +31,9 @@ This closes the source-to-track preparation portion of N1; full N1 remains open.
 Shared native grid admission now checks segment layer/direction, phase and track
 count with overflow-safe coordinate subtraction. Unsupported off-grid access fails
 instead of snapping pins. Full pin-access search and legal via construction remain open.
+Saved manifests retain exact technology availability for subsequent requests;
+the [CLI check](Fixtures/README.md) replays these bindings through cumulative routing
+and verifies source/grid failures without artifacts.
 
 ## Remaining Native Work
 

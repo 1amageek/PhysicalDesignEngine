@@ -384,7 +384,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             implementationConfiguration: request.configuration,
             executionIntent: request.executionIntent,
             clockTimingModel: request.clockTimingModel,
-            claims: outcome.claims
+            claims: outcome.claims,
+            technologyLEFs: request.inputBindings.filter { $0.descriptor.kind == .technology && $0.descriptor.format == .lef }
         )
         let manifestDiagnostics = manifest.validationDiagnostics()
         guard manifestDiagnostics.isEmpty else {
