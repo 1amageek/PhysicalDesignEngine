@@ -409,6 +409,48 @@ struct NativeExecutionTests {
         }
     }
 
+    @Test("declared grids bound signal, ECO and clock segment coordinates",
+          arguments: [PhysicalDesignStage.globalRouting, .detailedRouting, .timingECO, .clockTreeSynthesis],
+          ["aligned", "last-track", "off-phase", "before-origin", "past-count", "overflow-offset"])
+    func declaredRoutingGrid(stage: PhysicalDesignStage, scenario: String) async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var snapshot = PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false)
+        let origin: Int64 = scenario == "off-phase" ? 10_001 : scenario == "before-origin" ? 12_000 : scenario == "overflow-offset" ? .min : 10_000
+        let count: Int64 = scenario == "past-count" ? 1 : scenario == "last-track" ? 16 : 800
+        let tracks: [PhysicalDesignImplementationState.Track] = [
+            .init(id: "h", layer: 3, direction: "horizontal", origin: origin, spacing: 100, count: count),
+            .init(id: "v", layer: 2, direction: "vertical", origin: 10_000, spacing: 100, count: 800)
+        ]
+        snapshot.implementationState = .init(tracks: tracks)
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.preferredRoutingLayers = [2, 3]
+        configuration.ecoAction = .rerouteNet
+        configuration.ecoTargetNetID = "DATA"
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: stage, snapshot: snapshot, configuration: configuration)
+        )
+        if scenario == "aligned" || scenario == "last-track" {
+            #expect(result.status == .completed, "\(result.diagnostics)")
+            let output = try await decodedSnapshot(from: result, store: store)
+            let segments = output.routes.flatMap(\.segments)
+            #expect(!segments.isEmpty)
+            for segment in segments {
+                let track = try #require(tracks.first { $0.layer == segment.layer })
+                let coordinate = segment.y1 == segment.y2 ? segment.y1 : segment.x1
+                let index = (coordinate - track.origin) / track.spacing
+                #expect(coordinate >= track.origin)
+                #expect((coordinate - track.origin) % track.spacing == 0)
+                #expect(index < track.count)
+            }
+        } else {
+            #expect(result.status == .blocked)
+            let code = stage == .clockTreeSynthesis ? "cts_route_track_grid_conflict" : "routing_track_grid_conflict"
+            #expect(result.diagnostics.contains { $0.code.rawValue == code })
+            #expect(result.artifacts.isEmpty)
+            #expect(result.payload.claims.geometry == .blocked)
+        }
+    }
+
     @Test("CTS re-execution replaces family routes, vias and selected layer constraints")
     func ctsTrackReexecution() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()

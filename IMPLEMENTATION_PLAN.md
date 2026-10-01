@@ -28,6 +28,9 @@ Native scalar technology preparation now consumes exact manifest-bound technolog
 LEF through existing input bindings. Its supported subset and rejection policy are
 owned by [TechnologyConstraints](Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
 This closes the source-to-track preparation portion of N1; full N1 remains open.
+Shared native grid admission now checks segment layer/direction, phase and track
+count with overflow-safe coordinate subtraction. Unsupported off-grid access fails
+instead of snapping pins. Full pin-access search and legal via construction remain open.
 
 ## Remaining Native Work
 

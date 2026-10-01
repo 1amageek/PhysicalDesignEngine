@@ -77,8 +77,9 @@ recomputing all sink paths and buffer delays from the retained tree before this
 gate can be removed.
 Geometry-only re-execution clears preceding timing estimates because no timing
 model was evaluated for the new routes.
-This contract checks extent generation and layer direction, not track-grid access,
-PDK layer mappings, cell pin shapes or legal via stacks; those remain incomplete.
+These direction rules compose with declared-grid admission owned by
+[PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md). Native off-grid pin
+access, cell pin shapes, legal via stacks and complete process rules remain incomplete.
 
 Routing checks every segment against other nets on that segment's actual layer.
 Coincident geometry on different layers is not a same-layer spacing violation.

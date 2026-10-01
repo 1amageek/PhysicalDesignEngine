@@ -791,20 +791,27 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         var materializedClockRoutes: [PhysicalDesignSnapshot.Route] = []
         var materializedClockVias: [PhysicalDesignSnapshot.Via] = []
         for tree in output.clockTrees {
-            guard let materialization = materializeClockTree(
-                tree,
-                snapshot: output,
-                core: core,
-                configuration: configuration,
-                horizontalLayer: horizontalLayer,
-                verticalLayer: verticalLayer,
-                existingGeometries: &clockRouteGeometries
-            ) else {
+            let materialization: ClockRouteMaterialization
+            do {
+                guard let value = try materializeClockTree(
+                    tree, snapshot: output, core: core, configuration: configuration,
+                    horizontalLayer: horizontalLayer, verticalLayer: verticalLayer,
+                    existingGeometries: &clockRouteGeometries
+                ) else {
+                    return blocked(
+                        code: "cts_route_materialization_failed",
+                        message: "Clock tree \(tree.id) could not be materialized within the core, blockages and route spacing constraints.",
+                        entity: tree.id,
+                        actions: ["repair_clock_geometry", "move_clock_blockages", "use_a_qualified_external_cts"]
+                    )
+                }
+                materialization = value
+            } catch {
                 return blocked(
-                    code: "cts_route_materialization_failed",
-                    message: "Clock tree \(tree.id) could not be materialized within the core, blockages and route spacing constraints.",
+                    code: "cts_route_track_grid_conflict",
+                    message: "Clock tree \(tree.id) requires off-grid access that is not implemented by native CTS.",
                     entity: tree.id,
-                    actions: ["repair_clock_geometry", "move_clock_blockages", "use_a_qualified_external_cts"]
+                    actions: ["provide_grid_compatible_clock_pin_geometry", "implement_native_pin_access_routing"]
                 )
             }
             materializedClockRoutes.append(contentsOf: materialization.routes)
@@ -853,7 +860,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         var vias: [PhysicalDesignSnapshot.Via]
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Native CTS API/CLI routes enforce declared layer directions but not process track-grid access, pin shapes or via stacks. Production success requires those constraints and complete corner/load/slew closure to be behaviorally verified.
+    private enum ClockRouteGridError: Error {
+        case offGrid
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Native CTS API/CLI routes enforce declared directions and grid positions but do not implement off-grid pin access, process pin shapes or via stacks. Production success requires those constraints and complete corner/load/slew closure to be behaviorally verified.
     private func materializeClockTree(
         _ tree: PhysicalDesignSnapshot.ClockTree,
         snapshot: PhysicalDesignSnapshot,
@@ -862,7 +873,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         horizontalLayer: Int,
         verticalLayer: Int,
         existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)]
-    ) -> ClockRouteMaterialization? {
+    ) throws(ClockRouteGridError) -> ClockRouteMaterialization? {
         let pinByID = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
         guard pinByID[tree.sourcePinID] != nil else { return nil }
         var endpoints: [(netID: String, sourcePinID: String, sinkPinID: String)] = []
@@ -885,7 +896,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             let endpointSource = pinLocation(endpointSourcePin, cells: cellByID)
             let target = pinLocation(sinkPin, cells: cellByID)
             guard endpointSource != target else { return nil }
-            guard let path = clockPath(
+            guard let path = try clockPath(
                 from: endpointSource,
                 to: target,
                 netID: endpoint.netID,
@@ -895,6 +906,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 core: core,
                 blockages: snapshot.blockages,
                 configuration: configuration,
+                tracks: snapshot.implementationState?.tracks ?? [],
                 clockFamilyID: tree.netID,
                 existingGeometries: &existingGeometries
             ) else {
@@ -923,9 +935,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         core: PhysicalDesignSnapshot.Rect,
         blockages: [PhysicalDesignSnapshot.Rect],
         configuration: PhysicalDesignConfiguration,
+        tracks: [PhysicalDesignImplementationState.Track],
         clockFamilyID: String,
         existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)]
-    ) -> ClockPath? {
+    ) throws(ClockRouteGridError) -> ClockPath? {
         let implementationConstraints = configuration.implementationConstraints ?? .default
         var segments: [PhysicalDesignSnapshot.RouteSegment] = []
         var geometries: [(layer: Int, geometry: PhysicalDesignSnapshot.Rect)] = []
@@ -954,6 +967,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             segments.append(segment)
         }
         guard !segments.isEmpty else { return nil }
+        guard conformsToTracks(segments, tracks: tracks) else { throw .offGrid }
         guard geometries.allSatisfy({ layer, geometry in
             core.contains(geometry)
                 && !blockages.contains(where: { $0.intersects(geometry) })
@@ -984,7 +998,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         netID == familyID || netID.hasPrefix("\(familyID)_branch_")
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Global/detailed routing and ECO rerouting use a single-bend geometry algorithm. Declared layer directions are enforced, but production requires legal track-grid access, process pin/via semantics and obstacle search before routing closure can report success.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Global/detailed routing and ECO rerouting use a single-bend geometry algorithm. Declared directions and grid positions are enforced, but production requires off-grid pin access, process pin/via semantics and obstacle search before routing closure can report success.
     private func routing(
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration,
@@ -1134,6 +1148,17 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                         message: "Net \(net.id) contains distinct pins at the same physical location and cannot be represented by a native route segment.",
                         entity: net.id,
                         actions: ["repair_pin_geometry", "use_a_qualified_external_router"]
+                    ))
+                    netFailed = true
+                    break
+                }
+                guard conformsToTracks(pathSegments, tracks: tracks) else {
+                    routeFailures.append(diagnostic(
+                        severity: .error,
+                        code: "routing_track_grid_conflict",
+                        message: "Net \(net.id) requires off-grid access that is not implemented by native routing.",
+                        entity: net.id,
+                        actions: ["provide_grid_compatible_pin_geometry", "implement_native_pin_access_routing"]
                     ))
                     netFailed = true
                     break
@@ -1298,6 +1323,23 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             ],
             note: "Native \(mode) routing completed.\(warningsMessage)"
         )
+    }
+
+    private func conformsToTracks(
+        _ segments: [PhysicalDesignSnapshot.RouteSegment],
+        tracks: [PhysicalDesignImplementationState.Track]
+    ) -> Bool {
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Signal/ECO routing and CTS with no tracks use geometry smoke without grid evidence. Production grid correctness requires retained process tracks and must remain blocked on this path.
+        if tracks.isEmpty { return true }
+        return segments.allSatisfy { segment in
+            let horizontal = segment.y1 == segment.y2
+            let coordinate = horizontal ? segment.y1 : segment.x1
+            return tracks.contains { track in
+                guard track.layer == segment.layer, track.direction.lowercased() == (horizontal ? "horizontal" : "vertical") else { return false }
+                let (offset, overflow) = coordinate.subtractingReportingOverflow(track.origin)
+                return !overflow && offset >= 0 && offset % track.spacing == 0 && offset / track.spacing < track.count
+            }
+        }
     }
 
     private func routingLayers(

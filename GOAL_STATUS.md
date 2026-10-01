@@ -12,7 +12,7 @@ OpenROAD alone cannot complete PhysicalDesignEngine.
 | Native stage API | Executable subset | `PhysicalDesignEngine` and stage wrappers delegate to the shared native executor |
 | Floorplan / power / placement | Deterministic geometry with optional scalar technology LEF | Exact manifest/LEF binding, non-square track extent and JSON/DEF persistence tests; pin/via/process-rule and timing-driven closure remain |
 | CTS | Geometry; model-bound PS estimate for newly constructed trees | Explicit track selection and branch re-execution tests; retained-tree re-characterization is blocked; full corner/load/slew closure remains |
-| Routing / ECO | Limited native Manhattan geometry | Actual-layer spacing, configured track directions and rerouting-via regressions; track-grid access, obstacle search, process-legal via stacks and timing feedback remain |
+| Routing / ECO | Limited native Manhattan geometry with declared-grid admission | Phase/count/overflow checks, actual-layer spacing and rerouting-via regressions; off-grid pin access, obstacle search, process-legal via stacks and timing feedback remain |
 | Canonical artifacts | Immutable JSON, supported DEF, diff and manifest | Byte verification, tamper and review tests; DEF is not full execution-state serialization |
 | Developer CLI | Current schema-5 retained inputs | Actual CLI positive/missing-state/unsupported-production fixtures and digest verification |
 | Native production intent | Explicitly unsupported | `ProductionEvidenceTests.productionImplementationFailsClosed`; incomplete implementation marker retained |
@@ -20,7 +20,7 @@ OpenROAD alone cannot complete PhysicalDesignEngine.
 
 ## Current Verification
 
-Verification uses Swift 6.4.0 on macOS arm64. All 55 package tests in five suites
+Verification uses Swift 6.4.0 on macOS arm64. All 56 package tests in five suites
 pass, including three retained CLI request cases, with a 120-second process timeout. The routing corrections fail against
 the old code and pass against the current code. Existing native API, artifact,
 review, stage and characterized-CTS regressions pass. The CLI process test requires
@@ -39,8 +39,9 @@ and missing directions and production intent fail without output artifacts.
 
 The native technology suite covers 29 scalar LEF cases, including source identity,
 layer ambiguity, unsupported projections, DBU precision, minimum geometry constraints,
-explicit-track compatibility and retained-stage omission. Declared-grid routing
-admission is the next work item and is not proven by technology preparation alone.
+explicit-track compatibility and retained-stage omission. Declared-grid admission
+is verified by 24 cases across signal routing, ECO and CTS, including last-track
+acceptance and rejection of off-phase, pre-origin, past-count and overflowing offsets.
 
 No WASM, Embedded, foundry PDK, production timing closure or platform release claim
 is inferred from this macOS package verification. Remaining native implementation

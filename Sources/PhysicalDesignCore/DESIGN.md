@@ -30,8 +30,7 @@ NativePhysicalDesignExecutor -> TechnologyConstraints -> prepared snapshot
 
 ## Contracts and Invariants
 
-The package design owns stage/result and artifact contracts. Grid admission is the
-planned R9 change: with explicit tracks,
+The package design owns stage/result and artifact contracts. With explicit tracks,
 every generated signal/ECO/clock segment must lie on at least one declared track
 of the same layer and direction: coordinate minus origin is nonnegative, divisible
 by spacing and less than count in track units. Checked subtraction rejects overflow.
