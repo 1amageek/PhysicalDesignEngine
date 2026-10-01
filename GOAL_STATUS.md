@@ -21,7 +21,7 @@ OpenROAD alone cannot complete PhysicalDesignEngine.
 ## Current Verification
 
 Verification uses Swift 6.4.0 on macOS arm64. All 56 package tests in five suites
-pass, including four retained CLI request cases, with a 120-second process timeout. The routing corrections fail against
+pass, including four retained CLI request cases, with a 30-second process timeout. The routing corrections fail against
 the old code and pass against the current code. Existing native API, artifact,
 review, stage and characterized-CTS regressions pass. SwiftPM builds the CLI together
 with the tests; CLI tests locate it from their own resource bundle's products
@@ -35,6 +35,10 @@ The full test body measured about 0.25 seconds. These are warm workflow measurem
 not clean-build or production performance claims. An isolated CLI test also passed
 after removing the built CLI: SwiftPM rebuilt it and ignored a stale products-path
 override. Fixture assertions and failure/digest checks are unchanged.
+Final cumulative verification used the improved command without a products-path
+override: all 56 tests passed in a 1.607-second preparation-inclusive workflow,
+and the retained technology CLI integration passed in 0.182 seconds. This warm
+full-suite test body measured 0.072 seconds; timing varies with build/system caches.
 
 The directional-track matrix covers 20 cases across global routing, detailed
 routing, ECO and CTS, including missing directions and excluded layers. CTS
