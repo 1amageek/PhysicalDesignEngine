@@ -74,34 +74,15 @@ struct PhysicalDesignCLIProcessTests {
     }
 
     private func executableURL(named name: String) throws -> URL {
-        let fileManager = FileManager.default
-        let environment = ProcessInfo.processInfo.environment
-        var candidates: [URL] = []
-        if let productsDirectory = environment["BUILT_PRODUCTS_DIR"] {
-            candidates.append(URL(fileURLWithPath: productsDirectory).appending(path: name))
-        }
-        var processAncestor = URL(fileURLWithPath: CommandLine.arguments[0])
-        for _ in 0..<8 {
-            processAncestor.deleteLastPathComponent()
-            candidates.append(processAncestor.appending(path: name))
-        }
-        var ancestor = Bundle.main.bundleURL
-        for _ in 0..<6 {
-            ancestor.deleteLastPathComponent()
-            candidates.append(ancestor.appending(path: name))
-        }
-        for bundle in Bundle.allBundles + Bundle.allFrameworks {
-            var bundleAncestor = bundle.bundleURL
-            for _ in 0..<6 {
-                bundleAncestor.deleteLastPathComponent()
-                candidates.append(bundleAncestor.appending(path: name))
+        var directory = Bundle.module.bundleURL
+        // SwiftPM resources are adjacent to products or embedded in .xctest/Contents/Resources.
+        for _ in 0..<4 {
+            directory.deleteLastPathComponent()
+            let executable = directory.appending(path: name)
+            if FileManager.default.isExecutableFile(atPath: executable.path(percentEncoded: false)) {
+                return executable
             }
         }
-        guard let executable = candidates.first(where: {
-            fileManager.isExecutableFile(atPath: $0.path(percentEncoded: false))
-        }) else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-        return executable
+        throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: directory.appending(path: name).path])
     }
 }

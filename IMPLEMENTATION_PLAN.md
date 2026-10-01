@@ -55,7 +55,7 @@ eligibility. Until then, retain the native unsupported marker and typed failure.
 
 ## Verification
 
-Use the non-Metal package's `swift test` with a process timeout and explicitly
-built CLI product as documented in [Fixtures/README.md](Fixtures/README.md).
+Use the non-Metal package's `swift test` with a process timeout as documented in
+[Fixtures/README.md](Fixtures/README.md); it builds the CLI and tests together.
 Tests of native geometry cannot establish foundry correctness, full timing closure,
 lossless DEF via interchange, or production eligibility.

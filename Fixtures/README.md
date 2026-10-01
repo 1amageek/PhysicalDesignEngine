@@ -25,10 +25,24 @@ subset/rejection policy is in
 [TechnologyConstraints](../Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
 
 ```bash
-swift build --product physical-design --jobs 4
-BUILT_PRODUCTS_DIR="$(swift build --show-bin-path)" ../scripts/swift-test-timeout.sh 120 --jobs 4
+../scripts/swift-test-timeout.sh 30 --jobs 4 --filter PhysicalDesignCLIProcessTests
+```
+
+`swift test` builds the CLI and test products together. The tests find the CLI
+relative to their own resource bundle's products directory, including when run individually. Separate CLI
+builds and `BUILT_PRODUCTS_DIR` are unnecessary. After changes converge, run the
+package and technology handoff checks once:
+
+```bash
+../scripts/swift-test-timeout.sh 30 --jobs 4
 python3 Fixtures/verify-native-technology.py "$(swift build --show-bin-path)/physical-design"
 ```
+
+Use `--filter <SuiteOrTestName>` for the changed behavior while iterating. Use
+`--skip-build` only for another filter or timing measurement on the same already
+built source/configuration snapshot; rebuild after any source or fixture edit.
+The 30-second timeout covers preparation and tests. A first dependency build can
+use 120 seconds when needed; retain the same checks.
 
 For direct CLI execution, set `fixture_run_root` to a fresh directory containing a
 copy of `Fixtures/`, then execute the already built product:

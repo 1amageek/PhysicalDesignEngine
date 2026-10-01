@@ -147,6 +147,15 @@ immutable artifacts, review packets, characterized CTS and CLI failures.
 [ProductionEvidenceTests](Tests/PhysicalDesignEngineTests/ProductionEvidenceTests.swift)
 owns native production rejection and the release-authority boundary.
 
+SwiftPM's `swift test` builds the CLI and test products together. CLI process tests
+resolve the executable from their own `Bundle.module` resource bundle's products
+directory (adjacent bundle or embedded `.xctest/Contents/Resources`), so lookup
+does not depend on another test loading a bundle or an external products directory.
+The timeout-bounded focused command and package command are documented in
+[Fixtures/README.md](Fixtures/README.md). Build once per changed source snapshot;
+`--skip-build` is only valid while that source/configuration snapshot is unchanged.
+Technology CLI handoff verification runs once after the relevant changes converge.
+
 Routing changes affect global/detailed routing and ECO re-routing through the same
 shared function. DEF changes affect stored output and EDAInteroperability import.
 Verify the affected behavioral tests, then the non-Metal SwiftPM package with a

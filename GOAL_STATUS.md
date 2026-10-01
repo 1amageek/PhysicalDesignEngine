@@ -23,10 +23,18 @@ OpenROAD alone cannot complete PhysicalDesignEngine.
 Verification uses Swift 6.4.0 on macOS arm64. All 56 package tests in five suites
 pass, including four retained CLI request cases, with a 120-second process timeout. The routing corrections fail against
 the old code and pass against the current code. Existing native API, artifact,
-review, stage and characterized-CTS regressions pass. The CLI process test requires
-an explicitly built executable and `BUILT_PRODUCTS_DIR` when the SwiftPM test runner
-cannot infer its product directory. Reproducible commands and the synthetic fixture
+review, stage and characterized-CTS regressions pass. SwiftPM builds the CLI together
+with the tests; CLI tests locate it from their own resource bundle's products
+directory. Reproducible commands and the synthetic fixture
 scope are documented in [Fixtures/README.md](Fixtures/README.md).
+
+On this already-built macOS snapshot, three paired CLI-suite runs measured a median
+3.479 seconds for separate CLI build + bin-path query + test, versus 1.661 seconds
+for a single timeout-bounded `swift test` (52.3% less preparation-inclusive time).
+The full test body measured about 0.25 seconds. These are warm workflow measurements,
+not clean-build or production performance claims. An isolated CLI test also passed
+after removing the built CLI: SwiftPM rebuilt it and ignored a stale products-path
+override. Fixture assertions and failure/digest checks are unchanged.
 
 The directional-track matrix covers 20 cases across global routing, detailed
 routing, ECO and CTS, including missing directions and excluded layers. CTS
