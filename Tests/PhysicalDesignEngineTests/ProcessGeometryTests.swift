@@ -7,6 +7,7 @@ import LayoutIR
 import MaskGeometry
 import PDKCore
 import PhysicalDesignEngine
+import Synchronization
 @testable import PhysicalDesignCore
 
 @Suite("Exact native process geometry projection")
@@ -234,6 +235,127 @@ struct ProcessGeometryTests {
         #expect(result.diagnostics.contains { $0.code.rawValue == "physical_def_export_unsupported" })
         #expect(await store.data(at: "runs/unsupported-via-export/physical-design/floorplan/revision.json") == nil)
         #expect(throws: PhysicalDesignDEFExportError.self) { try PhysicalDesignDEFWriter().write(.empty(topCell: "empty")) }
+    }
+
+    @Test("native DEF intake resolves standard site and reflected master geometry")
+    func nativeSourceDEF() async throws {
+        let (_, base, store) = try await fixture()
+        let data = sourceDEF()
+        let binding = try await store.registerInput(data, relativePath: "inputs/source.def", kind: .layout, format: .def)
+        let reference = PhysicalDesignReference(layoutArtifact: binding, topCell: "fixture_top", layoutDigest: binding.reference.digest.hexadecimalValue)
+        let request = resumed(nativeRequest(base), from: reference, runID: "source-def", stage: .floorplan)
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+        #expect(result.status == .completed, "\(result.diagnostics)")
+        let outputBinding = try #require(result.payload.physicalDesign?.layoutArtifact)
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: await store.read(outputBinding))
+        let row = try #require(output.rows.first)
+        let cell = try #require(output.cells.first)
+        let pin = try #require(output.pins.first)
+        #expect(row.height == 1000 && row.siteName == "unit" && row.siteWidth == 100)
+        #expect(cell.orientation == .fn && cell.locked && cell.width == 2000 && cell.height == 1000)
+        #expect(pin.x == 3800 && pin.y == 3100 && pin.direction == "output" && pin.accessLayer == 2)
+        let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
+        let projections = Mutex(0)
+        let parsed = PhysicalDesignDEFParser().parseResolved(data, cellMasters: inputs.cellViews.values.flatMap(\.macros), processFactory: { units in
+            projections.withLock { $0 += 1 }
+            return try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: units)
+        })
+        #expect(parsed.result.isValid && parsed.geometry?.sources == output.processAssets)
+        #expect(projections.withLock { $0 } == 1)
+    }
+
+    @Test("source-bound DEF rejects semantic loss and unresolved physical references", arguments: [
+        "missing-version", "version-loss", "missing-units", "malformed-units", "late-units", "duplicate-design", "die-overflow", "missing-site", "row-array", "site-step", "row-overflow", "row-union-overflow",
+        "unknown-master", "unknown-pin", "bad-orientation", "cover", "component-attribute", "unknown-header",
+        "net-power", "duplicate-connection", "route", "top-ports", "special-nets", "routing-blockage", "bad-track",
+        "multiple-track-layers", "missing-end", "trailing-input"
+    ])
+    func sourceDEFFailures(scenario: String) async throws {
+        let (_, request, store) = try await fixture()
+        let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
+        var source = try #require(String(data: sourceDEF(), encoding: .utf8))
+        switch scenario {
+        case "missing-version": source = source.replacingOccurrences(of: "VERSION 5.8 ;", with: "")
+        case "version-loss": source = source.replacingOccurrences(of: "VERSION 5.8 ;", with: "VERSION 5.8 UNKNOWN ;")
+        case "missing-units": source = source.replacingOccurrences(of: "UNITS DISTANCE MICRONS 1000 ;", with: "")
+        case "malformed-units": source = source.replacingOccurrences(of: "UNITS DISTANCE MICRONS", with: "UNITS UNKNOWN MICRONS")
+        case "duplicate-design": source = source.replacingOccurrences(of: "DESIGN fixture_top ;", with: "DESIGN other ;\nDESIGN fixture_top ;")
+        case "die-overflow": source = source.replacingOccurrences(of: "( 0 0 ) ( 10000 10000 )", with: "( -9000000000000000000 0 ) ( 9000000000000000000 10000 )")
+        case "late-units": source = source.replacingOccurrences(of: "UNITS DISTANCE MICRONS 1000 ;", with: "").replacingOccurrences(of: "COMPONENTS 1", with: "UNITS DISTANCE MICRONS 1000 ;\nCOMPONENTS 1")
+        case "missing-site": source = source.replacingOccurrences(of: "row unit", with: "row missing")
+        case "row-array": source = source.replacingOccurrences(of: "BY 1 STEP", with: "BY 2 STEP")
+        case "site-step": source = source.replacingOccurrences(of: "STEP 100 0", with: "STEP 200 0")
+        case "row-overflow": source = source.replacingOccurrences(of: "unit 0 3000", with: "unit 9223372036854775807 3000")
+        case "row-union-overflow": source = source.replacingOccurrences(of: "ROW row unit 0 3000 N DO 100 BY 1 STEP 100 0 ;", with: "ROW a unit -9000000000000000000 3000 N DO 1 BY 1 STEP 100 0 ;\nROW b unit 9000000000000000000 3000 N DO 1 BY 1 STEP 100 0 ;")
+        case "unknown-master": source = source.replacingOccurrences(of: "U1 INV_X1", with: "U1 unknown")
+        case "unknown-pin": source = source.replacingOccurrences(of: "U1 Y", with: "U1 missing")
+        case "bad-orientation": source = source.replacingOccurrences(of: ") FN", with: ") unknown")
+        case "cover": source = source.replacingOccurrences(of: "FIXED", with: "COVER")
+        case "component-attribute": source = source.replacingOccurrences(of: ") FN ;", with: ") FN + SOURCE USER ;")
+        case "unknown-header": source = source.replacingOccurrences(of: "COMPONENTS 1", with: "GCELLGRID X 0 DO 2 STEP 100 ;\nCOMPONENTS 1")
+        case "net-power": source = source.replacingOccurrences(of: "( U1 Y ) ;", with: "( U1 Y ) + USE POWER ;")
+        case "duplicate-connection": source = source.replacingOccurrences(of: "( U1 Y ) ;", with: "( U1 Y ) ( U1 Y ) ;")
+        case "route": source = source.replacingOccurrences(of: "( U1 Y ) ;", with: "( U1 Y ) + ROUTED metH ( 3800 3100 ) ( 5000 3100 ) ;")
+        case "top-ports": source = source.replacingOccurrences(of: "NETS 1 ;", with: "PINS 1 ;\n- P + NET N + DIRECTION INPUT + LAYER metH ( -50 -50 ) ( 50 50 ) + PLACED ( 5000 3100 ) N ;\nEND PINS\nNETS 1 ;")
+        case "special-nets": source = source.replacingOccurrences(of: "NETS 1 ;", with: "SPECIALNETS 1 ;\n- VDD + USE POWER + ROUTED metH 100 ( 0 100 ) ( 1000 100 ) ;\nEND SPECIALNETS\nNETS 1 ;")
+        case "routing-blockage": source = source.replacingOccurrences(of: "NETS 1 ;", with: "BLOCKAGES 1 ;\n- LAYER metH RECT ( 0 0 ) ( 100 100 ) ;\nEND BLOCKAGES\nNETS 1 ;")
+        case "bad-track": source = source.replacingOccurrences(of: "COMPONENTS 1", with: "TRACKS Z 3100 DO 5 STEP 200 LAYER metH ;\nCOMPONENTS 1")
+        case "multiple-track-layers": source = source.replacingOccurrences(of: "COMPONENTS 1", with: "TRACKS Y 3100 DO 5 STEP 200 LAYER metH metV ;\nCOMPONENTS 1")
+        case "missing-end": source = source.replacingOccurrences(of: "END DESIGN", with: "")
+        case "trailing-input": source += "\nUNKNOWN ;"
+        default: Issue.record("Unknown source DEF counterexample")
+        }
+        let parsed = PhysicalDesignDEFParser().parseResolved(Data(source.utf8), cellMasters: inputs.cellViews.values.flatMap(\.macros), processFactory: { units in
+            try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: units)
+        })
+        #expect(parsed.result.snapshot == nil && parsed.result.diagnostics.contains { $0.severity == .error }, "\(scenario): \(parsed.result.diagnostics)")
+    }
+
+    @Test("source-bound DEF resolves named layers and declared clock use without name inference")
+    func sourceDEFLayersAndUse() async throws {
+        let (_, request, store) = try await fixture()
+        let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
+        let source = try #require(String(data: sourceDEF(), encoding: .utf8)).replacingOccurrences(of: "COMPONENTS 1", with: "TRACKS Y 3100 DO 5 STEP 200 LAYER metH ;\nPINS 0 ; END PINS\nSPECIALNETS 0 ; END SPECIALNETS\nCOMPONENTS 1").replacingOccurrences(of: "- N (", with: "- clk_data (")
+        for clock in [true, false] {
+            let text = clock ? source.replacingOccurrences(of: "( U1 Y ) ;", with: "( U1 Y ) + USE CLOCK ;") : source
+            let parsed = PhysicalDesignDEFParser().parseResolved(Data(text.utf8), cellMasters: inputs.cellViews.values.flatMap(\.macros), processFactory: { units in
+                try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: units)
+            })
+            let snapshot = try #require(parsed.result.snapshot)
+            #expect(snapshot.implementationState?.tracks.first?.layer == 2)
+            #expect(snapshot.nets.first?.isClock == clock)
+        }
+    }
+
+    private func sourceDEF() -> Data {
+        Data("""
+        VERSION 5.8 ;
+        DESIGN fixture_top ;
+        UNITS DISTANCE MICRONS 1000 ;
+        DIEAREA ( 0 0 ) ( 10000 10000 ) ;
+        ROW row unit 0 3000 N DO 100 BY 1 STEP 100 0 ;
+        COMPONENTS 1 ;
+        - U1 INV_X1 + FIXED ( 2000 3000 ) FN ;
+        END COMPONENTS
+        NETS 1 ;
+        - N ( U1 Y ) ;
+        END NETS
+        END DESIGN
+        """.utf8)
+    }
+
+    @Test("DEF retains each oriented source size instead of unrotated master dimensions", arguments: DEFOrientation.allCases)
+    func sourceDEFOrientedSize(orientation: DEFOrientation) async throws {
+        let (_, request, store) = try await fixture()
+        let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
+        let text = try #require(String(data: sourceDEF(), encoding: .utf8)).replacingOccurrences(of: ") FN", with: ") \(orientation.rawValue)")
+        let parsed = PhysicalDesignDEFParser().parseResolved(Data(text.utf8), processFactory: { units in
+            try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: units)
+        })
+        let cell = try #require(parsed.result.snapshot?.cells.first)
+        let rotated = [DEFOrientation.e, .w, .fe, .fw].contains(orientation)
+        #expect(cell.orientation == orientation)
+        #expect(cell.width == (rotated ? 1000 : 2000) && cell.height == (rotated ? 2000 : 1000))
     }
 
     private func resumed(_ base: PhysicalDesignRequest, from reference: PhysicalDesignReference, runID: String, stage: PhysicalDesignStage,

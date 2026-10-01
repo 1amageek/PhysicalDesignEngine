@@ -51,6 +51,20 @@ by spacing and less than count in track units. Checked subtraction rejects overf
 Canonical cells require explicit dimensions. The DEF standard-format adapter
 resolves admitted LEF masters or requires complete explicit smoke dimensions;
 missing or contradictory geometry fails before snapshot publication.
+With exact process inputs, the DEF adapter constructs the invocation projection
+when explicit UNITS is admitted and returns it to the executor for reuse. ROW uses
+the exact oriented SITE dimensions; STEP defines repetition and does not define
+site height. The current profile admits one horizontal row repetition (BY 1) and
+checks exact contiguous site pitch. Components retain standard orientation and
+oriented master SIZE. Connected component pins retain actual source direction,
+layer and a deterministic declared boundary point after ORIGIN/orientation/placement;
+this reference point is not a proof of width-aware track access or route closure.
+Unknown attributes/sections and incomplete headers fail in the process-bound profile;
+existing track layers resolve explicitly and CLOCK use comes from the declaration.
+Input byte identity is verified before decoding. Combined row/rectangle bounds use
+checked arithmetic, so malformed input cannot trap before geometry admission.
+Qualified DEF top ports/routes remain explicitly unsupported until B6. Source layers
+resolve through the projection; names are never converted by stripping an M prefix.
 The no-track geometry-smoke convention remains an explicitly incomplete path.
 Off-grid pin access is unsupported and blocks; it is not rounded or snapped.
 

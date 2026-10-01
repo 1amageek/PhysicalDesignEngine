@@ -77,7 +77,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             let loaded = try await loadSnapshot(from: request, processInputs: processInputs)
             let processGeometry: PhysicalDesignProcessGeometry?
             if let processInputs, !processInputs.cellViews.isEmpty {
-                processGeometry = try PhysicalDesignProcessGeometry(inputs: processInputs, request: request, units: loaded.snapshot.unitsPerMicron)
+                if let resolved = loaded.processGeometry { processGeometry = resolved }
+                else { processGeometry = try PhysicalDesignProcessGeometry(inputs: processInputs, request: request, units: loaded.snapshot.unitsPerMicron) }
             } else {
                 guard loaded.snapshot.processManifest == nil, loaded.snapshot.processAssets.isEmpty else {
                     throw PhysicalDesignTechnologyError.invalid("A process-bound snapshot cannot resume without its exact cell and technology sources.")
@@ -273,17 +274,27 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 throw PhysicalDesignStoreError.readFailed("input layout byte count does not match the physical design reference")
             }
             let sourceDigest = try hasher.digest(data: data, using: .sha256).hexadecimalValue
+            guard expectedArtifactDigest == sourceDigest, reference.layoutDigest == sourceDigest else {
+                throw PhysicalDesignStoreError.readFailed("layout digest does not match the source layout artifact")
+            }
             let snapshot: PhysicalDesignSnapshot
             let sourceParserID: String
             let sourceParserVersion: String
             let sourceDiagnostics: [PhysicalDesignDEFDiagnostic]
+            var resolvedGeometry: PhysicalDesignProcessGeometry?
             if reference.layoutArtifact.descriptor.format == .json {
                 snapshot = try codec.decode(PhysicalDesignSnapshot.self, from: data)
                 sourceParserID = "physical-design-json-codec"
                 sourceParserVersion = "1.0.0"
                 sourceDiagnostics = []
             } else {
-                let parseResult = defParser.parse(data, cellMasters: processInputs?.cellViews.values.flatMap(\.macros) ?? [])
+                let factory: (@Sendable (Int) throws -> PhysicalDesignProcessGeometry)?
+                if let processInputs, !processInputs.cellViews.isEmpty {
+                    factory = { units in try PhysicalDesignProcessGeometry(inputs: processInputs, request: request, units: units) }
+                } else { factory = nil }
+                let resolved = defParser.parseResolved(data, processFactory: factory)
+                let parseResult = resolved.result
+                resolvedGeometry = resolved.geometry
                 guard let parsedSnapshot = parseResult.snapshot else {
                     throw PhysicalDesignDEFParseError(diagnostics: parseResult.diagnostics)
                 }
@@ -295,9 +306,6 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             guard snapshot.topCell == reference.topCell else {
                 throw PhysicalDesignStoreError.readFailed("layout top cell does not match the physical design reference")
             }
-            guard expectedArtifactDigest == sourceDigest, reference.layoutDigest == sourceDigest else {
-                throw PhysicalDesignStoreError.readFailed("layout digest does not match the source layout artifact")
-            }
             return LoadedSnapshot(
                 snapshot: snapshot,
                 baseReference: reference,
@@ -305,7 +313,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 sourceLayoutDigest: sourceDigest,
                 sourceParserID: sourceParserID,
                 sourceParserVersion: sourceParserVersion,
-                sourceDiagnostics: sourceDiagnostics
+                sourceDiagnostics: sourceDiagnostics,
+                processGeometry: resolvedGeometry
             )
         }
         if let snapshot = request.initialSnapshot {
@@ -711,5 +720,6 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         var sourceParserID: String?
         var sourceParserVersion: String?
         var sourceDiagnostics: [PhysicalDesignDEFDiagnostic]
+        var processGeometry: PhysicalDesignProcessGeometry? = nil
     }
 }

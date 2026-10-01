@@ -88,6 +88,7 @@ public struct PhysicalDesignDEFWriter: Sendable {
                 "( \(pin.cellID ?? "PIN") \(pin.name) )"
             }.joined(separator: " ")
             var line = "- \(net.id) \(pinNames)"
+            if net.isClock { line += " + USE CLOCK" }
             for route in routesByNet[net.id, default: []].sorted(by: { $0.id < $1.id }) {
                 for segment in route.segments.sorted(by: { $0.id < $1.id }) {
                     line += " + ROUTED M\(segment.layer) 0 ( \(segment.x1) \(segment.y1) ) ( \(segment.x2) \(segment.y2) )"
@@ -100,7 +101,7 @@ public struct PhysicalDesignDEFWriter: Sendable {
         if !sortedBlockages.isEmpty {
             lines.append("BLOCKAGES \(sortedBlockages.count) ;")
             for blockage in sortedBlockages {
-                lines.append("- PLACEMENT ( \(blockage.x) \(blockage.y) ) ( \(blockage.maxX) \(blockage.maxY) ) ;")
+                lines.append("- PLACEMENT RECT ( \(blockage.x) \(blockage.y) ) ( \(blockage.maxX) \(blockage.maxY) ) ;")
             }
             lines.append("END BLOCKAGES")
         }

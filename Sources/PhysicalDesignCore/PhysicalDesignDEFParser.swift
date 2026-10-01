@@ -1,16 +1,23 @@
 import Foundation
 import CircuiteFoundation
 import LEF
+import DEF
 
 public struct PhysicalDesignDEFParser: Sendable {
     public static let parserID = "physical-design-def-parser"
-    public static let parserVersion = "2.0.0"
+    public static let parserVersion = "3.0.0"
 
     public init() {}
 
     public func parse(_ data: Data, cellMasters: [LEFMacroDef] = []) -> PhysicalDesignDEFParseResult {
+        parseResolved(data, cellMasters: cellMasters).result
+    }
+
+    func parseResolved(_ data: Data, cellMasters: [LEFMacroDef] = [],
+        processFactory: (@Sendable (Int) throws -> PhysicalDesignProcessGeometry)? = nil
+    ) -> (result: PhysicalDesignDEFParseResult, geometry: PhysicalDesignProcessGeometry?) {
         guard let source = String(data: data, encoding: .utf8) else {
-            return PhysicalDesignDEFParseResult(
+            return (PhysicalDesignDEFParseResult(
                 snapshot: nil,
                 diagnostics: [PhysicalDesignDEFDiagnostic(
                     severity: .error,
@@ -20,15 +27,17 @@ public struct PhysicalDesignDEFParser: Sendable {
                     section: "header",
                     suggestedActions: ["provide_utf8_encoded_def"]
                 )]
-            )
+            ), nil)
         }
-        var state = State(masterGeometry: PhysicalDesignMasterGeometry(cellMasters))
+        var state = State(masterGeometry: PhysicalDesignMasterGeometry(cellMasters), processFactory: processFactory)
         state.parse(source)
-        return state.result()
+        return (state.result(), state.processGeometry)
     }
 
     private struct State {
         let masterGeometry: PhysicalDesignMasterGeometry
+        let processFactory: (@Sendable (Int) throws -> PhysicalDesignProcessGeometry)?
+        var processGeometry: PhysicalDesignProcessGeometry?
         private var tokens: [PhysicalDesignDEFToken] = []
         private var index = 0
         private var diagnostics: [PhysicalDesignDEFDiagnostic] = []
@@ -47,6 +56,7 @@ public struct PhysicalDesignDEFParser: Sendable {
         private var pinIndexByKey: [String: Int] = [:]
         private var topPinNameToID: [String: String] = [:]
         private var hasUnits = false
+        private var hasVersion = false
         private var hasDesign = false
         private var hasDieArea = false
         private var finishedDesign = false
@@ -84,7 +94,7 @@ public struct PhysicalDesignDEFParser: Sendable {
                     parseTopLevelEnd(token)
                 default:
                     addDiagnostic(
-                        severity: .warning,
+                        severity: processFactory == nil ? .warning : .error,
                         code: "def_unsupported_section",
                         message: "DEF statement or section \(token.text) is outside the supported interchange subset.",
                         token: token,
@@ -93,6 +103,11 @@ public struct PhysicalDesignDEFParser: Sendable {
                     )
                     skipUnsupportedStatement(named: token.text)
                 }
+            }
+
+            if processFactory != nil, !hasVersion || !hasUnits || !finishedDesign || !isAtEnd {
+                addDiagnostic(severity: .error, code: "def_process_header_incomplete", message: "Process-bound DEF requires explicit VERSION/UNITS, END DESIGN and no trailing statements.",
+                    line: firstLine, section: "header", suggestedActions: ["supply_a_complete_exact_def_header"])
             }
 
             if !hasDesign {
@@ -123,7 +138,13 @@ public struct PhysicalDesignDEFParser: Sendable {
             }
 
             var resultDiagnostics = diagnostics
-            let inferredCore = coreInferredFromRows()
+            let inferredCore: PhysicalDesignSnapshot.Rect?
+            do { inferredCore = try coreInferredFromRows() }
+            catch {
+                resultDiagnostics.append(.init(severity: .error, code: "def_row_geometry_invalid", message: error.localizedDescription,
+                    line: firstLine, section: "ROW", suggestedActions: ["repair_representable_row_extents"]))
+                return PhysicalDesignDEFParseResult(snapshot: nil, diagnostics: resultDiagnostics)
+            }
             if inferredCore != nil, !rows.isEmpty {
                 resultDiagnostics.append(PhysicalDesignDEFDiagnostic(
                     severity: .warning,
@@ -148,7 +169,9 @@ public struct PhysicalDesignDEFParser: Sendable {
                 },
                 powerStructures: powerStructures.sorted { $0.id < $1.id },
                 routes: routes.sorted { $0.id < $1.id },
-                implementationState: implementationState()
+                implementationState: implementationState(),
+                processManifest: processGeometry?.manifestReference,
+                processAssets: processGeometry?.sources ?? [:]
             )
             let snapshotDiagnostics = snapshot.validationDiagnostics()
             if !snapshotDiagnostics.isEmpty {
@@ -209,10 +232,16 @@ public struct PhysicalDesignDEFParser: Sendable {
 
         private mutating func parseVersion() {
             let statement = readStatementTokens()
+            if processFactory != nil, hasVersion || statement.count != 1 {
+                addDiagnostic(severity: .error, code: "def_process_version_unsupported", message: "Process-bound DEF requires one exact VERSION declaration.",
+                    token: statement.first ?? tokens[max(0, index - 1)], section: "header", suggestedActions: ["declare_one_exact_def_version"])
+                return
+            }
+            hasVersion = true
             guard let version = statement.first else { return }
             if version.text != "5.8" {
                 addDiagnostic(
-                    severity: .warning,
+                    severity: processFactory == nil ? .warning : .error,
                     code: "def_version_not_qualified",
                     message: "DEF version \(version.text) is parsed using the supported 5.8 subset.",
                     token: version,
@@ -224,6 +253,11 @@ public struct PhysicalDesignDEFParser: Sendable {
 
         private mutating func parseDesign(_ token: PhysicalDesignDEFToken) {
             let statement = readStatementTokens()
+            if processFactory != nil, hasDesign || statement.count != 1 {
+                addDiagnostic(severity: .error, code: "def_process_design_unsupported", message: "Process-bound DEF requires one exact DESIGN declaration.",
+                    token: token, section: "header", suggestedActions: ["declare_one_exact_design_name"])
+                return
+            }
             guard let name = statement.first, !name.text.isEmpty else {
                 addDiagnostic(
                     severity: .error,
@@ -241,6 +275,11 @@ public struct PhysicalDesignDEFParser: Sendable {
 
         private mutating func parseUnits(_ token: PhysicalDesignDEFToken) {
             let statement = readStatementTokens()
+            if processFactory != nil, statement.count != 3 || statement[0].text.uppercased() != "DISTANCE" || statement[1].text.uppercased() != "MICRONS" {
+                addDiagnostic(severity: .error, code: "def_process_units_unsupported", message: "Process-bound DEF requires exact UNITS DISTANCE MICRONS syntax.",
+                    token: token, section: "header", suggestedActions: ["declare_one_exact_units_scale"])
+                return
+            }
             guard let micronIndex = statement.firstIndex(where: { $0.text.uppercased() == "MICRONS" }), micronIndex + 1 < statement.count else {
                 addDiagnostic(
                     severity: .error,
@@ -272,10 +311,20 @@ public struct PhysicalDesignDEFParser: Sendable {
             }
             unitsPerMicron = Int(value)
             hasUnits = true
+            if let processFactory {
+                do { processGeometry = try processFactory(unitsPerMicron) }
+                catch { addDiagnostic(severity: .error, code: "def_process_geometry_unresolved", message: error.localizedDescription,
+                    token: token, section: "header", suggestedActions: ["supply_exact_representable_process_views"]) }
+            }
         }
 
         private mutating func parseDieArea(_ token: PhysicalDesignDEFToken) {
             let statement = readStatementTokens()
+            if processFactory != nil, hasDieArea || statement.count != 8 {
+                addDiagnostic(severity: .error, code: "def_process_die_unsupported", message: "The process-bound profile requires one rectangular DIEAREA declaration.",
+                    token: token, section: "DIEAREA", suggestedActions: ["declare_one_exact_rectangular_die"])
+                return
+            }
             guard let rect = rectangle(from: statement, section: "DIEAREA") else {
                 addDiagnostic(
                     severity: .error,
@@ -306,6 +355,34 @@ public struct PhysicalDesignDEFParser: Sendable {
             }
             guard let originX = integer(statement[2], section: "ROW"), let originY = integer(statement[3], section: "ROW") else { return }
             let uppercased = statement.map { $0.text.uppercased() }
+            if processFactory != nil {
+                guard statement.count == 12, let processGeometry, let site = processGeometry.sites[statement[1].text],
+                      let orientation = DEFOrientation(rawValue: uppercased[4]),
+                      let doIndex = uppercased.firstIndex(of: "DO"), doIndex == 5,
+                      uppercased[doIndex + 2] == "BY", let count = integer(statement[doIndex + 1], section: "ROW"), count > 0,
+                      statement[doIndex + 3].text == "1",
+                      let stepIndex = uppercased.firstIndex(of: "STEP"), stepIndex == 9,
+                      let stepX = integer(statement[stepIndex + 1], section: "ROW"),
+                      let stepY = integer(statement[stepIndex + 2], section: "ROW"), stepY == 0 else {
+                    addDiagnostic(severity: .error, code: "def_process_row_unresolved", message: "ROW requires explicit units, one declared site/orientation, BY 1 and STEP-y 0 for the current native profile.",
+                        token: token, section: "ROW", suggestedActions: ["supply_exact_supported_site_repetition"])
+                    return
+                }
+                let rotated = [DEFOrientation.e, .w, .fe, .fw].contains(orientation)
+                let width = rotated ? site.height : site.width
+                let height = rotated ? site.width : site.height
+                let (extent, extentOverflow) = width.multipliedReportingOverflow(by: count)
+                let (_, xOverflow) = originX.addingReportingOverflow(extent)
+                let (_, yOverflow) = originY.addingReportingOverflow(height)
+                guard (stepX == width || (count == 1 && stepX == 0)), !extentOverflow, !xOverflow, !yOverflow else {
+                    addDiagnostic(severity: .error, code: "def_process_row_unresolved", message: "ROW repetition must match exact oriented SITE width and representable extents.",
+                        token: token, section: "ROW", suggestedActions: ["repair_site_pitch_and_row_extents"])
+                    return
+                }
+                rows.append(.init(id: id.text, originX: originX, originY: originY, siteWidth: width, height: height, siteCount: count,
+                    siteName: statement[1].text, orientation: orientation))
+                return
+            }
             guard let doIndex = uppercased.firstIndex(of: "DO"), doIndex + 1 < statement.count,
                   let siteCount = integer(statement[doIndex + 1], section: "ROW"),
                   let stepIndex = uppercased.firstIndex(of: "STEP"), stepIndex + 2 < statement.count,
@@ -353,6 +430,11 @@ public struct PhysicalDesignDEFParser: Sendable {
                 return
             }
             let direction = axis.text.uppercased() == "X" ? "vertical" : "horizontal"
+            if processFactory != nil, (!["X", "Y"].contains(axis.text.uppercased()) || statement.count != 8 || doIndex != 2 || stepIndex != 4 || layerIndex != 6) {
+                addDiagnostic(severity: .error, code: "def_process_track_unsupported", message: "The current process-bound TRACKS profile requires one X/Y axis and one exact layer.",
+                    token: token, section: "TRACKS", suggestedActions: ["split_tracks_by_declared_layer"])
+                return
+            }
             tracks.append(PhysicalDesignImplementationState.Track(
                 id: "track_M\(layer)_\(axis.text.uppercased())",
                 layer: layer,
@@ -393,6 +475,17 @@ public struct PhysicalDesignDEFParser: Sendable {
             }
             let id = item[0].text
             let master = item[1].text
+            if processFactory != nil {
+                let clauses = item.indices.filter { item[$0].text == "+" }
+                let bareUnplaced = clauses.isEmpty && item.count == 2
+                let placedClause = clauses.count == 1 && clauses.first == 2 && item.count == 9 && ["PLACED", "FIXED"].contains(item[3].text.uppercased())
+                let unplacedClause = clauses.count == 1 && clauses.first == 2 && item.count == 4 && item[3].text.uppercased() == "UNPLACED"
+                guard bareUnplaced || placedClause || unplacedClause else {
+                    addDiagnostic(severity: .error, code: "def_process_component_unsupported", message: "The process-bound component profile retains one PLACED/FIXED/UNPLACED clause; other attributes require exact standard interchange.",
+                        token: item[0], section: "COMPONENTS", entity: id, suggestedActions: ["provide_supported_exact_component_attributes"])
+                    return
+                }
+            }
             var x: Int64 = 0
             var y: Int64 = 0
             var widths: [Int64] = []
@@ -400,6 +493,7 @@ public struct PhysicalDesignDEFParser: Sendable {
             var placed = false
             var locked = false
             var hasPlacement = false
+            var orientation: DEFOrientation = .n
             let uppercased = item.map { $0.text.uppercased() }
             for position in item.indices {
                 if uppercased[position] == "PLACED" || uppercased[position] == "FIXED" || uppercased[position] == "COVER" {
@@ -409,12 +503,19 @@ public struct PhysicalDesignDEFParser: Sendable {
                         x = point.0
                         y = point.1
                         hasPlacement = true
-                        // FIXME(INCOMPLETE_IMPLEMENTATION): DEF API/CLI placement currently supports N only. Non-N master origin, pin and obstruction transforms require exact process geometry and behavioral verification before this branch can succeed.
-                        guard position + 5 < item.count, uppercased[position + 5] == "N" else {
+                        guard position + 5 < item.count, let parsedOrientation = DEFOrientation(rawValue: uppercased[position + 5]) else {
                             addDiagnostic(severity: .error, code: "def_component_orientation_unsupported",
-                                message: "Component \(id) requires an explicit supported N orientation.",
+                                message: "Component \(id) requires an explicit standard orientation.",
                                 token: item[position], section: "COMPONENTS", entity: id,
                                 suggestedActions: ["provide_supported_orientation_or_implement_exact_process_transforms"])
+                            return
+                        }
+                        orientation = parsedOrientation
+                        // FIXME(INCOMPLETE_IMPLEMENTATION): Unqualified DEF dimension-only imports support N only. Other orientations require exact source port/OBS/site projection; API callers must provide process sources through the executor until full independent interchange is implemented.
+                        if processFactory == nil, orientation != .n {
+                            addDiagnostic(severity: .error, code: "def_component_orientation_unsupported",
+                                message: "Component \(id) requires source-bound orientation geometry.", token: item[position], section: "COMPONENTS", entity: id,
+                                suggestedActions: ["provide_exact_process_sources"])
                             return
                         }
                     }
@@ -446,7 +547,7 @@ public struct PhysicalDesignDEFParser: Sendable {
                     suggestedActions: ["provide_component_placement_or_mark_it_unplaced"]
                 )
             }
-            guard widths.count <= 1, heights.count <= 1, masterGeometry.isEmpty || hasUnits else {
+            guard widths.count <= 1, heights.count <= 1, (masterGeometry.isEmpty && processFactory == nil) || hasUnits else {
                 addDiagnostic(severity: .error, code: "def_cell_geometry_unresolved",
                     message: "Component \(id) requires unique dimensions and explicit DEF units for master resolution.",
                     token: item[0], section: "COMPONENTS", entity: id,
@@ -455,9 +556,14 @@ public struct PhysicalDesignDEFParser: Sendable {
             }
             var width = widths.first
             var height = heights.first
-            if !masterGeometry.isEmpty {
+            if !masterGeometry.isEmpty || processFactory != nil {
                 do {
-                    let resolved = try masterGeometry.dimensions(of: master, units: unitsPerMicron)
+                    let resolved: (width: Int64, height: Int64)
+                    if let processGeometry { resolved = try processGeometry.dimensions(master: master, orientation: orientation) }
+                    else {
+                        guard processFactory == nil else { throw PhysicalDesignTechnologyError.invalid("Explicit units and exact process projection are required before component geometry.") }
+                        resolved = try masterGeometry.dimensions(of: master, units: unitsPerMicron)
+                    }
                     guard (width == nil || width == resolved.width), (height == nil || height == resolved.height) else {
                         throw PhysicalDesignTechnologyError.invalid("Explicit DEF dimensions contradict LEF master \(master).")
                     }
@@ -497,12 +603,18 @@ public struct PhysicalDesignDEFParser: Sendable {
                 width: width,
                 height: height,
                 placed: placed,
-                locked: locked
+                locked: locked,
+                orientation: orientation
             ))
         }
 
         private mutating func parsePins(_ token: PhysicalDesignDEFToken) {
             guard let expectedCount = beginSection(named: "PINS", token: token) else { return }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Process-bound DEF top ports require exact layer shapes and placement transforms. Native API/CLI must reject this section until B6 preserves those standard semantics instead of synthesizing ports.
+            if processFactory != nil, expectedCount > 0 {
+                addDiagnostic(severity: .error, code: "def_process_top_ports_unsupported", message: "Exact process-bound DEF top-port interchange is not complete.",
+                    token: token, section: "PINS", suggestedActions: ["provide_supported_exact_top_port_interchange"])
+            }
             var actualCount = 0
             while !isAtEnd {
                 if isEndSection(named: "PINS") {
@@ -624,17 +736,29 @@ public struct PhysicalDesignDEFParser: Sendable {
             }
             var pinIDs: [String] = []
             var position = 1
-            while position + 3 < item.count {
-                if item[position].text == "(", item[position + 3].text == ")",
-                   Int64(item[position + 1].text) == nil, Int64(item[position + 2].text) == nil {
+            var declaredClock: Bool?
+            while position < item.count {
+                if position + 3 < item.count, item[position].text == "(", item[position + 3].text == ")",
+                   processFactory != nil || (Int64(item[position + 1].text) == nil && Int64(item[position + 2].text) == nil) {
                     let cellName = item[position + 1].text
                     let pinName = item[position + 2].text
                     let pinID = ensurePin(cellID: cellName.uppercased() == "PIN" ? nil : cellName, name: pinName, token: item[position + 1])
                     if !pinIDs.contains(pinID) {
                         pinIDs.append(pinID)
+                    } else if processFactory != nil {
+                        addDiagnostic(severity: .error, code: "def_process_connection_duplicate", message: "A process-bound net cannot repeat one connection.",
+                            token: item[position], section: "NETS", entity: netID, suggestedActions: ["declare_each_exact_connection_once"])
                     }
                     setNetID(netID, forPinID: pinID)
                     position += 4
+                } else if processFactory != nil, position + 2 < item.count, item[position].text == "+",
+                          item[position + 1].text.uppercased() == "USE", ["SIGNAL", "CLOCK"].contains(item[position + 2].text.uppercased()), declaredClock == nil {
+                    declaredClock = item[position + 2].text.uppercased() == "CLOCK"
+                    position += 3
+                } else if processFactory != nil {
+                    addDiagnostic(severity: .error, code: "def_process_net_unsupported", message: "Process-bound NETS currently retain exact connection pairs and one SIGNAL/CLOCK use only.",
+                        token: item[position], section: "NETS", entity: netID, suggestedActions: ["provide_supported_exact_net_attributes"])
+                    return
                 } else {
                     position += 1
                 }
@@ -655,7 +779,7 @@ public struct PhysicalDesignDEFParser: Sendable {
             nets.append(PhysicalDesignSnapshot.Net(
                 id: netID,
                 pinIDs: pinIDs.sorted(),
-                isClock: netID.lowercased().contains("clk"),
+                isClock: processFactory == nil ? netID.lowercased().contains("clk") : declaredClock == true,
                 antennaRatio: nil,
                 maximumAntennaRatio: nil
             ))
@@ -671,6 +795,12 @@ public struct PhysicalDesignDEFParser: Sendable {
                 }
                 guard consumeSectionMarker(named: "BLOCKAGES") else { continue }
                 let item = readStatementTokens()
+                if processFactory != nil, item.count != 10 || item.first?.text.uppercased() != "PLACEMENT" || item[1].text.uppercased() != "RECT" {
+                    addDiagnostic(severity: .error, code: "def_process_blockage_unsupported", message: "The process-bound profile retains rectangular hard placement blockages only.",
+                        token: item.first ?? token, section: "BLOCKAGES", suggestedActions: ["provide_supported_exact_blockage_geometry"])
+                    actualCount += 1
+                    continue
+                }
                 guard let rect = rectangle(from: item, section: "BLOCKAGES") else {
                     addDiagnostic(
                         severity: .error,
@@ -691,6 +821,11 @@ public struct PhysicalDesignDEFParser: Sendable {
 
         private mutating func parseSpecialNets(_ token: PhysicalDesignDEFToken) {
             guard let expectedCount = beginSection(named: "SPECIALNETS", token: token) else { return }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Native process-bound special-net import needs exact widths/vias/connectivity. Reject this API/CLI section until B6 retains the full standard contract.
+            if processFactory != nil, expectedCount > 0 {
+                addDiagnostic(severity: .error, code: "def_process_special_nets_unsupported", message: "Exact process-bound SPECIALNETS interchange is not complete.",
+                    token: token, section: "SPECIALNETS", suggestedActions: ["provide_supported_exact_special_net_interchange"])
+            }
             var actualCount = 0
             while !isAtEnd {
                 if isEndSection(named: "SPECIALNETS") {
@@ -874,7 +1009,6 @@ public struct PhysicalDesignDEFParser: Sendable {
             )
         }
 
-        // FIXME(INCOMPLETE_IMPLEMENTATION): DEF API/CLI and interchange imports currently synthesize unresolved component pins at the cell origin. Exact LEF port, direction and layer resolution must be connected before imported pins can support qualified physical correctness.
         private mutating func ensurePin(cellID: String?, name: String, token: PhysicalDesignDEFToken) -> String {
             let key = pinKey(cellID: cellID, name: name)
             if let existingIndex = pinIndexByKey[key] {
@@ -893,6 +1027,27 @@ public struct PhysicalDesignDEFParser: Sendable {
             }
             let id = cellID.map { "pin_\($0)_\(name)" } ?? topPinNameToID[name] ?? "pin_\(name)"
             let cell = cellID.flatMap { cellID in cells.first { $0.id == cellID } }
+            if processFactory != nil {
+                do {
+                    guard let processGeometry, let cell, let pin = processGeometry.masters[cell.master]?.pins[name], let direction = pin.definition.direction else {
+                        throw PhysicalDesignTechnologyError.invalid("Connected component pin \(cellID ?? "PIN")/\(name) requires one exact declared master port and direction.")
+                    }
+                    let shapes = try processGeometry.pinShapes(master: cell.master, pin: name, orientation: cell.orientation, x: cell.x, y: cell.y)
+                    guard let shape = shapes.first(where: { processGeometry.layers[$0.layer]?.isRoutingLayer == true }), let point = shape.points.first else {
+                        throw PhysicalDesignTechnologyError.invalid("Connected component pin \(cell.id)/\(name) requires declared routing geometry.")
+                    }
+                    // FIXME(INCOMPLETE_IMPLEMENTATION): Source-bound DEF intake selects a deterministic actual port boundary point, not a legal wire-width/track access proof. Native routing must remain unqualified until process-aware access selection and route closure are implemented.
+                    let resolved = PhysicalDesignSnapshot.Pin(id: id, cellID: cell.id, name: name, x: Int64(point.x), y: Int64(point.y),
+                        direction: direction.rawValue.lowercased(), accessLayer: Int(shape.layer))
+                    pinIndexByKey[key] = pins.count
+                    pins.append(resolved)
+                } catch {
+                    addDiagnostic(severity: .error, code: "def_process_pin_unresolved", message: error.localizedDescription, token: token,
+                        section: "NETS", entity: id, suggestedActions: ["supply_exact_declared_master_pin_geometry"])
+                }
+                return id
+            }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Unqualified DEF API/interchange imports synthesize component pins at the cell origin. Exact source-bound imports use the branch above; independent unqualified interchange must fail or resolve real ports before it can support physical correctness.
             let pin = PhysicalDesignSnapshot.Pin(
                 id: id,
                 cellID: cellID,
@@ -923,23 +1078,37 @@ public struct PhysicalDesignDEFParser: Sendable {
             )
         }
 
-        private func coreInferredFromRows() -> PhysicalDesignSnapshot.Rect? {
+        private func coreInferredFromRows() throws -> PhysicalDesignSnapshot.Rect? {
             guard let firstRow = rows.first else { return nil }
             var minX = firstRow.originX
             var minY = firstRow.originY
-            var maxX = firstRow.originX + firstRow.siteCount * firstRow.siteWidth
-            var maxY = firstRow.originY + firstRow.height
-            for row in rows.dropFirst() {
+            var maxX = Int64.min
+            var maxY = Int64.min
+            for row in rows {
+                let (width, widthOverflow) = row.siteCount.multipliedReportingOverflow(by: row.siteWidth)
+                let (endX, xOverflow) = row.originX.addingReportingOverflow(width)
+                let (endY, yOverflow) = row.originY.addingReportingOverflow(row.height)
+                guard row.siteCount > 0, row.siteWidth > 0, row.height > 0, !widthOverflow, !xOverflow, !yOverflow else {
+                    throw PhysicalDesignTechnologyError.invalid("ROW geometry requires positive and representable extents.")
+                }
                 minX = min(minX, row.originX)
                 minY = min(minY, row.originY)
-                maxX = max(maxX, row.originX + row.siteCount * row.siteWidth)
-                maxY = max(maxY, row.originY + row.height)
+                maxX = max(maxX, endX)
+                maxY = max(maxY, endY)
             }
-            guard maxX > minX, maxY > minY else { return nil }
-            return PhysicalDesignSnapshot.Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+            let (width, widthOverflow) = maxX.subtractingReportingOverflow(minX)
+            let (height, heightOverflow) = maxY.subtractingReportingOverflow(minY)
+            guard !widthOverflow, !heightOverflow else { throw PhysicalDesignTechnologyError.invalid("Combined ROW bounds exceed the coordinate range.") }
+            return PhysicalDesignSnapshot.Rect(x: minX, y: minY, width: width, height: height)
         }
 
         private mutating func parseRoutes(in item: [PhysicalDesignDEFToken], netID: String) -> [PhysicalDesignSnapshot.Route] {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Process-bound DEF route/via semantic preservation is owned by B6. Native API/CLI must reject existing routed clauses until that standard import is exact.
+            if processFactory != nil, let token = item.first(where: { ["ROUTED", "FIXED", "COVER", "NEW"].contains($0.text.uppercased()) }) {
+                addDiagnostic(severity: .error, code: "def_process_routes_unsupported", message: "Exact process-bound DEF route/via interchange is not complete.",
+                    token: token, section: "NETS", entity: netID, suggestedActions: ["provide_supported_exact_route_interchange"])
+                return []
+            }
             var result: [PhysicalDesignSnapshot.Route] = []
             var routeOrdinal = 0
             for position in item.indices where item[position].text.uppercased() == "ROUTED" {
@@ -1023,7 +1192,14 @@ public struct PhysicalDesignDEFParser: Sendable {
                 )
                 return nil
             }
-            return PhysicalDesignSnapshot.Rect(x: x, y: y, width: maxX - x, height: maxY - y)
+            let (width, widthOverflow) = maxX.subtractingReportingOverflow(x)
+            let (height, heightOverflow) = maxY.subtractingReportingOverflow(y)
+            guard !widthOverflow, !heightOverflow else {
+                addDiagnostic(severity: .error, code: "def_rectangle_overflow", message: "\(section) rectangle exceeds the coordinate range.",
+                    token: statement.first ?? tokens[max(0, index - 1)], section: section, suggestedActions: ["repair_representable_rectangle_extents"])
+                return nil
+            }
+            return PhysicalDesignSnapshot.Rect(x: x, y: y, width: width, height: height)
         }
 
         private mutating func coordinatePair(in statement: [PhysicalDesignDEFToken], start: Int, section: String) -> (Int64, Int64)? {
@@ -1058,6 +1234,11 @@ public struct PhysicalDesignDEFParser: Sendable {
         }
 
         private func parseLayer(_ token: PhysicalDesignDEFToken) -> Int? {
+            if processFactory != nil {
+                let definitions = processGeometry?.layers.values.filter { $0.name == token.text || $0.aliases.contains(token.text) } ?? []
+                guard definitions.count == 1 else { return nil }
+                return definitions.first?.number
+            }
             let value = token.text.uppercased().replacingOccurrences(of: "M", with: "")
             return Int(value)
         }
