@@ -906,12 +906,25 @@ struct NativeExecutionTests {
         }
     }
 
+    @Test("master replacement cannot fabricate source-free geometry")
+    func sourceFreeReplacementIsBlocked() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.ecoTargetCellID = "U1"
+        configuration.ecoReplacementMaster = "BUF_X1"
+        let request = PhysicalDesignFixtureFactory.request(stage: .timingECO, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: configuration)
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+        #expect(result.status == .blocked && result.artifactBindings.isEmpty)
+        #expect(result.diagnostics.contains { $0.code.rawValue == "eco_replacement_sources_missing" })
+    }
+
     @Test("repair strategies persist verified proof evidence")
     func repairProofs() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
         var ecoConfiguration = PhysicalDesignFixtureFactory.configuration
         ecoConfiguration.ecoTargetCellID = "U1"
-        ecoConfiguration.ecoAction = .resizeCell
+        ecoConfiguration.ecoAction = .moveCell
+        ecoConfiguration.ecoDeltaX = 100
         let ecoResult = try await PhysicalDesignEngine(artifactStore: store).execute(
             PhysicalDesignFixtureFactory.request(stage: .timingECO, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: ecoConfiguration)
         )
@@ -1116,7 +1129,8 @@ struct NativeExecutionTests {
 
         var ecoConfiguration = PhysicalDesignFixtureFactory.configuration
         ecoConfiguration.ecoTargetCellID = "U1"
-        ecoConfiguration.ecoAction = .resizeCell
+        ecoConfiguration.ecoAction = .moveCell
+        ecoConfiguration.ecoDeltaX = 100
         let ecoResult = try await engine.execute(
             PhysicalDesignFixtureFactory.request(stage: .timingECO, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: ecoConfiguration)
         )

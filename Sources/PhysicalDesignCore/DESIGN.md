@@ -68,6 +68,16 @@ resolve through the projection; names are never converted by stripping an M pref
 The no-track geometry-smoke convention remains an explicitly incomplete path.
 Off-grid pin access is unsupported and blocks; it is not rounded or snapped.
 
+ECO resizing is an explicit master replacement: `ecoReplacementMaster` must name a
+selected exact process master. Without process sources or a selected master the
+operation fails; no dimension delta or generated master name is supported. Both
+masters must expose the same complete physical pin-name/direction/use interface.
+The candidate retains instance identity, pose and connectivity, adopts oriented
+source SIZE and reconstructs its connected pins from declared replacement PORTs.
+Row/site/symmetry, core and collision admission still apply before publication.
+The operation provides physical geometry evidence only; logical equivalence and
+characterized timing improvement remain separate required closure work.
+
 ## State, Ownership, and Lifecycle
 
 Native placement and ECO movement share one checked cell-owned pin translation.

@@ -76,3 +76,14 @@ per CLI call. It replays saved manifest technology availability through floorpla
 global and detailed routing, verifies all input/output identities and preserves
 routes/vias. Off-grid access, wrong process, omitted/tampered technology and native
 production intent must fail without artifacts. This is synthetic geometry evidence.
+
+For `resize_cell`, select `configuration.ecoTargetCellID` and
+`configuration.ecoReplacementMaster` with exact cell-role LEF process assets.
+The replacement retains the instance pose and pin/net IDs, uses the selected
+oriented SIZE, and rebuilds connected pins from its declared PORT geometry.
+Missing sources/master, changed physical port names/directions/uses, incompatible
+site/symmetry or illegal placement fail without a revision. Source-free geometry
+smoke cannot resize a cell by fabricating dimensions or a master name.
+This operation does not prove functional equivalence or timing improvement.
+Run the source-bound API regressions with
+`../scripts/swift-test-timeout.sh 120 --jobs 4 --filter exactReplacement`.

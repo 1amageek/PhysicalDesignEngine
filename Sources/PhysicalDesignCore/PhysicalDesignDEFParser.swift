@@ -1029,16 +1029,10 @@ public struct PhysicalDesignDEFParser: Sendable {
             let cell = cellID.flatMap { cellID in cells.first { $0.id == cellID } }
             if processFactory != nil {
                 do {
-                    guard let processGeometry, let cell, let pin = processGeometry.masters[cell.master]?.pins[name], let direction = pin.definition.direction else {
+                    guard let processGeometry, let cell else {
                         throw PhysicalDesignTechnologyError.invalid("Connected component pin \(cellID ?? "PIN")/\(name) requires one exact declared master port and direction.")
                     }
-                    let shapes = try processGeometry.pinShapes(master: cell.master, pin: name, orientation: cell.orientation, x: cell.x, y: cell.y)
-                    guard let shape = shapes.first(where: { processGeometry.layers[$0.layer]?.isRoutingLayer == true }), let point = shape.points.first else {
-                        throw PhysicalDesignTechnologyError.invalid("Connected component pin \(cell.id)/\(name) requires declared routing geometry.")
-                    }
-                    // FIXME(INCOMPLETE_IMPLEMENTATION): Source-bound DEF intake selects a deterministic actual port boundary point, not a legal wire-width/track access proof. Native routing must remain unqualified until process-aware access selection and route closure are implemented.
-                    let resolved = PhysicalDesignSnapshot.Pin(id: id, cellID: cell.id, name: name, x: Int64(point.x), y: Int64(point.y),
-                        direction: direction.rawValue.lowercased(), accessLayer: Int(shape.layer))
+                    let resolved = try processGeometry.referencePin(.init(id: id, cellID: cell.id, name: name), for: cell)
                     pinIndexByKey[key] = pins.count
                     pins.append(resolved)
                 } catch {

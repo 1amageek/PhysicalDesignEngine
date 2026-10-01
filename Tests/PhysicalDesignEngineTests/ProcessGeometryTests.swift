@@ -132,7 +132,7 @@ struct ProcessGeometryTests {
         resize.configuration.ecoTargetCellID = "U1"
         let rejectedResize = try await engine.execute(resize)
         #expect(rejectedResize.status == .blocked && rejectedResize.artifactBindings.isEmpty)
-        #expect(rejectedResize.diagnostics.contains { $0.code.rawValue == "process_geometry_invalid" })
+        #expect(rejectedResize.diagnostics.contains { $0.code.rawValue == "eco_replacement_master_missing" })
         #expect(await store.data(at: "runs/fabricated-resize/physical-design/timingECO/revision.json") == nil)
         #expect(throws: PhysicalDesignDEFExportError.unresolvedProcessSources) { try PhysicalDesignDEFWriter().write(placed) }
         var changed = placed
@@ -158,6 +158,67 @@ struct ProcessGeometryTests {
         let changedResult = try await engine.execute(changedRequest)
         #expect(changedResult.status == .blocked && changedResult.artifactBindings.isEmpty)
         #expect(changedResult.diagnostics.contains { $0.summary.contains("same manifest") })
+    }
+
+    @Test("explicit replacement adopts exact source SIZE and reconstructs connected ports", arguments: [
+        "valid", "same-master", "ports", "direction", "use", "height", "symmetry", "missing-name", "unknown", "locked", "collision"
+    ])
+    func exactReplacement(scenario: String) async throws {
+        let (geometry, base, store) = try await fixture(replacement: scenario)
+        let engine = PhysicalDesignEngine(artifactStore: store)
+        let request = nativeRequest(base)
+        let floorplanned = try #require(try await engine.execute(request).payload.physicalDesign)
+        let placed = try #require(try await engine.execute(resumed(request, from: floorplanned, runID: "replacement-place", stage: .placement)).payload.physicalDesign)
+        let codec = PhysicalDesignJSONCodec()
+        var input = try codec.decode(PhysicalDesignSnapshot.self, from: await store.read(placed.layoutArtifact))
+        input.pins[0].netID = "N"
+        input.nets = [.init(id: "N", pinIDs: [input.pins[0].id])]
+        if scenario == "locked" { input.cells[0].locked = true }
+        if scenario == "collision" {
+            input.cells.append(.init(id: "U2", master: "INV_X1", x: 2500, y: 0, width: 2000, height: 1000, placed: true))
+            input.implementationState?.placementProof = nil
+        }
+        #expect(input.validationDiagnostics().isEmpty)
+        try geometry.validate(input)
+        var replacement = request
+        replacement.runID = "replacement-\(scenario)"
+        replacement.stage = .timingECO
+        replacement.initialSnapshot = input
+        replacement.configuration.ecoTargetCellID = "U1"
+        replacement.configuration.ecoReplacementMaster = scenario == "missing-name" ? nil : (scenario == "unknown" ? "INV_MISSING" : (scenario == "same-master" ? "INV_X1" : "INV_X2"))
+        let result = try await engine.execute(replacement)
+        if scenario == "valid" || scenario == "same-master" {
+            #expect(result.status == .completed, "\(result.diagnostics)")
+            let reference = try #require(result.payload.physicalDesign)
+            let output = try codec.decode(PhysicalDesignSnapshot.self, from: await store.read(reference.layoutArtifact))
+            let cell = try #require(output.cells.first)
+            #expect(cell.id == input.cells[0].id && cell.orientation == .fn && cell.x == 0 && cell.y == 0)
+            #expect(output.nets == input.nets)
+            #expect(output.pins[0].id == input.pins[0].id && output.pins[0].netID == "N")
+            if scenario == "valid" {
+                #expect(cell.master == "INV_X2" && cell.width == 3000 && cell.height == 1000)
+                #expect(output.pins[0].x == 2300 && output.pins[0].y == 100 && output.pins[0].accessLayer == 3)
+                #expect(output.implementationState?.placementProof == nil)
+            } else {
+                #expect(output.cells == input.cells && output.pins == input.pins)
+                #expect(output.implementationState?.placementProof == input.implementationState?.placementProof)
+            }
+            try geometry.validate(output)
+            let encoded = try codec.encode(replacement)
+            #expect(try codec.decode(PhysicalDesignRequest.self, from: encoded).configuration.ecoReplacementMaster == replacement.configuration.ecoReplacementMaster)
+        } else {
+            #expect(result.status == .blocked && result.artifactBindings.isEmpty, "\(result.diagnostics)")
+            let code: String
+            switch scenario {
+            case "missing-name": code = "eco_replacement_master_missing"
+            case "locked": code = "eco_locked_cell"
+            case "collision": code = "eco_resize_illegal"
+            case "height", "symmetry": code = "process_geometry_invalid"
+            default: code = "eco_replacement_invalid"
+            }
+            #expect(result.diagnostics.contains { $0.code.rawValue == code }, "\(result.diagnostics)")
+            #expect(await store.data(at: "runs/\(replacement.runID)/physical-design/timingECO/revision.json") == nil)
+        }
     }
 
     @Test("contradictory canonical geometry cannot enter or leave process-bound mutation", arguments: [
@@ -376,7 +437,7 @@ struct ProcessGeometryTests {
             stage: stage, configuration: base.configuration, processAssets: processAssets ?? base.processAssets)
     }
 
-    private func fixture(_ scenario: String = "valid") async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
+    private func fixture(_ scenario: String = "valid", replacement: String? = nil) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
         let store = InMemoryPhysicalDesignArtifactStore()
         var technology = """
         VERSION 5.8 ;
@@ -429,6 +490,24 @@ struct ProcessGeometryTests {
         case "port-via", "missing-port-via": cells = cells.replacingOccurrences(of: "RECT 0.1 0.3 0.3 0.5 ;", with: "VIA 0.2 0.4 \(scenario == "port-via" ? "hv" : "missing") ;")
         default: break
         }
+        if let replacement {
+            var macro = """
+            MACRO INV_X2
+              CLASS CORE ; SIZE 3 BY 1 ; ORIGIN 0.2 -0.1 ; SYMMETRY X Y ; SITE unit ;
+              PIN Y DIRECTION OUTPUT ; USE SIGNAL ; PORT LAYER metV ; RECT 0.5 0.2 0.7 0.4 ; END END Y
+              PIN A DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 0.1 0.2 0.3 0.4 ; END END A
+            END INV_X2
+            """
+            switch replacement {
+            case "ports": macro = macro.replacingOccurrences(of: "PIN A ", with: "PIN B ").replacingOccurrences(of: "END A", with: "END B")
+            case "direction": macro = macro.replacingOccurrences(of: "DIRECTION OUTPUT", with: "DIRECTION INPUT")
+            case "use": macro = macro.replacingOccurrences(of: "USE SIGNAL", with: "USE CLOCK")
+            case "height": macro = macro.replacingOccurrences(of: "SIZE 3 BY 1", with: "SIZE 3 BY 2")
+            case "symmetry": macro = macro.replacingOccurrences(of: "SYMMETRY X Y ;", with: "SYMMETRY X ;")
+            default: break
+            }
+            cells = cells.replacingOccurrences(of: "END LIBRARY", with: macro + "\nEND LIBRARY")
+        }
         let technologyBinding = try await store.registerInput(Data(technology.utf8), relativePath: "inputs/tech.lef", kind: .technology, format: .lef)
         let cellsBinding = try await store.registerInput(Data(cells.utf8), relativePath: "inputs/cells.lef", kind: .technology, format: .lef)
         var layers: [PDKLayerDefinition] = [
@@ -443,7 +522,7 @@ struct ProcessGeometryTests {
             .init(assetID: "cells", role: .cell, path: "cells.lef", kind: .technology, format: .lef, sha256: cellsBinding.reference.digest.hexadecimalValue, byteCount: Int64(cells.utf8.count))
         ], layers: layers, crossViewMappings: [
             .init(mappingID: "tech", view: .lef, assetID: "tech", layerIDs: layerIDs),
-            .init(mappingID: "cells", view: .lef, assetID: "cells", physicalNames: scenario == "unmapped-master" ? [] : ["INV_X1"], layerIDs: scenario == "unmapped-layer" ? ["V", "C"] : layerIDs)
+            .init(mappingID: "cells", view: .lef, assetID: "cells", physicalNames: scenario == "unmapped-master" ? [] : (replacement == nil ? ["INV_X1"] : ["INV_X1", "INV_X2"]), layerIDs: scenario == "unmapped-layer" ? ["V", "C"] : layerIDs)
         ])
         let manifestBinding = try await store.registerInput(try PDKManifestCodec.encode(manifest), relativePath: "inputs/process.json", kind: .technology, format: .json)
         let base = PhysicalDesignFixtureFactory.request(stage: .floorplan)

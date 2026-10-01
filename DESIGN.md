@@ -159,8 +159,10 @@ layer identity and source content references. Geometry backend range, invalid
 polygons, unsupported MASK/generated-rule families and contradictory layer types
 fail explicitly. Canonical geometry admission surrounds mutation and preserves exact
 process identity across JSON resume. Floorplan and compatible-site placement consume
-the source declarations; unsupported inserted/resized masters and unnamed vias fail
-output admission. Native routing/access/CTS/ECO closure and full standard interchange
+the source declarations. Explicit ECO master replacement adopts exact selected SIZE
+and PORTs after matching the complete physical interface; source-free resize fails.
+Unsupported inserted masters and unnamed vias fail output admission.
+Native routing/access/CTS/ECO closure and full standard interchange
 remain pending, and production capability remains independently blocked.
 
 ## Verification and Change Impact

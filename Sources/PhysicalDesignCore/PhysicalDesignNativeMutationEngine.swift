@@ -109,7 +109,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .detailedRouting:
             outcome = routing(input, configuration: request.configuration, mode: "detailed")
         case .timingECO, .drcRepair:
-            outcome = eco(input, configuration: request.configuration, stage: request.stage)
+            outcome = eco(input, configuration: request.configuration, stage: request.stage, processGeometry: processGeometry)
         case .antennaRepair:
             outcome = antennaRepair(input, configuration: request.configuration)
         case .fillInsertion:
@@ -1433,11 +1433,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
     private func eco(
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration,
-        stage: PhysicalDesignStage
+        stage: PhysicalDesignStage,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         var output = input
         var netsToRoute: [String] = []
         switch configuration.ecoAction {
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Native timingECO/drcRepair master replacement verifies physical ports and placement only. Logical equivalence and characterized timing must be established before production ECO completion.
         case .resizeCell:
             guard let target = configuration.ecoTargetCellID,
                   let index = output.cells.firstIndex(where: { $0.id == target }) else {
@@ -1455,16 +1457,37 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["unlock_the_cell_or_choose_another_target"]
                 )
             }
-            guard output.cells[index].width <= Int64.max - configuration.siteWidth else {
-                return blocked(
-                    code: "eco_resize_overflow",
-                    message: "ECO resize would overflow the target cell geometry.",
-                    entity: target,
-                    actions: ["reduce_eco_resize_delta"]
-                )
+            guard let processGeometry else {
+                return blocked(code: "eco_replacement_sources_missing", message: "Master replacement requires exact selected process sources.",
+                    entity: target, actions: ["supply_exact_process_sources"])
             }
-            output.cells[index].width += configuration.siteWidth
-            output.cells[index].master += "_ECO"
+            guard let name = configuration.ecoReplacementMaster else {
+                return blocked(code: "eco_replacement_master_missing", message: "Master replacement requires an explicit replacement master.",
+                    entity: target, actions: ["set_eco_replacement_master"])
+            }
+            let previous = output.cells[index]
+            do {
+                let original = try processGeometry.requireMaster(previous.master)
+                let replacement = try processGeometry.requireMaster(name)
+                guard Set(original.pins.keys) == Set(replacement.pins.keys), original.pins.allSatisfy({ name, pin in
+                    pin.definition.direction == replacement.pins[name]?.definition.direction
+                        && pin.definition.use == replacement.pins[name]?.definition.use
+                }) else {
+                    throw PhysicalDesignTechnologyError.invalid("Replacement master \(name) must retain the complete physical port names, directions and uses of \(previous.master).")
+                }
+                if name != previous.master {
+                    let size = try processGeometry.dimensions(master: name, orientation: previous.orientation)
+                    output.cells[index].master = name
+                    output.cells[index].width = size.width
+                    output.cells[index].height = size.height
+                    for pinIndex in output.pins.indices where output.pins[pinIndex].cellID == target {
+                        output.pins[pinIndex] = try processGeometry.referencePin(output.pins[pinIndex], for: output.cells[index])
+                    }
+                }
+            } catch {
+                return blocked(code: "eco_replacement_invalid", message: error.localizedDescription,
+                    entity: target, actions: ["select_an_exact_compatible_replacement_master"])
+            }
             if let violation = placedCellViolation(output.cells[index], in: output, excluding: target) {
                 return blocked(
                     code: "eco_resize_illegal",
@@ -1473,7 +1496,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["choose_another_eco_target", "move_adjacent_cells", "increase_core_area"]
                 )
             }
-            invalidateCellGeometryDependents(in: &output)
+            if previous != output.cells[index] { invalidateCellGeometryDependents(in: &output) }
         case .moveCell:
             guard let target = configuration.ecoTargetCellID,
                   let index = output.cells.firstIndex(where: { $0.id == target }) else {

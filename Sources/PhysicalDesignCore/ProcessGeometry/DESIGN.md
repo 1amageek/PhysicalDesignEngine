@@ -77,6 +77,10 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
   admission rather than becoming persisted successful revisions.
 - Public bare mutation cannot consume bound process sources without the artifact
   intake path. The executor supplies the immutable projection to internal mutation.
+- Connected pin reconstruction reuses one deterministic declared routing-boundary
+  reference point for DEF intake and explicit master replacement. Identity and net
+  connectivity remain caller-owned; coordinates, direction and layer come from the
+  selected source port. This point does not prove wire-width-aware legal access.
 - The returned physical reference identifies canonical JSON, retaining all state and
   process references. DEF is an interchange artifact with its own bounded semantics,
   not a lossless resume authority.

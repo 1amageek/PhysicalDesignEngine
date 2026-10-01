@@ -165,6 +165,24 @@ struct PhysicalDesignProcessGeometry: Sendable {
         return try transform(pin.shapes, master: master, orientation: orientation, x: x, y: y)
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Native DEF intake and master replacement select a declared routing-boundary reference point. Width-aware track access and route closure must be established before this point can qualify native routing.
+    func referencePin(_ pin: PhysicalDesignSnapshot.Pin, for cell: PhysicalDesignSnapshot.Cell) throws -> PhysicalDesignSnapshot.Pin {
+        let master = try requireMaster(cell.master)
+        guard pin.cellID == cell.id, let direction = master.pins[pin.name]?.definition.direction else {
+            throw PhysicalDesignTechnologyError.invalid("Connected pin \(pin.id) requires an exact declared master port and direction.")
+        }
+        let shapes = try pinShapes(master: cell.master, pin: pin.name, orientation: cell.orientation, x: cell.x, y: cell.y)
+        guard let shape = shapes.first(where: { layers[$0.layer]?.isRoutingLayer == true }), let point = shape.points.first else {
+            throw PhysicalDesignTechnologyError.invalid("Connected pin \(pin.id) requires declared routing geometry.")
+        }
+        var resolved = pin
+        resolved.x = Int64(point.x)
+        resolved.y = Int64(point.y)
+        resolved.direction = direction.rawValue.lowercased()
+        resolved.accessLayer = Int(shape.layer)
+        return resolved
+    }
+
     func obstructionShapes(master name: String, orientation: DEFOrientation, x: Int64, y: Int64) throws -> [IRBoundary] {
         let master = try requireMaster(name)
         return try transform(master.obstructions, master: master, orientation: orientation, x: x, y: y)
