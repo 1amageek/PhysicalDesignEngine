@@ -131,7 +131,10 @@ Technology input preparation and declared-grid validation are specified by
 [TechnologyConstraints component](Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
 The optional technology path uses existing schema-5 input bindings, keeps native
 production blocked, and adds a direct dependency on the fixed swift-mask-data LEF
-product. It does not change PDKKit or the standard parser's public contracts.
+product. It consumes the shared scalar/X-Y pitch and offset representation;
+horizontal tracks select Y and vertical tracks select X. The standard codec now
+owns numeric arity and semantic-loss admission, so native preparation does not
+repeat tokenization. Native production qualification remains independent.
 
 ## Verification and Change Impact
 

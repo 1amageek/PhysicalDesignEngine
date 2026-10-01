@@ -2,7 +2,7 @@
 
 Updated: 2026-10-01
 
-Native deterministic geometry and a scalar technology subset are executable.
+Native deterministic geometry and a typed routing-grid technology subset are executable.
 Native production physical closure is not implemented. OpenROAD execution belongs
 to EDAInteroperability and cannot close a native algorithm gap in this package.
 

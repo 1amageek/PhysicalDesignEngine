@@ -3,7 +3,7 @@ import CircuiteFoundation
 import PDKCore
 import LEF
 
-// FIXME(INCOMPLETE_IMPLEMENTATION): Native API/CLI technology preparation consumes scalar LEF routing constraints only. Cell pin access, legal via stacks and advanced process rules must be implemented and independently verified before this path can support production correctness.
+// FIXME(INCOMPLETE_IMPLEMENTATION): Native API/CLI technology preparation consumes typed LEF routing-grid constraints only. Cell pin access, legal via stacks and advanced process rules must be implemented and independently verified before this path can support production correctness.
 enum PhysicalDesignTechnologyConstraints {
     static func prepare(
         _ snapshot: PhysicalDesignSnapshot,
@@ -47,15 +47,6 @@ enum PhysicalDesignTechnologyConstraints {
             let document: LEFDocument
             do {
                 document = try LEFLibraryReader.read(data)
-                // The public reader drops second-axis values and qualified spacing. Token preflight prevents that loss without replacing the standard parser.
-                guard let text = String(data: data, encoding: .utf8) else { throw LEFError.invalidEncoding }
-                let tokens = try LEFTokenizer.tokenize(text)
-                for index in tokens.indices where ["PITCH", "OFFSET", "SPACING"].contains(tokens[index].uppercased()) {
-                    if index + 1 < tokens.count, Double(tokens[index + 1]) != nil,
-                       index + 2 >= tokens.count || tokens[index + 2] != ";" {
-                        throw PhysicalDesignTechnologyError.unsupported("Technology \(tokens[index]) must have one unqualified scalar value.")
-                    }
-                }
                 guard !document.layers.contains(where: { $0.spacingTable != nil }) else {
                     throw PhysicalDesignTechnologyError.unsupported("Technology SPACINGTABLE is not implemented by native routing.")
                 }
@@ -87,8 +78,10 @@ enum PhysicalDesignTechnologyConstraints {
             guard usedLayerIDs.insert(definition.layerID).inserted, usedLEFNames.insert(layer.name).inserted else {
                 throw PhysicalDesignTechnologyError.invalid("Configured layers cannot reuse canonical layer IDs or a LEF routing layer.")
             }
-            let pitch = try dbu(layer.pitch, units: snapshot.unitsPerMicron, field: "\(layer.name).PITCH", positive: true)
-            let offset = try dbu(layer.offset, units: snapshot.unitsPerMicron, field: "\(layer.name).OFFSET")
+            let selectedPitch = direction == .horizontal ? layer.pitch?.y : layer.pitch?.x
+            let selectedOffset = direction == .horizontal ? layer.offset?.y : layer.offset?.x
+            let pitch = try dbu(selectedPitch, units: snapshot.unitsPerMicron, field: "\(layer.name).PITCH", positive: true)
+            let offset = try dbu(selectedOffset, units: snapshot.unitsPerMicron, field: "\(layer.name).OFFSET")
             let defaultWidth = try dbu(layer.width, units: snapshot.unitsPerMicron, field: "\(layer.name).WIDTH", positive: true)
             let width = try layer.minwidth.map { try dbu($0, units: snapshot.unitsPerMicron, field: "\(layer.name).MINWIDTH", positive: true) } ?? defaultWidth
             let spacing = try dbu(layer.spacing, units: snapshot.unitsPerMicron, field: "\(layer.name).SPACING")

@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 Prepare process-bound routing constraints for native geometry execution.
-Parent: [PhysicalDesignCore](../DESIGN.md). No children. This is a scalar technology
+Parent: [PhysicalDesignCore](../DESIGN.md). No children. This is a routing-grid technology
 LEF subset; pin access, via stacks, advanced spacing and process qualification remain incomplete.
 
 ## Responsibilities and Boundaries
@@ -18,14 +18,14 @@ The native mutation engine owns routing and grid admission.
 |---|---|---|---|---|
 | [PhysicalDesignCore](../DESIGN.md) | parent / used by | Snapshot and artifact store | Executor input preparation | Preserve original snapshot for diff generation |
 | [PDKKit](../../../../PDKKit/DESIGN.md) | depends on | PDKManifestCodec, manifest values | Exact process/layer identity | Do not infer layer numbers from names |
-| [swift-mask-data](../../../../swift-mask-data/DESIGN.md) | depends on | LEFLibraryReader, LEFTokenizer | Scalar technology view | Preflight rejects discarded multi-value/spacing semantics |
+| [swift-mask-data](../../../../swift-mask-data/DESIGN.md) | depends on | LEFLibraryReader, shared typed axis values | Exact technology routing view | Common codec rejects unretained grammar; engine rejects unsupported rules |
 
 ## Architecture
 
 ```text
 technology/LEF input bindings + PDK manifest binding
     -> verified bytes -> manifest identity + declared asset digest/size + layer mapping
-    -> LEF scalar constraints -> integer DBU -> validate or generate tracks
+    -> LEF typed constraints -> select track axis -> integer DBU -> validate or generate tracks
 ```
 
 ## Contracts and Invariants
@@ -43,13 +43,17 @@ match the request. Configured layer numbers map directly to unique routing-layer
 definitions; name/alias matching is exact and unambiguous. Canonical layer IDs and
 LEF layer names cannot be reused by another configured layer.
 
-Required LEF values are direction, scalar pitch, offset, width and base spacing.
+Required LEF values are direction, pitch, offset, width and base spacing.
+Scalar declarations apply to either axis. Two-axis declarations use Y for
+horizontal tracks and X for vertical tracks, including offset. The unused axis
+is retained by the standard schema; it is not silently substituted for the selected axis.
 Offset is required rather than inferred. Non-finite, negative, missing or
 non-representable values fail. Micron values are scaled by snapshot units; nearest
 integer DBU is admitted only within one floating-point ULP and below 2^53, retaining
 integer precision. Width must satisfy MINWIDTH/default WIDTH and optional MAXWIDTH;
-configured spacing must satisfy base SPACING. Two-axis PITCH/OFFSET, qualified
-SPACING and SPACINGTABLE are unsupported and explicitly fail before projection.
+configured spacing must satisfy base SPACING. Qualified SPACING is rejected by
+the common codec; SPACINGTABLE is retained by the codec but unsupported by this
+native routing profile and explicitly fails before mutation.
 
 Generated track positions use the LEF offset's global grid, begin at the first
 grid point inside the core and stop before its upper bound. Explicit tracks are
@@ -73,9 +77,9 @@ remain in run provenance. No persistent cache or shared mutable state is introdu
 
 ## Failure, Concurrency, and Constraints
 
-Input length is bounded by retained artifact size. Parser/preflight storage is linear
-in input bytes; each view is read once, with token preflight required because the
-existing public reader otherwise drops needed scalar constraints. Layer/track work
+Input length is bounded by retained artifact size. Parser storage is linear
+in input bytes; each view is read once and uses the common codec's semantic-loss
+gate without repeating tokenization. Layer/track work
 is bounded by supplied views and configured layers, not track count. Cancellation is
 checked between views. Semantic errors are typed; failed preparation emits no revision.
 

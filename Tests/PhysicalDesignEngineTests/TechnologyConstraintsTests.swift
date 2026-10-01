@@ -9,7 +9,7 @@ import PhysicalDesignEngine
 struct TechnologyConstraintsTests {
     @Test("technology LEF is bound to the PDK and drives retained tracks", arguments: [
         "valid", "missing-pitch", "missing-offset", "wrong-process", "wrong-asset-digest",
-        "unmapped", "ambiguous-layer", "off-dbu", "double-pitch", "double-offset",
+        "unmapped", "ambiguous-layer", "off-dbu", "double-pitch", "double-offset", "vertical-grid",
         "qualified-spacing", "spacing-table", "insufficient-width", "insufficient-spacing",
         "conflicting-tracks", "invalid-encoding", "wrong-version", "wrong-manifest-digest",
         "wrong-asset-size", "empty-lef", "nonfinite", "missing-direction", "malformed-lef", "tiny-core", "aligned-explicit", "shared-layer", "missing-provenance", "invalid-default-width", "unit-precision"
@@ -23,7 +23,8 @@ struct TechnologyConstraintsTests {
         case "missing-offset": text = text.replacingOccurrences(of: "OFFSET 0.1 ;", with: "")
         case "off-dbu": text = text.replacingOccurrences(of: "PITCH 0.2 ;", with: "PITCH 0.2005 ;")
         case "double-pitch": text = text.replacingOccurrences(of: "PITCH 0.2 ;", with: "PITCH 0.2 0.4 ;")
-        case "double-offset": text = text.replacingOccurrences(of: "OFFSET 0.1 ;", with: "OFFSET 0.1 0.3 ;")
+        case "double-offset": text = text.replacingOccurrences(of: "OFFSET 0.1 ;", with: "OFFSET 0.01 0.05 ;")
+        case "vertical-grid": text = text.replacingOccurrences(of: "PITCH 0.4 ;", with: "PITCH 0.3 0.5 ;")
         case "qualified-spacing": text = text.replacingOccurrences(of: "SPACING 0.1 ;", with: "SPACING 0.1 RANGE 0.1 0.2 ;")
         case "spacing-table": text = text.replacingOccurrences(of: "SPACING 0.1 ;", with: "SPACING 0.1 ;\nSPACINGTABLE PARALLELRUNLENGTH 0.1 WIDTH 0.1 0.2 ;")
         case "empty-lef": text = ""
@@ -74,7 +75,7 @@ struct TechnologyConstraintsTests {
         request.inputBindings.append(contentsOf: [manifestBinding, technology])
         if scenario == "missing-provenance" { request.inputs.removeAll { $0 == technology.reference } }
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
-        if scenario == "valid" || scenario == "aligned-explicit" {
+        if ["valid", "aligned-explicit", "double-pitch", "double-offset", "vertical-grid"].contains(scenario) {
             #expect(result.status == .completed, "\(result.diagnostics)")
             let binding = try #require(result.artifactBindings.first { $0.path.hasSuffix("revision.json") })
             let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: await store.read(binding))
@@ -82,13 +83,13 @@ struct TechnologyConstraintsTests {
             let horizontal = try #require(tracks.first { $0.layer == 2 })
             let vertical = try #require(tracks.first { $0.layer == 3 })
             #expect(horizontal.direction == "horizontal")
-            #expect(horizontal.spacing == 200)
-            #expect(horizontal.origin == (scenario == "valid" ? 10_100 : 100))
-            #expect(horizontal.count == (scenario == "valid" ? 400 : 500))
+            #expect(horizontal.spacing == (scenario == "double-pitch" ? 400 : 200))
+            #expect(horizontal.origin == (scenario == "aligned-explicit" ? 100 : scenario == "double-offset" ? 10_050 : 10_100))
+            #expect(horizontal.count == (scenario == "aligned-explicit" ? 500 : scenario == "double-pitch" ? 200 : 400))
             #expect(vertical.direction == "vertical")
-            #expect(vertical.spacing == 400)
-            #expect(vertical.origin == (scenario == "valid" ? 10_100 : 100))
-            #expect(vertical.count == (scenario == "valid" ? 400 : 450))
+            #expect(vertical.spacing == (scenario == "vertical-grid" ? 300 : 400))
+            #expect(vertical.origin == (scenario == "aligned-explicit" ? 100 : scenario == "double-offset" ? 10_010 : scenario == "vertical-grid" ? 10_000 : 10_100))
+            #expect(vertical.count == (scenario == "aligned-explicit" ? 450 : scenario == "vertical-grid" ? 534 : 400))
             if scenario == "aligned-explicit" { #expect(tracks == snapshot.implementationState?.tracks) }
             #expect(result.provenance.inputs.contains(technology.reference))
             let manifestBinding = try #require(result.payload.runManifest)
