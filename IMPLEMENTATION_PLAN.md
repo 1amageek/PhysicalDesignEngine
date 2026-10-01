@@ -17,6 +17,13 @@ Behavioral regressions cover rejection, different-layer crossing, repeated routi
 and the actual retained multilayer DEF. Developer fixtures use schema 5 and bind
 real checked-in input bytes rather than fabricated digests.
 
+Non-square floorplans generate tracks on the correct axis. Signal/ECO routing and
+CTS consume configured explicit track directions without parity substitution;
+missing directional coverage blocks without artifacts. CTS re-execution replaces
+owned branch routes, vias and layer constraints while preserving unrelated nets.
+Re-characterization of retained trees remains unsupported and fails explicitly
+rather than verifying an estimate produced by a preceding model.
+
 ## Remaining Native Work
 
 These are required implementation outcomes, not claims that an algorithm is

@@ -150,9 +150,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
             let constraints = configuration.implementationConstraints ?? .default
             if implementationState.tracks.isEmpty {
-                implementationState.tracks = configuration.preferredRoutingLayers.enumerated().map { _, layer in
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Floorplan API/CLI execution synthesizes smoke tracks without process views. Production requires digest-bound PDK layer directions, pitches and legal origins before these tracks can prove process correctness.
+                implementationState.tracks = configuration.preferredRoutingLayers.map { layer in
                     let direction = layer.isMultiple(of: 2) ? "vertical" : "horizontal"
-                    let extent = direction == "horizontal" ? core.width : core.height
+                    let extent = direction == "horizontal" ? core.height : core.width
                     return PhysicalDesignImplementationState.Track(
                         id: "track_M\(layer)",
                         layer: layer,
@@ -561,7 +562,19 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         timingModel: PhysicalDesignClockTimingModel?,
         timingModelReference: PhysicalDesignClockTimingModelReference?
     ) -> Outcome {
-        let clockNets = input.nets.filter(\.isClock).sorted { $0.id < $1.id }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Characterized CTS API/CLI re-execution does not yet recompute retained sink paths and buffer delays. Existing trees must fail until the supplied model is evaluated against every retained sink; an old estimate is not evidence for a new execution.
+        if timingModel != nil, !input.clockTrees.isEmpty {
+            return blocked(
+                code: "cts_existing_tree_recharacterization_unsupported",
+                message: "Characterized CTS re-execution requires native re-characterization of the retained clock tree.",
+                actions: ["provide_a_pre_cts_snapshot", "implement_retained_tree_recharacterization"]
+            )
+        }
+        let existingBufferIDs = Set(input.clockTrees.flatMap(\.bufferCellIDs))
+        let existingBranchNetIDs = Set(input.pins.filter {
+            existingBufferIDs.contains($0.cellID ?? "") && $0.direction.lowercased() == "output"
+        }.compactMap(\.netID))
+        let clockNets = input.nets.filter { $0.isClock && !existingBranchNetIDs.contains($0.id) }.sorted { $0.id < $1.id }
         guard !clockNets.isEmpty else {
             return blocked(
                 code: "clock_net_missing",
@@ -578,6 +591,17 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 code: "core_geometry_missing",
                 message: "Clock-tree synthesis requires a core rectangle to bound generated clock routes.",
                 actions: ["run_floorplan"]
+            )
+        }
+        let tracks = input.implementationState?.tracks ?? []
+        let horizontalLayers = routingLayers(direction: "horizontal", configuration: configuration, tracks: tracks).sorted()
+        let verticalLayers = routingLayers(direction: "vertical", configuration: configuration, tracks: tracks).sorted()
+        guard let horizontalLayer = horizontalLayers.first(where: { $0 == implementationConstraints.clockRouteLayer }) ?? horizontalLayers.first,
+              let verticalLayer = verticalLayers.last else {
+            return blocked(
+                code: "routing_layer_direction_missing",
+                message: "Clock-tree synthesis requires configured horizontal and vertical layers from the declared tracks.",
+                actions: ["declare_directional_routing_tracks", "correct_stage_configuration"]
             )
         }
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
@@ -691,7 +715,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 implementationState.clockRouteConstraints.append(PhysicalDesignImplementationState.ClockRouteConstraint(
                     id: "clock_route_\(branchNetID)",
                     netID: branchNetID,
-                    layer: implementationConstraints.clockRouteLayer,
+                    layer: horizontalLayer,
                     width: implementationConstraints.routeWidth,
                     spacing: implementationConstraints.routeSpacing,
                     maximumLength: implementationConstraints.clockRouteMaximumLengthDBU
@@ -742,13 +766,21 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             implementationState.clockRouteConstraints.append(PhysicalDesignImplementationState.ClockRouteConstraint(
                 id: "clock_route_\(net.id)",
                 netID: net.id,
-                layer: implementationConstraints.clockRouteLayer,
+                layer: horizontalLayer,
                 width: implementationConstraints.routeWidth,
                 spacing: implementationConstraints.routeSpacing,
                 maximumLength: implementationConstraints.clockRouteMaximumLengthDBU
             ))
         }
-        let clockTreeIDs = Set(output.clockTrees.map(\.netID))
+        let clockBufferIDs = Set(output.clockTrees.flatMap(\.bufferCellIDs))
+        let clockBranchNetIDs = Set(output.pins.filter {
+            clockBufferIDs.contains($0.cellID ?? "") && $0.direction.lowercased() == "output"
+        }.compactMap(\.netID))
+        let clockTreeIDs = Set(output.clockTrees.map(\.netID)).union(clockBranchNetIDs)
+        for index in implementationState.clockRouteConstraints.indices
+            where clockTreeIDs.contains(implementationState.clockRouteConstraints[index].netID) {
+            implementationState.clockRouteConstraints[index].layer = horizontalLayer
+        }
         var clockRouteGeometries = output.routes
             .filter { !clockTreeIDs.contains($0.netID) }
             .flatMap { route in
@@ -764,6 +796,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 snapshot: output,
                 core: core,
                 configuration: configuration,
+                horizontalLayer: horizontalLayer,
+                verticalLayer: verticalLayer,
                 existingGeometries: &clockRouteGeometries
             ) else {
                 return blocked(
@@ -777,8 +811,12 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             materializedClockVias.append(contentsOf: materialization.vias)
         }
         output.routes = output.routes.filter { !clockTreeIDs.contains($0.netID) } + materializedClockRoutes
-        let existingViaIDs = Set(output.vias.map(\.id))
-        output.vias.append(contentsOf: materializedClockVias.filter { !existingViaIDs.contains($0.id) })
+        output.vias = output.vias.filter { !clockTreeIDs.contains($0.netID) } + materializedClockVias
+        if timingModel == nil {
+            for index in output.clockTrees.indices {
+                output.clockTrees[index].timingEstimate = nil
+            }
+        }
         output.implementationState = implementationState
         output.metadata["clockTreeStatus"] = "constructed"
         let timingClaim: PhysicalDesignClaimStatus
@@ -815,20 +853,16 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         var vias: [PhysicalDesignSnapshot.Via]
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Native CTS API/CLI routes enforce declared layer directions but not process track-grid access, pin shapes or via stacks. Production success requires those constraints and complete corner/load/slew closure to be behaviorally verified.
     private func materializeClockTree(
         _ tree: PhysicalDesignSnapshot.ClockTree,
         snapshot: PhysicalDesignSnapshot,
         core: PhysicalDesignSnapshot.Rect,
         configuration: PhysicalDesignConfiguration,
+        horizontalLayer: Int,
+        verticalLayer: Int,
         existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)]
     ) -> ClockRouteMaterialization? {
-        let implementationConstraints = configuration.implementationConstraints ?? .default
-        let horizontalLayers = configuration.preferredRoutingLayers.filter { !$0.isMultiple(of: 2) }.sorted()
-        let verticalLayers = configuration.preferredRoutingLayers.filter { $0.isMultiple(of: 2) }.sorted()
-        guard let horizontalLayer = horizontalLayers.first(where: { $0 == implementationConstraints.clockRouteLayer }) ?? horizontalLayers.first,
-              let verticalLayer = verticalLayers.last ?? verticalLayers.first else {
-            return nil
-        }
         let pinByID = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
         guard pinByID[tree.sourcePinID] != nil else { return nil }
         var endpoints: [(netID: String, sourcePinID: String, sinkPinID: String)] = []
@@ -950,6 +984,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         netID == familyID || netID.hasPrefix("\(familyID)_branch_")
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Global/detailed routing and ECO rerouting use a single-bend geometry algorithm. Declared layer directions are enforced, but production requires legal track-grid access, process pin/via semantics and obstacle search before routing closure can report success.
     private func routing(
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration,
@@ -982,9 +1017,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         let pinByID = Dictionary(uniqueKeysWithValues: output.pins.map { ($0.id, $0) })
         let cellByID = Dictionary(uniqueKeysWithValues: output.cells.map { ($0.id, $0) })
         let implementationConstraints = configuration.implementationConstraints ?? .default
-        let tracks = (output.implementationState?.tracks ?? []).filter {
-            $0.layer > 0 && $0.layer <= configuration.maximumRoutingLayer
-        }
+        let tracks = output.implementationState?.tracks ?? []
+        let horizontalLayers = routingLayers(direction: "horizontal", configuration: configuration, tracks: tracks)
+        let verticalLayers = routingLayers(direction: "vertical", configuration: configuration, tracks: tracks)
         let powerNetIDs = Set(configuration.powerNetNames)
         let powerNetsWithoutStructures = output.nets
             .filter { powerNetIDs.contains($0.id) }
@@ -1057,8 +1092,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     netFailed = true
                     break
                 }
-                guard let horizontalLayer = routingLayer(direction: "horizontal", preferredLayers: configuration.preferredRoutingLayers, tracks: tracks, offset: netOrdinal),
-                      let verticalLayer = routingLayer(direction: "vertical", preferredLayers: configuration.preferredRoutingLayers, tracks: tracks, offset: netOrdinal) else {
+                guard !horizontalLayers.isEmpty, !verticalLayers.isEmpty else {
                     layerDirectionViolations += 1
                     routeFailures.append(diagnostic(
                         severity: .error,
@@ -1070,6 +1104,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     netFailed = true
                     break
                 }
+                let horizontalLayer = horizontalLayers[netOrdinal % horizontalLayers.count]
+                let verticalLayer = verticalLayers[netOrdinal % verticalLayers.count]
                 var pathSegments: [PhysicalDesignSnapshot.RouteSegment] = []
                 if source.x != location.x {
                     pathSegments.append(PhysicalDesignSnapshot.RouteSegment(
@@ -1264,23 +1300,22 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         )
     }
 
-    private func routingLayer(
+    private func routingLayers(
         direction: String,
-        preferredLayers: [Int],
-        tracks: [PhysicalDesignImplementationState.Track],
-        offset: Int
-    ) -> Int? {
-        let directionalTracks = tracks.filter { $0.direction.lowercased() == direction }.sorted(by: { $0.layer < $1.layer })
-        if !directionalTracks.isEmpty {
-            return directionalTracks[offset % directionalTracks.count].layer
+        configuration: PhysicalDesignConfiguration,
+        tracks: [PhysicalDesignImplementationState.Track]
+    ) -> [Int] {
+        if !tracks.isEmpty {
+            return Set(tracks.filter {
+                $0.direction.lowercased() == direction
+                    && configuration.preferredRoutingLayers.contains($0.layer)
+                    && $0.layer <= configuration.maximumRoutingLayer
+            }.map(\.layer)).sorted()
         }
-        let fallback = preferredLayers.filter { layer in
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Signal/ECO routing and CTS without explicit tracks use synthetic odd/even directions for geometry smoke only. Production requires retained process tracks; this branch must never qualify a process routing claim.
+        return configuration.preferredRoutingLayers.filter { layer in
             direction == "horizontal" ? !layer.isMultiple(of: 2) : layer.isMultiple(of: 2)
         }
-        if !fallback.isEmpty {
-            return fallback[offset % fallback.count]
-        }
-        return nil
     }
 
     private func segmentGeometry(

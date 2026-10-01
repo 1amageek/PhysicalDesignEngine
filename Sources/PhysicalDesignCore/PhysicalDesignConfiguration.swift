@@ -142,12 +142,6 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         if Set(preferredRoutingLayers).count != preferredRoutingLayers.count {
             diagnostics.append("routing layers must be unique")
         }
-        if !preferredRoutingLayers.contains(where: { !$0.isMultiple(of: 2) }) {
-            diagnostics.append("at least one odd routing layer is required for horizontal segments")
-        }
-        if !preferredRoutingLayers.contains(where: { $0.isMultiple(of: 2) }) {
-            diagnostics.append("at least one even routing layer is required for vertical segments")
-        }
         if targetUtilization <= 0 || targetUtilization > 1 {
             diagnostics.append("target utilization must be in the interval (0, 1]")
         }

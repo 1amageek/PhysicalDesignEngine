@@ -57,6 +57,29 @@ implemented and verified; no caller flag or external backend may bypass this gat
 Geometry uses DBU. Timing estimates use PS only with verified PDK/RC/Liberty/corner
 characterization; missing models and extrapolation fail explicitly.
 
+Track direction describes the wire direction: horizontal track positions vary on
+Y across core height; vertical positions vary on X across core width. Floorplan
+generates tracks only when none are supplied and retains explicit tracks unchanged.
+An explicit track set is authoritative for signal/ECO routing and CTS layer
+selection. Eligible layers must also belong to `preferredRoutingLayers` and not
+exceed `maximumRoutingLayer`. Missing directional coverage blocks execution;
+an unusable explicit set must not trigger odd/even substitution. Layer parity is
+only the synthetic geometry-smoke convention when no tracks exist. Configuration
+validation therefore does not infer a layer's direction from its number.
+CTS records the selected horizontal layer in its clock-route constraints.
+Re-execution identifies buffered branches by their owned output pins, replaces
+the family's routes and vias, and updates those constraints to the selected layer;
+it does not synthesize existing branches again as independent clock roots.
+Characterized re-execution of an existing tree is currently unsupported and blocks
+without artifacts. Reusing the preceding tree's estimate with a newly supplied
+model must not produce a verified timing claim. Re-characterization requires
+recomputing all sink paths and buffer delays from the retained tree before this
+gate can be removed.
+Geometry-only re-execution clears preceding timing estimates because no timing
+model was evaluated for the new routes.
+This contract checks extent generation and layer direction, not track-grid access,
+PDK layer mappings, cell pin shapes or legal via stacks; those remain incomplete.
+
 Routing checks every segment against other nets on that segment's actual layer.
 Coincident geometry on different layers is not a same-layer spacing violation.
 Re-routing replaces both routes and vias for the selected nets and preserves
@@ -108,6 +131,9 @@ macOS package or by macOS-only verification evidence.
 owns behavioral routing verification: reject same-layer vertical overlap, accept
 different-layer crossing, preserve vias from global through detailed routing, and
 reopen the actual retained multilayer DEF without geometry/layer corruption.
+It also verifies non-square generated track bounds and exact JSON/DEF persistence,
+explicit directions independent of parity, configured-layer restrictions and
+fail-closed direction selection across signal routing, ECO rerouting and CTS.
 The existing package tests cover stage prerequisites, negative inputs, cancellation,
 immutable artifacts, review packets, characterized CTS and CLI failures.
 [ProductionEvidenceTests](Tests/PhysicalDesignEngineTests/ProductionEvidenceTests.swift)

@@ -330,6 +330,133 @@ struct NativeExecutionTests {
         #expect(output.implementationState?.pads.isEmpty == true)
     }
 
+    @Test("non-square floorplans retain tracks on the correct coordinate axis", arguments: [true, false])
+    func floorplanTrackExtents(tall: Bool) async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.dieWidth = tall ? 100_000 : 180_000
+        configuration.dieHeight = tall ? 180_000 : 100_000
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(
+                stage: .floorplan,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false),
+                configuration: configuration
+            )
+        )
+        #expect(result.status == .completed)
+        let output = try await decodedSnapshot(from: result, store: store)
+        let core = try #require(output.core)
+        let tracks = try #require(output.implementationState?.tracks)
+        let defBinding = try #require(result.payload.physicalDesign?.layoutArtifact)
+        let parsed = try PhysicalDesignDEFParser().parse(await store.read(defBinding))
+        let retainedTracks = try #require(parsed.snapshot?.implementationState?.tracks)
+        for track in tracks {
+            let horizontal = track.direction == "horizontal"
+            let origin = horizontal ? core.y : core.x
+            let extent = horizontal ? core.height : core.width
+            #expect(track.origin == origin)
+            #expect(track.count == max(1, extent / track.spacing))
+            #expect(track.origin + (track.count - 1) * track.spacing < origin + extent)
+            let retained = try #require(retainedTracks.first { $0.layer == track.layer })
+            #expect(retained.direction == track.direction)
+            #expect(retained.origin == track.origin)
+            #expect(retained.count == track.count)
+            #expect(retained.spacing == track.spacing)
+        }
+    }
+
+    @Test("explicit tracks govern signal routing, ECO and CTS without parity fallback",
+          arguments: [PhysicalDesignStage.globalRouting, .detailedRouting, .timingECO, .clockTreeSynthesis],
+          ["reversed-parity", "even-layers", "missing-vertical", "excluded-horizontal", "above-maximum"])
+    func explicitRoutingTracks(stage: PhysicalDesignStage, scenario: String) async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        var snapshot = PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false)
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.preferredRoutingLayers = scenario == "even-layers" ? [2, 4] : [2, 3]
+        configuration.ecoAction = .rerouteNet
+        configuration.ecoTargetNetID = "DATA"
+        let horizontalLayer = scenario == "excluded-horizontal" ? 4 : scenario == "above-maximum" ? 7 : 2
+        let verticalLayer = scenario == "even-layers" ? 4 : scenario == "above-maximum" ? 8 : 3
+        var tracks: [PhysicalDesignImplementationState.Track] = [
+            .init(id: "horizontal", layer: horizontalLayer, direction: "horizontal", origin: 10_000, spacing: 100, count: 800)
+        ]
+        if scenario != "missing-vertical" {
+            tracks.append(.init(id: "vertical", layer: verticalLayer, direction: "vertical", origin: 10_000, spacing: 100, count: 800))
+        }
+        snapshot.implementationState = .init(tracks: tracks)
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(
+            PhysicalDesignFixtureFactory.request(stage: stage, snapshot: snapshot, configuration: configuration)
+        )
+        if scenario == "reversed-parity" || scenario == "even-layers" {
+            #expect(result.status == .completed, "\(result.diagnostics)")
+            let output = try await decodedSnapshot(from: result, store: store)
+            #expect(output.implementationState?.tracks == tracks)
+            let segments = output.routes.flatMap(\.segments)
+            #expect(!segments.isEmpty)
+            #expect(segments.allSatisfy {
+                $0.layer == ($0.y1 == $0.y2 ? horizontalLayer : verticalLayer)
+            })
+            if stage == .clockTreeSynthesis {
+                let constraints = try #require(output.implementationState?.clockRouteConstraints)
+                #expect(!constraints.isEmpty)
+                #expect(constraints.allSatisfy { $0.layer == horizontalLayer })
+            }
+        } else {
+            #expect(result.status == .blocked)
+            #expect(result.diagnostics.contains { $0.code.rawValue == "routing_layer_direction_missing" })
+            #expect(result.artifacts.isEmpty)
+            #expect(result.payload.claims.geometry == .blocked)
+        }
+    }
+
+    @Test("CTS re-execution replaces family routes, vias and selected layer constraints")
+    func ctsTrackReexecution() async throws {
+        let store = InMemoryPhysicalDesignArtifactStore()
+        let engine = PhysicalDesignEngine(artifactStore: store)
+        var snapshot = PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false)
+        let dataRoute = PhysicalDesignSnapshot.Route(id: "retained-data", netID: "DATA", segments: [
+            .init(id: "retained-data-segment", layer: 6, x1: 20_000, y1: 40_000, x2: 30_000, y2: 40_000)
+        ])
+        let dataVia = PhysicalDesignSnapshot.Via(id: "retained-data-via", netID: "DATA", x: 25_000, y: 40_000, lowerLayer: 5, upperLayer: 6)
+        snapshot.routes = [dataRoute]
+        snapshot.vias = [dataVia]
+        snapshot.implementationState = .init(tracks: [
+            .init(id: "h", layer: 2, direction: "horizontal", origin: 10_000, spacing: 100, count: 800),
+            .init(id: "v", layer: 4, direction: "vertical", origin: 10_000, spacing: 100, count: 800)
+        ])
+        var configuration = PhysicalDesignFixtureFactory.configuration
+        configuration.preferredRoutingLayers = [2, 4]
+        let first = try await engine.execute(PhysicalDesignFixtureFactory.request(
+            stage: .clockTreeSynthesis, snapshot: snapshot, configuration: configuration
+        ))
+        #expect(first.status == .completed)
+        snapshot = try await decodedSnapshot(from: first, store: store)
+        let treeCount = snapshot.clockTrees.count
+        let cellCount = snapshot.cells.count
+        #expect(snapshot.vias.contains { $0.upperLayer == 4 })
+        snapshot.implementationState?.tracks = [
+            .init(id: "h", layer: 3, direction: "horizontal", origin: 10_000, spacing: 100, count: 800),
+            .init(id: "v", layer: 2, direction: "vertical", origin: 10_000, spacing: 100, count: 800)
+        ]
+        configuration.preferredRoutingLayers = [2, 3]
+        var secondRequest = PhysicalDesignFixtureFactory.request(
+            stage: .clockTreeSynthesis, snapshot: snapshot, configuration: configuration
+        )
+        secondRequest.runID = "test-cts-track-reexecution"
+        let second = try await engine.execute(secondRequest)
+        #expect(second.status == .completed, "\(second.diagnostics)")
+        let output = try await decodedSnapshot(from: second, store: store)
+        #expect(output.clockTrees.count == treeCount)
+        #expect(output.cells.count == cellCount)
+        #expect(output.routes.filter { $0.netID != "DATA" }.flatMap(\.segments).allSatisfy { $0.layer == ($0.y1 == $0.y2 ? 3 : 2) })
+        let clockVias = output.vias.filter { $0.netID != "DATA" }
+        #expect(!clockVias.isEmpty)
+        #expect(clockVias.allSatisfy { $0.lowerLayer == 2 && $0.upperLayer == 3 })
+        #expect(output.routes.contains(dataRoute))
+        #expect(output.vias.contains(dataVia))
+        #expect(output.implementationState?.clockRouteConstraints.allSatisfy { $0.layer == 3 } == true)
+    }
+
     @Test("placement emits legal placement proof and avoids blockages")
     func placementProof() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
@@ -453,6 +580,38 @@ struct NativeExecutionTests {
         #expect(estimate.cornerID == "typical")
         #expect(estimate.estimatedLatencyPS > 0)
         #expect(estimate.modelDigest == modelArtifact.reference.digest.hexadecimalValue)
+
+        var changedModel = model
+        changedModel.wireDelaySamples = [
+            .init(pathLengthDBU: 0, delayPS: 0),
+            .init(pathLengthDBU: 20_000, delayPS: 80)
+        ]
+        let changedArtifact = try await store.registerInput(
+            try PhysicalDesignJSONCodec().encode(changedModel),
+            relativePath: "inputs/changed-clock-timing-model.json",
+            kind: try ArtifactKind(rawValue: "timing.characterization"),
+            format: .json
+        )
+        var changedReference = modelReference
+        changedReference.modelArtifact = changedArtifact
+        request.runID = "test-changed-cts-characterization"
+        request.initialSnapshot = output
+        request.clockTimingModel = changedReference
+        request.inputs.append(changedArtifact.reference)
+        request.inputBindings.append(changedArtifact)
+        let replay = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+        #expect(replay.status == .blocked)
+        #expect(replay.payload.claims.timing == .blocked)
+        #expect(replay.artifacts.isEmpty)
+        #expect(replay.diagnostics.contains { $0.code.rawValue == "cts_existing_tree_recharacterization_unsupported" })
+
+        var geometryRequest = PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis, snapshot: output)
+        geometryRequest.runID = "test-cts-geometry-reexecution"
+        let geometryReplay = try await PhysicalDesignEngine(artifactStore: store).execute(geometryRequest)
+        #expect(geometryReplay.status == .completed)
+        #expect(geometryReplay.payload.claims.timing == .blocked)
+        let geometryOutput = try await decodedSnapshot(from: geometryReplay, store: store)
+        #expect(geometryOutput.clockTrees.allSatisfy { $0.timingEstimate == nil })
     }
 
     @Test("execution intent does not encode flow authority")
