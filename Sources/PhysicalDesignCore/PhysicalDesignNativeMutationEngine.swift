@@ -94,7 +94,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .floorplan:
             outcome = floorplan(input, configuration: request.configuration, processGeometry: processGeometry)
         case .powerPlanning:
-            outcome = powerPlanning(input, configuration: request.configuration)
+            outcome = powerPlanning(input, configuration: request.configuration, processGeometry: processGeometry)
         case .placement:
             outcome = placement(input, configuration: request.configuration, processGeometry: processGeometry)
         case .clockTreeSynthesis:
@@ -102,12 +102,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 input,
                 configuration: request.configuration,
                 timingModel: clockTimingModel,
-                timingModelReference: clockTimingModelReference
+                timingModelReference: clockTimingModelReference,
+                processGeometry: processGeometry
             )
         case .globalRouting:
-            outcome = routing(input, configuration: request.configuration, mode: "global")
+            outcome = routing(input, configuration: request.configuration, mode: "global", processGeometry: processGeometry)
         case .detailedRouting:
-            outcome = routing(input, configuration: request.configuration, mode: "detailed")
+            outcome = routing(input, configuration: request.configuration, mode: "detailed", processGeometry: processGeometry)
         case .timingECO, .drcRepair:
             outcome = eco(input, configuration: request.configuration, stage: request.stage, processGeometry: processGeometry)
         case .antennaRepair:
@@ -115,7 +116,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .fillInsertion:
             outcome = fillInsertion(input, configuration: request.configuration)
         case .redundantViaInsertion:
-            outcome = redundantViaInsertion(input, configuration: request.configuration)
+            outcome = redundantViaInsertion(input, configuration: request.configuration, processGeometry: processGeometry)
         case .hotspotRepair:
             outcome = hotspotRepair(input, configuration: request.configuration)
         }
@@ -229,7 +230,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func powerPlanning(
         _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
+        configuration: PhysicalDesignConfiguration,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         guard let core = input.core else {
             return blocked(
@@ -352,7 +354,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     let strapNumerator = (strapIndex + 1 + Int64(netIndex)) * core.width
                     let x = core.x + strapNumerator / strapDenominator
                     let viaID = "power_\(netID)_via_\(strapIndex)_\(index)"
-                    let via = PhysicalDesignSnapshot.Via(
+                    guard !existingViaIDs.contains(viaID) else { continue }
+                    var via = PhysicalDesignSnapshot.Via(
                         id: viaID,
                         netID: netID,
                         x: x,
@@ -360,7 +363,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                         lowerLayer: 1 + netIndex,
                         upperLayer: 2 + netIndex
                     )
-                    guard !existingViaIDs.contains(viaID), !output.vias.contains(where: {
+                    do { via = try resolveVia(via, processGeometry: processGeometry, within: core) }
+                    catch { return blocked(code: "native_via_source_invalid", message: error.localizedDescription, actions: ["select_exact_fixed_via_sources"]) }
+                    guard !output.vias.contains(where: {
                         manhattan($0.x, $0.y, via.x, via.y) < (configuration.repairConstraints ?? .default).minimumViaSpacing
                     }) else { continue }
                     output.vias.append(via)
@@ -603,11 +608,48 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         snapshot.metadata["clockTimingStatus"] = "invalidated_by_cell_geometry"
     }
 
+    private func resolveVia(_ via: PhysicalDesignSnapshot.Via, processGeometry: PhysicalDesignProcessGeometry?,
+        within bounds: PhysicalDesignSnapshot.Rect) throws -> PhysicalDesignSnapshot.Via {
+        if let processGeometry { return try processGeometry.resolveVia(via, within: bounds) }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Source-free geometry-smoke power/clock/routing/repair paths retain unnamed point transitions. They cannot qualify fixed-via geometry or process closure without exact source admission.
+        return via
+    }
+
+    private func pathVias(id: String, netID: String, segments: [PhysicalDesignSnapshot.RouteSegment],
+        sourceLayer: Int?, targetLayer: Int?, processGeometry: PhysicalDesignProcessGeometry?,
+        within bounds: PhysicalDesignSnapshot.Rect) throws -> [PhysicalDesignSnapshot.Via] {
+        guard let first = segments.first, let last = segments.last else { return [] }
+        if processGeometry != nil, sourceLayer == nil || targetLayer == nil {
+            throw PhysicalDesignTechnologyError.invalid("Process-bound route endpoints require declared pin access layers.")
+        }
+        var vias: [PhysicalDesignSnapshot.Via] = []
+        func append(_ suffix: String, x: Int64, y: Int64, from: Int, to: Int) throws {
+            guard from != to else { return }
+            let candidate = PhysicalDesignSnapshot.Via(id: "\(id)_\(suffix)", netID: netID, x: x, y: y,
+                lowerLayer: min(from, to), upperLayer: max(from, to))
+            vias.append(try resolveVia(candidate, processGeometry: processGeometry, within: bounds))
+        }
+        if let sourceLayer { try append("source_via", x: first.x1, y: first.y1, from: sourceLayer, to: first.layer) }
+        for (index, pair) in zip(segments, segments.dropFirst()).enumerated() {
+            try append("bend_via_\(index)", x: pair.0.x2, y: pair.0.y2, from: pair.0.layer, to: pair.1.layer)
+        }
+        if let targetLayer { try append("target_via", x: last.x2, y: last.y2, from: last.layer, to: targetLayer) }
+        return vias
+    }
+
+    private func appendUniqueVias(_ candidates: [PhysicalDesignSnapshot.Via], to vias: inout [PhysicalDesignSnapshot.Via]) {
+        for candidate in candidates where !vias.contains(where: {
+            $0.netID == candidate.netID && $0.x == candidate.x && $0.y == candidate.y
+                && $0.lowerLayer == candidate.lowerLayer && $0.upperLayer == candidate.upperLayer
+        }) { vias.append(candidate) }
+    }
+
     private func clockTreeSynthesis(
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration,
         timingModel: PhysicalDesignClockTimingModel?,
-        timingModelReference: PhysicalDesignClockTimingModelReference?
+        timingModelReference: PhysicalDesignClockTimingModelReference?,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         // FIXME(INCOMPLETE_IMPLEMENTATION): Characterized CTS API/CLI re-execution does not yet recompute retained sink paths and buffer delays. Existing trees must fail until the supplied model is evaluated against every retained sink; an old estimate is not evidence for a new execution.
         if timingModel != nil, !input.clockTrees.isEmpty {
@@ -843,7 +885,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 guard let value = try materializeClockTree(
                     tree, snapshot: output, core: core, configuration: configuration,
                     horizontalLayer: horizontalLayer, verticalLayer: verticalLayer,
-                    existingGeometries: &clockRouteGeometries
+                    existingGeometries: &clockRouteGeometries, processGeometry: processGeometry
                 ) else {
                     return blocked(
                         code: "cts_route_materialization_failed",
@@ -854,6 +896,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 }
                 materialization = value
             } catch {
+                if case .processVia(let message) = error {
+                    return blocked(code: "native_via_source_invalid", message: message, actions: ["select_exact_fixed_via_sources"])
+                }
                 return blocked(
                     code: "cts_route_track_grid_conflict",
                     message: "Clock tree \(tree.id) requires off-grid access that is not implemented by native CTS.",
@@ -909,9 +954,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private enum ClockRouteGridError: Error {
         case offGrid
+        case processVia(String)
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Native CTS API/CLI routes enforce declared directions and grid positions but do not implement off-grid pin access, process pin shapes or via stacks. Production success requires those constraints and complete corner/load/slew closure to be behaviorally verified.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Native CTS API/CLI routes enforce grids and exact fixed source transitions but lack width-aware pin access, obstruction/cut/enclosure DRC and complete corner/load/slew closure. Those contracts must be established before production completion.
     private func materializeClockTree(
         _ tree: PhysicalDesignSnapshot.ClockTree,
         snapshot: PhysicalDesignSnapshot,
@@ -919,7 +965,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         configuration: PhysicalDesignConfiguration,
         horizontalLayer: Int,
         verticalLayer: Int,
-        existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)]
+        existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)],
+        processGeometry: PhysicalDesignProcessGeometry?
     ) throws(ClockRouteGridError) -> ClockRouteMaterialization? {
         let pinByID = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
         guard pinByID[tree.sourcePinID] != nil else { return nil }
@@ -955,21 +1002,20 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 configuration: configuration,
                 tracks: snapshot.implementationState?.tracks ?? [],
                 clockFamilyID: tree.netID,
-                existingGeometries: &existingGeometries
+                existingGeometries: &existingGeometries, processGeometry: processGeometry,
+                sourceLayer: endpointSourcePin.accessLayer, targetLayer: sinkPin.accessLayer
             ) else {
                 return nil
             }
             routes.append(path.route)
-            if let via = path.via {
-                vias.append(via)
-            }
+            appendUniqueVias(path.vias, to: &vias)
         }
         return ClockRouteMaterialization(routes: routes, vias: vias)
     }
 
     private struct ClockPath {
         var route: PhysicalDesignSnapshot.Route
-        var via: PhysicalDesignSnapshot.Via?
+        var vias: [PhysicalDesignSnapshot.Via]
     }
 
     private func clockPath(
@@ -984,7 +1030,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         configuration: PhysicalDesignConfiguration,
         tracks: [PhysicalDesignImplementationState.Track],
         clockFamilyID: String,
-        existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)]
+        existingGeometries: inout [(netID: String, layer: Int, geometry: PhysicalDesignSnapshot.Rect)],
+        processGeometry: PhysicalDesignProcessGeometry?,
+        sourceLayer: Int?,
+        targetLayer: Int?
     ) throws(ClockRouteGridError) -> ClockPath? {
         let implementationConstraints = configuration.implementationConstraints ?? .default
         var segments: [PhysicalDesignSnapshot.RouteSegment] = []
@@ -1025,20 +1074,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 }
         }) else { return nil }
         existingGeometries.append(contentsOf: geometries.map { (netID: netID, layer: $0.layer, geometry: $0.geometry) })
-        let via: PhysicalDesignSnapshot.Via?
-        if source.x != target.x, source.y != target.y {
-            via = PhysicalDesignSnapshot.Via(
-                id: "\(routeID)_via",
-                netID: netID,
-                x: target.x,
-                y: source.y,
-                lowerLayer: min(horizontalLayer, verticalLayer),
-                upperLayer: max(horizontalLayer, verticalLayer)
-            )
-        } else {
-            via = nil
-        }
-        return ClockPath(route: PhysicalDesignSnapshot.Route(id: routeID, netID: netID, segments: segments), via: via)
+        let vias: [PhysicalDesignSnapshot.Via]
+        do { vias = try pathVias(id: routeID, netID: netID, segments: segments, sourceLayer: sourceLayer,
+            targetLayer: targetLayer, processGeometry: processGeometry, within: core) }
+        catch { throw .processVia(error.localizedDescription) }
+        return ClockPath(route: PhysicalDesignSnapshot.Route(id: routeID, netID: netID, segments: segments), vias: vias)
     }
 
     private func isClockFamilyNet(_ netID: String, familyID: String) -> Bool {
@@ -1050,7 +1090,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration,
         mode: String,
-        onlyNetID: String? = nil
+        onlyNetID: String? = nil,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         guard !input.cells.isEmpty, input.cells.allSatisfy(\.placed) else {
             return blocked(
@@ -1254,16 +1295,12 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 }
                 segments.append(contentsOf: pathSegments)
                 segmentGeometries.append(contentsOf: geometries)
-                if pathSegments.count == 2 {
-                    generatedVias.append(PhysicalDesignSnapshot.Via(
-                        id: "via_\(net.id)_\(index)",
-                        netID: net.id,
-                        x: location.x,
-                        y: source.y,
-                        lowerLayer: min(pathSegments[0].layer, pathSegments[1].layer),
-                        upperLayer: max(pathSegments[0].layer, pathSegments[1].layer)
-                    ))
-                }
+                do {
+                    let vias = try pathVias(id: "via_\(net.id)_\(index)", netID: net.id, segments: pathSegments,
+                        sourceLayer: pins[0].accessLayer, targetLayer: pins[index + 1].accessLayer,
+                        processGeometry: processGeometry, within: core)
+                    appendUniqueVias(vias, to: &generatedVias)
+                } catch { return blocked(code: "native_via_source_invalid", message: error.localizedDescription, actions: ["select_exact_fixed_via_sources"]) }
             }
             if netFailed {
                 skippedNetIDs.append(net.id)
@@ -1687,7 +1724,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                   output.nets.contains(where: { $0.id == netID }) else {
                 return blocked(code: "eco_target_net_missing", message: "Reroute requires an existing target net.", actions: ["set_eco_target_net_id"])
             }
-            let routingOutcome = routing(output, configuration: configuration, mode: "eco", onlyNetID: netID)
+            let routingOutcome = routing(output, configuration: configuration, mode: "eco", onlyNetID: netID, processGeometry: processGeometry)
             guard let routed = routingOutcome.snapshot else { return routingOutcome }
             output = routed
         case .addBlockage:
@@ -1712,7 +1749,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             output.blockages.append(geometry)
         }
         for netID in netsToRoute {
-            let routingOutcome = routing(output, configuration: configuration, mode: "eco", onlyNetID: netID)
+            let routingOutcome = routing(output, configuration: configuration, mode: "eco", onlyNetID: netID, processGeometry: processGeometry)
             guard let routed = routingOutcome.snapshot, routingOutcome.status == .completed else {
                 return routingOutcome
             }
@@ -2013,7 +2050,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func redundantViaInsertion(
         _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
+        configuration: PhysicalDesignConfiguration,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
         guard !input.vias.isEmpty else {
             return blocked(code: "vias_missing", message: "Redundant-via insertion requires existing vias.", actions: ["run_detailed_routing"])
@@ -2052,21 +2090,34 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 let (x, xOverflow) = via.x.addingReportingOverflow(deltaX)
                 let (y, yOverflow) = via.y.addingReportingOverflow(deltaY)
                 guard !xOverflow, !yOverflow, core.containsPoint(x: x, y: y) else { return false }
+                if let processGeometry {
+                    var candidate = via
+                    candidate.x = x
+                    candidate.y = y
+                    do {
+                        guard try processGeometry.viaFits(candidate, within: core) else { return false }
+                    } catch {
+                        // An out-of-range translated footprint rejects this bounded location candidate.
+                        return false
+                    }
+                }
                 return output.vias.allSatisfy { existing in
                     existing.id == via.id || manhattan(x, y, existing.x, existing.y) >= repairConstraints.minimumViaSpacing
                 }
             }) else { continue }
-            output.vias.append(
-                PhysicalDesignSnapshot.Via(
+            var candidate = PhysicalDesignSnapshot.Via(
                     id: id,
                     netID: via.netID,
                     x: via.x + offset.0,
                     y: via.y + offset.1,
                     lowerLayer: via.lowerLayer,
                     upperLayer: via.upperLayer,
-                    isRedundant: true
+                    isRedundant: true,
+                    master: via.master
                 )
-            )
+            do { candidate = try resolveVia(candidate, processGeometry: processGeometry, within: core) }
+            catch { return blocked(code: "native_via_source_invalid", message: error.localizedDescription, actions: ["select_exact_fixed_via_sources"]) }
+            output.vias.append(candidate)
             inserted += 1
         }
         guard inserted > 0 else {

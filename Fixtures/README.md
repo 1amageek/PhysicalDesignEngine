@@ -87,3 +87,12 @@ smoke cannot resize a cell by fabricating dimensions or a master name.
 This operation does not prove functional equivalence or timing improvement.
 Run the source-bound API regressions with
 `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter exactReplacement`.
+
+Process-bound native layer transitions use a unique DEFAULT fixed LEF via for
+each declared routing-layer pair, including pin access layers at path endpoints.
+Explicit named vias preserve their source identity during redundant insertion.
+The current center-joined profile rejects offset routing footprints and any full
+translated footprint outside the construction core. It does not establish
+process cut/enclosure DRC or legal width-aware pin access.
+Run `../scripts/swift-test-timeout.sh 120 --jobs 4 --filter
+'constructedFixedVias|viaFootprintAuthority'` for these source-bound regressions.

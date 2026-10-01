@@ -208,6 +208,45 @@ struct PhysicalDesignProcessGeometry: Sendable {
         }
     }
 
+    func resolveVia(_ via: PhysicalDesignSnapshot.Via, within bounds: PhysicalDesignSnapshot.Rect) throws -> PhysicalDesignSnapshot.Via {
+        let source: Via
+        if let name = via.master, let declared = vias[name] {
+            source = declared
+        } else if via.master != nil {
+            throw PhysicalDesignTechnologyError.invalid("Via \(via.id) references an undeclared fixed master.")
+        } else {
+            let defaults = vias.values.filter {
+                $0.definition.isDefault && Int($0.lowerLayer) == via.lowerLayer && Int($0.upperLayer) == via.upperLayer
+            }
+            guard defaults.count == 1, let declared = defaults.first else {
+                throw PhysicalDesignTechnologyError.invalid("Via \(via.id) requires one exact DEFAULT fixed master for layers \(via.lowerLayer)/\(via.upperLayer).")
+            }
+            source = declared
+        }
+        guard Int(source.lowerLayer) == via.lowerLayer, Int(source.upperLayer) == via.upperLayer else {
+            throw PhysicalDesignTechnologyError.invalid("Via \(via.id) layer pair contradicts its fixed master.")
+        }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Native power/clock/signal constructors join routes at the via origin. Offset access and multi-transition search require process-aware routing before they can qualify native closure.
+        for layer in [source.lowerLayer, source.upperLayer] {
+            guard Region(layer: layer, polygons: source.shapes.filter { $0.layer == layer }).contains(.init(x: 0, y: 0)) else {
+                throw PhysicalDesignTechnologyError.unsupported("Via \(source.definition.name) requires offset access beyond the center-joined native profile.")
+            }
+        }
+        var resolved = via
+        resolved.master = source.definition.name
+        guard try viaFits(resolved, within: bounds) else {
+            throw PhysicalDesignTechnologyError.invalid("Via \(via.id) translated fixed footprint leaves its construction bounds.")
+        }
+        return resolved
+    }
+
+    func viaFits(_ via: PhysicalDesignSnapshot.Via, within bounds: PhysicalDesignSnapshot.Rect) throws -> Bool {
+        guard let name = via.master else { throw PhysicalDesignTechnologyError.invalid("Via footprint admission requires an exact fixed master.") }
+        return try viaShapes(master: name, x: via.x, y: via.y).allSatisfy { shape in
+            shape.points.allSatisfy { bounds.containsPoint(x: Int64($0.x), y: Int64($0.y)) }
+        }
+    }
+
     private func transform(_ shapes: [IRBoundary], master: Master, orientation: DEFOrientation, x: Int64, y: Int64) throws -> [IRBoundary] {
         let rotation = DEFIRConverter.orientationToTransform(orientation)
         func rotate(_ x: Int64, _ y: Int64) throws -> (Int64, Int64) {

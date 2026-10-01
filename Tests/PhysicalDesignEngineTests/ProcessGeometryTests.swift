@@ -221,6 +221,106 @@ struct ProcessGeometryTests {
         }
     }
 
+    @Test("native routing and CTS construct exact named fixed vias", arguments: [
+        "routing", "clock", "eco", "power", "source-access", "vertical-access", "no-default-via", "ambiguous-default-via", "offset-via", "clock-no-default", "clock-ambiguous"
+    ])
+    func constructedFixedVias(scenario: String) async throws {
+        let sourceScenario = scenario == "source-access" ? "port-via" : (scenario == "clock-no-default" ? "no-default-via" : (scenario == "clock-ambiguous" ? "ambiguous-default-via" : scenario))
+        let (geometry, base, _) = try await fixture(sourceScenario)
+        var request = nativeRequest(base)
+        request.stage = scenario.hasPrefix("clock") ? .clockTreeSynthesis : .globalRouting
+        if scenario == "eco" {
+            request.stage = .timingECO
+            request.configuration.ecoAction = .rerouteNet
+            request.configuration.ecoTargetNetID = "N"
+        }
+        if scenario == "power" { request.stage = .powerPlanning; request.configuration.powerNetNames = ["N"] }
+        request.configuration.implementationConstraints?.clockBufferDistanceThresholdDBU = .max
+        request.configuration.implementationConstraints?.clockRouteLayer = 2
+        var snapshot = try geometry.bind(try #require(request.initialSnapshot))
+        snapshot.cells = [
+            .init(id: "U1", master: "INV_X1", x: 500, y: 1000, width: 2000, height: 1000, placed: true),
+            .init(id: "U2", master: "INV_X1", x: 1900, y: 2000, width: 2000, height: 1000, placed: true)
+        ]
+        snapshot.pins = [
+            .init(id: "Y", cellID: "U1", name: "Y", x: 700, y: 1100, netID: "N", direction: "output", accessLayer: 2),
+            .init(id: "A", cellID: "U2", name: "A", x: 2100, y: 2000, netID: "N", direction: "input", accessLayer: 2)
+        ]
+        snapshot.nets = [.init(id: "N", pinIDs: ["Y", "A"], isClock: scenario.hasPrefix("clock"))]
+        if scenario == "source-access" { snapshot.pins[0].accessLayer = 3 }
+        if scenario == "vertical-access" {
+            snapshot.cells[0].x = 700
+            snapshot.cells[1].x = 700
+            snapshot.pins[0].x = 900
+            snapshot.pins[1].x = 900
+        }
+        snapshot.rows = [1000, 2000].map { y in .init(id: "row_\(y)", originX: 0, originY: Int64(y), siteWidth: 100, height: 1000, siteCount: 100, siteName: "unit") }
+        snapshot.implementationState = .init(tracks: [
+            .init(id: "H", layer: 2, direction: "horizontal", origin: 100, spacing: 200, count: 50),
+            .init(id: "V", layer: 3, direction: "vertical", origin: 100, spacing: 400, count: 25)
+        ])
+        try geometry.validate(snapshot)
+        let mutation = PhysicalDesignNativeMutationEngine()
+        let outcome = await mutation.applyPrepared(request, to: snapshot, processGeometry: geometry)
+        if ["routing", "clock", "eco", "source-access", "vertical-access"].contains(scenario) {
+            #expect(outcome.status == .completed, "\(outcome.diagnostics)")
+            let output = try #require(outcome.snapshot)
+            let via = try #require(output.vias.first)
+            #expect(output.vias.count == (scenario == "source-access" ? 3 : 2))
+            #expect(output.vias.allSatisfy { $0.master == "hv" && $0.lowerLayer == 2 && $0.upperLayer == 3 })
+            let sourceX: Int64 = scenario == "vertical-access" ? 900 : 700
+            let targetX: Int64 = scenario == "vertical-access" ? 900 : 2100
+            #expect(output.vias.contains { $0.x == targetX && $0.y == 2000 })
+            if scenario == "source-access" || scenario == "vertical-access" {
+                #expect(output.vias.contains { $0.x == sourceX && $0.y == 1100 })
+            } else { #expect(via.x == 2100 && via.y == 1100) }
+            try geometry.validate(output)
+            if scenario == "routing" {
+                request.stage = .detailedRouting
+                let detailed = await mutation.applyPrepared(request, to: output, processGeometry: geometry)
+                #expect(detailed.status == .completed && detailed.snapshot?.vias == output.vias)
+                request.stage = .redundantViaInsertion
+                let redundant = await mutation.applyPrepared(request, to: output, processGeometry: geometry)
+                #expect(redundant.status == .completed, "\(redundant.diagnostics)")
+                #expect(redundant.snapshot?.vias.filter(\.isRedundant).allSatisfy { $0.master == "hv" } == true)
+                try geometry.validate(try #require(redundant.snapshot))
+            }
+        } else {
+            #expect(outcome.status == .blocked && outcome.snapshot == nil)
+            #expect(outcome.diagnostics.contains { $0.code.rawValue == "native_via_source_invalid" }, "\(outcome.diagnostics)")
+        }
+    }
+
+    @Test("named non-default vias retain identity and footprint bounds govern redundant candidates")
+    func viaFootprintAuthority() async throws {
+        let (geometry, base, _) = try await fixture("no-default-via")
+        let bounds = PhysicalDesignSnapshot.Rect(x: 0, y: 0, width: 300, height: 300)
+        let named = PhysicalDesignSnapshot.Via(id: "V", netID: "N", x: 100, y: 100, lowerLayer: 2, upperLayer: 3, master: "hv")
+        #expect(try geometry.resolveVia(named, within: bounds).master == "hv")
+        var outside = named
+        outside.x = 0
+        #expect(bounds.containsPoint(x: outside.x, y: outside.y))
+        #expect(throws: PhysicalDesignTechnologyError.self) { try geometry.resolveVia(outside, within: bounds) }
+        var unnamed = named
+        unnamed.master = nil
+        #expect(throws: PhysicalDesignTechnologyError.self) { try geometry.resolveVia(unnamed, within: bounds) }
+        var snapshot = try geometry.bind(.init(topCell: base.design.topDesignName,
+            die: .init(x: 0, y: 0, width: 10000, height: 10000), core: bounds, nets: [.init(id: "N", pinIDs: [])],
+            routes: [.init(id: "route", netID: "N", segments: [
+                .init(id: "H", layer: 2, x1: 0, y1: 100, x2: 300, y2: 100),
+                .init(id: "V", layer: 3, x1: 100, y1: 0, x2: 100, y2: 300)
+            ])], vias: [named]))
+        var request = nativeRequest(base)
+        request.stage = .redundantViaInsertion
+        request.configuration.repairConstraints?.minimumViaSpacing = 200
+        try geometry.validate(snapshot)
+        let outcome = await PhysicalDesignNativeMutationEngine().applyPrepared(request, to: snapshot, processGeometry: geometry)
+        #expect(outcome.status == .blocked && outcome.snapshot == nil)
+        #expect(outcome.diagnostics.contains { $0.code.rawValue == "redundant_via_location_unavailable" })
+        snapshot.vias[0].master = "missing"
+        #expect(throws: PhysicalDesignTechnologyError.self) { try geometry.validate(snapshot) }
+    }
+
     @Test("contradictory canonical geometry cannot enter or leave process-bound mutation", arguments: [
         "width", "orientation-size", "missing-layer", "wrong-layer", "direction", "pin-outside", "missing-site", "site-size",
         "off-site", "missing-via", "via-layers", "via-footprint", "coordinate-overflow"
@@ -485,6 +585,13 @@ struct ProcessGeometryTests {
         case "empty-via-layer": technology = technology.replacingOccurrences(of: "RECT -0.025 -0.025 0.025 0.025 ;", with: "")
         case "wrong-lef-cut-type": technology = technology.replacingOccurrences(of: "LAYER cutHV TYPE CUT", with: "LAYER cutHV TYPE ROUTING")
         case "generated-via": technology = technology.replacingOccurrences(of: "VIA hv DEFAULT", with: "VIA hv GENERATE")
+        case "no-default-via": technology = technology.replacingOccurrences(of: "VIA hv DEFAULT", with: "VIA hv")
+        case "ambiguous-default-via":
+            let start = try #require(technology.range(of: "VIA hv DEFAULT"))
+            let end = try #require(technology.range(of: "END hv"))
+            let duplicate = String(technology[start.lowerBound..<end.upperBound]).replacingOccurrences(of: "hv", with: "hv2")
+            technology = technology.replacingOccurrences(of: "END LIBRARY", with: duplicate + "\nEND LIBRARY")
+        case "offset-via": technology = technology.replacingOccurrences(of: "RECT -0.1 -0.1 0.1 0.1", with: "RECT 1 1 1.2 1.2")
         case "mask": cells = cells.replacingOccurrences(of: "RECT 0.1 0.3", with: "RECT MASK 1 0.1 0.3")
         case "bad-resistance": technology = technology.replacingOccurrences(of: "RESISTANCE 0.75", with: "RESISTANCE -0.75")
         case "port-via", "missing-port-via": cells = cells.replacingOccurrences(of: "RECT 0.1 0.3 0.3 0.5 ;", with: "VIA 0.2 0.4 \(scenario == "port-via" ? "hv" : "missing") ;")

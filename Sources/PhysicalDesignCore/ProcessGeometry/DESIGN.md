@@ -75,6 +75,11 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
 - Vias reference fixed source masters and matching layer pairs; translated footprints
   must fit the die. Fabricated inserted/resized cells and unnamed vias fail output
   admission rather than becoming persisted successful revisions.
+- Native construction resolves exactly one DEFAULT fixed via for the declared layer
+  pair, or preserves an explicit existing source master. The center-joined profile
+  admits only routing footprints containing the origin and full translated shapes
+  inside the construction bounds. Missing/ambiguous defaults and offset-access
+  profiles fail explicitly. Fixed via selection does not establish cut/enclosure DRC.
 - Public bare mutation cannot consume bound process sources without the artifact
   intake path. The executor supplies the immutable projection to internal mutation.
 - Connected pin reconstruction reuses one deterministic declared routing-boundary

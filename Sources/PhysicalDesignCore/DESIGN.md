@@ -78,6 +78,20 @@ Row/site/symmetry, core and collision admission still apply before publication.
 The operation provides physical geometry evidence only; logical equivalence and
 characterized timing improvement remain separate required closure work.
 
+Native power, signal/ECO routing, CTS and redundant repair share fixed-via source
+resolution. A newly constructed layer transition requires exactly one selected
+DEFAULT fixed via for that declared routing-layer pair; an explicitly retained
+master keeps its identity. Missing/ambiguous defaults fail, without a name or
+layer-number fallback. This center-joined profile requires both routing footprints
+to contain the via origin and every translated shape to fit the construction core.
+Redundant candidates retain the original master and test full footprints before
+location acceptance. Multi-transition route search, process cut/enclosure DRC and
+pin-access closure remain B5; fixed source resolution alone does not prove them.
+The same path constructor materializes transitions at declared pin access layers
+and each segment-layer boundary. A bend via alone cannot bridge a different pin
+layer at an endpoint. Repeated same-net transitions at the same position/pair are
+retained once; no process-free pin layer is inferred.
+
 ## State, Ownership, and Lifecycle
 
 Native placement and ECO movement share one checked cell-owned pin translation.
