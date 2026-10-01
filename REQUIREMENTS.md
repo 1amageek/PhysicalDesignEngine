@@ -31,7 +31,7 @@ Transform a mapped design into a traceable physical implementation and close rep
 - Inputs and outputs use immutable ArtifactReference artifacts.
 - Diagnostics contain a stable code, severity, affected entity and suggested actions.
 - Unsupported semantics and missing prerequisites produce blocked results.
-- Native and external-tool backends conform to identical request and payload schemas.
+- Native stages use the common physical request and payload schemas; external compatibility and oracle execution belongs to EDAInteroperability.
 - Execution capability, corpus validation, oracle correlation, process qualification and release approval remain distinct.
 - Xcircuite owns concrete artifact persistence and composition; DesignFlowKernel owns flow construction, qualification gates, approval and resume.
 - The package never imports Xcircuite or circuit-studio.

@@ -1,46 +1,25 @@
 # PhysicalDesignEngine Remaining Tasks
 
-Updated: 2026-07-26
+Updated: 2026-10-01
 
-The deterministic native geometry-smoke backend and callable OpenROAD process
-backend are implemented. Production readiness remains evidence- and
-integration-gated.
+Native deterministic geometry and a scalar technology subset are executable.
+Native production physical closure is not implemented. OpenROAD execution belongs
+to EDAInteroperability and cannot close a native algorithm gap in this package.
 
-## Remaining tasks
+The authoritative package outcomes and acceptance conditions are
+[N1-N6 in IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#remaining-native-work).
+The active cross-package execution graph is [LSI PROGRESS.md](../PROGRESS.md).
+Previous package sprint records are retained in [PROGRESS.md](PROGRESS.md).
 
-| ID | Priority | Owner | Task | Exit criteria |
-|---|---|---|---|---|
-No package-owned P1 implementation remains.
-
-## External prerequisites
-
-An installed OpenROAD executable, exact PDK views, and independent process
-evidence are external inputs. Native geometry success is not production
-qualification.
-
-PHY-1 and PHY-W3 specifically require those real external inputs. They cannot
-be completed by adding process data, mask I/O, trust policy, or flow lifecycle
-ownership to PhysicalDesignEngine.
-
-| Former ID | Owner | Required evidence |
-|---|---|---|
-| PHY-1 | Physical qualification workflow | Actual OpenROAD/PDK runs retaining exact executable, process, PDK, RC, Liberty, corner, input/output, health and independent oracle identities for ToolQualification reconstruction. |
-| PHY-W3 | Production Xcircuite/DesignFlowKernel workflow | A real-backend run covering raw evidence, failure, review, approval, resume, downstream signoff handoff, and immutable artifact verification. |
-
-## Completed host P1
-
-| ID | Completion evidence |
+| Responsibility | Remaining owner |
 |---|---|
-| PHY-W1 | Xcircuite composes canonical layout outputs with `LayoutIO.MaskDataFormatConverter`, retains GDSII/OASIS artifacts, verifies standard-layout round trips, and routes those artifacts into downstream LVS/PEX stages. Mask encoding remains owned by `swift-mask-data`/`semiconductor-layout`. |
-| PHY-W2 | Xcircuite consumes typed DRC/LVS/PEX/Timing/Electrical feedback, formulates auditable repair plans, retains rejected feedback, applies reviewable mutations and design diffs, re-runs gates, and preserves approval/resume state. PhysicalDesignEngine continues to own physical mutations rather than signoff verdicts or flow policy. |
+| Process views, cell/pin shapes and legal via/contact rules | PhysicalDesignEngine consuming exact PDK/standard-view contracts |
+| Timing-driven placement, characterized CTS and bounded routing | PhysicalDesignEngine |
+| Extraction/timing-driven native ECO | PhysicalDesignEngine with independent PEX/STA/DRC/LVS contracts |
+| Exact standard interchange and semantic loss | PhysicalDesignEngine and standard-format owners |
+| Independent process qualification | ToolQualification with retained native and independent observations |
+| Same-design repair, human review/resume and release | Xcircuite, DesignFlowKernel, circuit-studio and ReleaseEngine |
 
-## Evidence reviewed
-
-- `README.md`
-- `DESIGN.md`
-- `INTERFACES.md`
-- `IMPLEMENTATION_PLAN.md`
-- `MILESTONES.md`
-- `GOAL_STATUS.md`
-- OpenROAD execution and native invariant paths
-- `Sources` incomplete-implementation marker scan
+Installed external tools and process assets are qualification inputs; their
+availability does not implement the missing native responsibilities. Historical
+host fixture handoffs do not prove a current production repair/release path.
