@@ -186,6 +186,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var y1: Int64
         public var x2: Int64
         public var y2: Int64
+        /// Absent width denotes unqualified geometry; source-bound routing never infers it.
+        public var widthDBU: Int64?
         public var isJumper: Bool
 
         public init(
@@ -195,6 +197,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             y1: Int64,
             x2: Int64,
             y2: Int64,
+            widthDBU: Int64? = nil,
             isJumper: Bool = false
         ) {
             self.id = id
@@ -203,6 +206,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             self.y1 = y1
             self.x2 = x2
             self.y2 = y2
+            self.widthDBU = widthDBU
             self.isJumper = isJumper
         }
     }
@@ -545,6 +549,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
                 if segment.layer <= 0 || (segment.x1 == segment.x2 && segment.y1 == segment.y2) || (segment.x1 != segment.x2 && segment.y1 != segment.y2) {
                     diagnostics.append("route segment \(segment.id) has invalid orthogonal geometry")
                 }
+                if let width = segment.widthDBU, width <= 0 { diagnostics.append("route segment \(segment.id) width must be positive") }
                 if !routeSegmentIDs.insert(segment.id).inserted {
                     diagnostics.append("duplicate route segment identifier \(segment.id)")
                 }

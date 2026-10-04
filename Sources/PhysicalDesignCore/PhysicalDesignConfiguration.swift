@@ -8,6 +8,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
     public var siteWidth: Int64
     public var placementSpacing: Int64
     public var maximumPlacementCandidateChecks: Int?
+    public var maximumRoutingCandidateChecks: Int?
     public var preferredRoutingLayers: [Int]
     public var maximumRoutingLayer: Int
     public var targetUtilization: Double
@@ -34,6 +35,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         case siteWidth
         case placementSpacing
         case maximumPlacementCandidateChecks
+        case maximumRoutingCandidateChecks
         case preferredRoutingLayers
         case maximumRoutingLayer
         case targetUtilization
@@ -61,6 +63,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         siteWidth: Int64 = 1_000,
         placementSpacing: Int64 = 200,
         maximumPlacementCandidateChecks: Int? = nil,
+        maximumRoutingCandidateChecks: Int? = nil,
         preferredRoutingLayers: [Int] = [2, 3, 4, 5],
         maximumRoutingLayer: Int = 6,
         targetUtilization: Double = 0.70,
@@ -86,6 +89,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         self.siteWidth = siteWidth
         self.placementSpacing = placementSpacing
         self.maximumPlacementCandidateChecks = maximumPlacementCandidateChecks
+        self.maximumRoutingCandidateChecks = maximumRoutingCandidateChecks
         self.preferredRoutingLayers = preferredRoutingLayers
         self.maximumRoutingLayer = maximumRoutingLayer
         self.targetUtilization = targetUtilization
@@ -114,6 +118,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         siteWidth = try container.decode(Int64.self, forKey: .siteWidth)
         placementSpacing = try container.decode(Int64.self, forKey: .placementSpacing)
         maximumPlacementCandidateChecks = try container.decodeIfPresent(Int.self, forKey: .maximumPlacementCandidateChecks)
+        maximumRoutingCandidateChecks = try container.decodeIfPresent(Int.self, forKey: .maximumRoutingCandidateChecks)
         preferredRoutingLayers = try container.decode([Int].self, forKey: .preferredRoutingLayers)
         maximumRoutingLayer = try container.decode(Int.self, forKey: .maximumRoutingLayer)
         targetUtilization = try container.decode(Double.self, forKey: .targetUtilization)
@@ -156,6 +161,9 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         }
         if let maximumPlacementCandidateChecks, maximumPlacementCandidateChecks <= 0 {
             diagnostics.append("placement candidate ceiling must be positive")
+        }
+        if let maximumRoutingCandidateChecks, maximumRoutingCandidateChecks <= 0 {
+            diagnostics.append("routing candidate ceiling must be positive")
         }
         if maximumRoutingLayer <= 0 {
             diagnostics.append("maximum routing layer must be positive")

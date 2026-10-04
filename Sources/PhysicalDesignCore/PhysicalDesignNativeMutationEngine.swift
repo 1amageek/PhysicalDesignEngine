@@ -1039,7 +1039,6 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         netID == familyID || netID.hasPrefix("\(familyID)_branch_")
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Global/detailed routing and ECO rerouting use a single-bend geometry algorithm. Declared directions and grid positions are enforced, but production requires off-grid pin access, process pin/via semantics and obstacle search before routing closure can report success.
     private func routing(
         _ input: PhysicalDesignSnapshot,
         configuration: PhysicalDesignConfiguration,
@@ -1069,6 +1068,25 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
 
+        if let processGeometry {
+            do {
+                let router: any PhysicalDesignSourceRouting = PhysicalDesignSourceRouter()
+                let result = try router.route(input, configuration: configuration, mode: mode, onlyNetID: onlyNetID, geometry: processGeometry)
+                return completed(result.snapshot, actions: ["run_drc", "run_lvs"], metrics: metrics(for: result.snapshot) + [
+                    .init(name: "routingCandidateChecks", value: Double(result.checks), unit: "checks"),
+                    .init(name: "routingStructuralCandidateCeiling", value: Double(result.structuralCeiling), unit: "checks")
+                ], note: "Source-bound native routing materialized full-width conductors and exact fixed contacts.")
+            } catch is CancellationError {
+                return cancelled(actions: ["resume_from_the_last_immutable_revision"])
+            } catch let error as PhysicalDesignRoutingSourceError {
+                return blocked(code: error.code, message: error.message, actions: ["repair_exact_routing_inputs"])
+            } catch let error as PhysicalDesignSourceRouter.Failure {
+                return blocked(code: error.code, message: error.message, actions: ["repair_exact_routing_inputs"])
+            } catch {
+                return blocked(code: "routing_source_geometry_invalid", message: error.localizedDescription, actions: ["repair_exact_routing_inputs"])
+            }
+        }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Source-free signal/ECO routing uses single-bend geometry smoke. It does not establish source PORT, obstacle-search or fixed-contact correctness and cannot qualify process or production routing.
         var output = input
         let pinByID = Dictionary(uniqueKeysWithValues: output.pins.map { ($0.id, $0) })
         let cellByID = Dictionary(uniqueKeysWithValues: output.cells.map { ($0.id, $0) })

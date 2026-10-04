@@ -3,7 +3,7 @@ import CircuiteFoundation
 import PDKCore
 import LEF
 
-// FIXME(INCOMPLETE_IMPLEMENTATION): Native API/CLI technology preparation consumes typed LEF routing-grid constraints only. Cell pin access, legal via stacks and advanced process rules must be implemented and independently verified before this path can support production correctness.
+// FIXME(INCOMPLETE_IMPLEMENTATION): Native API/CLI technology preparation owns the declared LEF grid subset. Advanced routing rules and full process qualification require complete rule closure before production correctness can be reported.
 enum PhysicalDesignTechnologyConstraints {
     static func prepare(
         _ snapshot: PhysicalDesignSnapshot,
@@ -70,7 +70,9 @@ enum PhysicalDesignTechnologyConstraints {
             let defaultWidth = try PhysicalDesignProcessInputs.dbu(layer.width, units: snapshot.unitsPerMicron, field: "\(layer.name).WIDTH", positive: true)
             let width = try layer.minwidth.map { try PhysicalDesignProcessInputs.dbu($0, units: snapshot.unitsPerMicron, field: "\(layer.name).MINWIDTH", positive: true) } ?? defaultWidth
             let spacing = try PhysicalDesignProcessInputs.dbu(layer.spacing, units: snapshot.unitsPerMicron, field: "\(layer.name).SPACING")
-            guard constraints.routeWidth >= width, constraints.routeSpacing >= spacing else {
+            let sourceRouting = !processInputs.cellViews.isEmpty && (request.stage == .globalRouting || request.stage == .detailedRouting
+                || (request.stage == .timingECO && request.configuration.ecoAction == .rerouteNet))
+            guard constraints.routeWidth >= width, sourceRouting || constraints.routeSpacing >= spacing else {
                 throw PhysicalDesignTechnologyError.invalid("Configured width/spacing is below LEF constraints for \(layer.name).")
             }
             if let maximum = layer.maxwidth,

@@ -221,7 +221,7 @@ struct ProcessGeometryTests {
         }
     }
 
-    @Test("native routing and CTS construct exact named fixed vias", arguments: [
+    @Test("routing rejects narrow access while CTS retains its separate fixed-via contract", arguments: [
         "routing", "clock", "eco", "power", "source-access", "vertical-access", "no-default-via", "ambiguous-default-via", "offset-via", "clock-no-default", "clock-ambiguous"
     ])
     func constructedFixedVias(scenario: String) async throws {
@@ -262,32 +262,17 @@ struct ProcessGeometryTests {
         try geometry.validate(snapshot)
         let mutation = PhysicalDesignNativeMutationEngine()
         let outcome = await mutation.applyPrepared(request, to: snapshot, processGeometry: geometry)
-        if ["routing", "clock", "eco", "source-access", "vertical-access"].contains(scenario) {
+        if scenario == "clock" {
             #expect(outcome.status == .completed, "\(outcome.diagnostics)")
             let output = try #require(outcome.snapshot)
-            let via = try #require(output.vias.first)
-            #expect(output.vias.count == (scenario == "source-access" ? 3 : 2))
-            #expect(output.vias.allSatisfy { $0.master == "hv" && $0.lowerLayer == 2 && $0.upperLayer == 3 })
-            let sourceX: Int64 = scenario == "vertical-access" ? 900 : 700
-            let targetX: Int64 = scenario == "vertical-access" ? 900 : 2100
-            #expect(output.vias.contains { $0.x == targetX && $0.y == 2000 })
-            if scenario == "source-access" || scenario == "vertical-access" {
-                #expect(output.vias.contains { $0.x == sourceX && $0.y == 1100 })
-            } else { #expect(via.x == 2100 && via.y == 1100) }
+            #expect(output.vias.count == 2 && output.vias.allSatisfy { $0.master == "hv" && $0.lowerLayer == 2 && $0.upperLayer == 3 })
+            #expect(output.vias.contains { $0.x == 2100 && $0.y == 1100 })
+            #expect(output.vias.contains { $0.x == 2100 && $0.y == 2000 })
             try geometry.validate(output)
-            if scenario == "routing" {
-                request.stage = .detailedRouting
-                let detailed = await mutation.applyPrepared(request, to: output, processGeometry: geometry)
-                #expect(detailed.status == .completed && detailed.snapshot?.vias == output.vias)
-                request.stage = .redundantViaInsertion
-                let redundant = await mutation.applyPrepared(request, to: output, processGeometry: geometry)
-                #expect(redundant.status == .completed, "\(redundant.diagnostics)")
-                #expect(redundant.snapshot?.vias.filter(\.isRedundant).allSatisfy { $0.master == "hv" } == true)
-                try geometry.validate(try #require(redundant.snapshot))
-            }
         } else {
             #expect(outcome.status == .blocked && outcome.snapshot == nil)
-            #expect(outcome.diagnostics.contains { $0.code.rawValue == "native_via_source_invalid" }, "\(outcome.diagnostics)")
+            let code = scenario.hasPrefix("clock") || scenario == "power" ? "native_via_source_invalid" : "routing_pin_access_unavailable"
+            #expect(outcome.diagnostics.contains { $0.code.rawValue == code }, "\(outcome.diagnostics)")
         }
     }
 
@@ -323,7 +308,7 @@ struct ProcessGeometryTests {
 
     @Test("inserted buffers use exact source dimensions ports and sites", arguments: ["eco", "clock", "buffer-interface", "buffer-site", "buffer-height", "missing", "blocked"])
     func sourceInsertedCells(scenario: String) async throws {
-        let (geometry, base, store) = try await fixture(replacement: scenario.hasPrefix("buffer") ? scenario : "buffer")
+        let (geometry, base, store) = try await fixture(replacement: scenario.hasPrefix("buffer") ? scenario : "buffer", routingPorts: scenario == "eco")
         var request = nativeRequest(base)
         request.stage = scenario == "clock" ? .clockTreeSynthesis : .timingECO
         request.configuration.ecoAction = .bufferInsertion
@@ -346,6 +331,9 @@ struct ProcessGeometryTests {
                 .init(id: "H", layer: 2, direction: "horizontal", origin: 100, spacing: 200, count: 50),
                 .init(id: "V", layer: 3, direction: "vertical", origin: 100, spacing: 400, count: 25)
             ])))
+        if scenario == "eco" {
+            input.pins = try input.pins.map { pin in try geometry.referencePin(pin, for: input.cells.first { $0.id == pin.cellID }!) }
+        }
         if scenario == "blocked" {
             input.blockages = [
                 .init(x: 0, y: 1000, width: 500, height: 1000), .init(x: 2500, y: 1000, width: 7500, height: 1000),
@@ -362,8 +350,14 @@ struct ProcessGeometryTests {
             input = try #require(await mutation.applyPrepared(preparation, to: input, processGeometry: geometry).snapshot)
             #expect(input.implementationState?.placementProof != nil)
             preparation.stage = .globalRouting
-            input = try #require(await mutation.applyPrepared(preparation, to: input, processGeometry: geometry).snapshot)
-            #expect(input.implementationState?.routingEvidence != nil)
+            let preparedRoute = await mutation.applyPrepared(preparation, to: input, processGeometry: geometry)
+            if scenario == "eco" {
+                input = try #require(preparedRoute.snapshot)
+                #expect(input.implementationState?.routingEvidence != nil)
+            } else {
+                #expect(preparedRoute.status == .blocked && preparedRoute.snapshot == nil)
+                #expect(preparedRoute.diagnostics.contains { $0.code.rawValue == "routing_pin_access_unavailable" })
+            }
         }
         let result = await mutation.applyPrepared(request, to: input, processGeometry: geometry)
         if scenario == "eco" || scenario == "clock" {
@@ -402,9 +396,8 @@ struct ProcessGeometryTests {
                 var routing = request
                 routing.stage = .globalRouting
                 let routed = await mutation.applyPrepared(routing, to: decoded, processGeometry: geometry)
-                #expect(routed.status == .completed, "\(routed.diagnostics)")
-                #expect(Set(routed.snapshot?.routes.map(\.netID) ?? []) == ["N", "N_eco_branch"])
-                #expect(routed.snapshot?.vias.allSatisfy { $0.master == "hv" } == true)
+                #expect(routed.status == .blocked && routed.snapshot == nil)
+                #expect(routed.diagnostics.contains { $0.code.rawValue == "routing_pin_access_unavailable" })
             } else {
                 #expect(output.clockTrees.first?.bufferCellIDs == [cell.id])
                 #expect(output.routes.contains { $0.netID == "N_branch_0" })
@@ -489,7 +482,7 @@ struct ProcessGeometryTests {
         return request
     }
 
-    @Test("fixed via footprints are admitted but incomplete standard export persists nothing")
+    @Test("fixed via export preserves declared geometry and rejects unqualified conductor widths")
     func fixedViaAdmissionAndExport() async throws {
         let (geometry, base, store) = try await fixture()
         var request = nativeRequest(base)
@@ -498,11 +491,25 @@ struct ProcessGeometryTests {
         snapshot.vias = [.init(id: "V", netID: "N", x: 1000, y: 1000, lowerLayer: 2, upperLayer: 3, master: "hv")]
         try geometry.validate(snapshot)
         request.initialSnapshot = snapshot
-        request.runID = "unsupported-via-export"
+        request.runID = "fixed-via-export"
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
-        #expect(result.status == .blocked && result.artifactBindings.isEmpty)
-        #expect(result.diagnostics.contains { $0.code.rawValue == "physical_def_export_unsupported" })
-        #expect(await store.data(at: "runs/unsupported-via-export/physical-design/floorplan/revision.json") == nil)
+        #expect(result.status == .completed, "\(result.diagnostics)")
+        let layout = try #require(result.payload.physicalDesign?.layoutArtifact)
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: await store.read(layout))
+        #expect(output.vias == snapshot.vias)
+        let def = try #require(result.artifactBindings.first { $0.descriptor.format == .def })
+        let document = try DEFLibraryReader.read(await store.read(def))
+        let routing = try #require(document.nets.first { $0.name == "N" }?.routing.first)
+        #expect(routing.layerName == "metH" && routing.viaName == "hv" && routing.points == [.init(x: 1000, y: 1000)])
+        let actual = try geometry.viaShapes(master: try #require(routing.viaName), x: Int64(routing.points[0].x), y: Int64(routing.points[0].y))
+        #expect(actual == (try geometry.viaShapes(master: "hv", x: output.vias[0].x, y: output.vias[0].y)))
+        for width: Int64? in [nil, 102] {
+            request.runID = width == nil ? "unqualified-wire-export" : "nondefault-wire-export"
+            request.initialSnapshot?.routes = [.init(id: "wire", netID: "N", segments: [.init(id: "H", layer: 2, x1: 700, y1: 1100, x2: 1700, y2: 1100, widthDBU: width)])]
+            let rejected = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+            #expect(rejected.status == .blocked && rejected.artifactBindings.isEmpty)
+            #expect(rejected.diagnostics.contains { $0.code.rawValue == "physical_def_export_unsupported" }, "\(rejected.diagnostics)")
+        }
         #expect(throws: PhysicalDesignDEFExportError.self) { try PhysicalDesignDEFWriter().write(.empty(topCell: "empty")) }
     }
 
@@ -691,7 +698,7 @@ struct ProcessGeometryTests {
         }
     }
 
-    func fixture(_ scenario: String = "valid", replacement: String? = nil) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
+    func fixture(_ scenario: String = "valid", replacement: String? = nil, routingPorts: Bool = false) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
         let store = InMemoryPhysicalDesignArtifactStore()
         var technology = """
         VERSION 5.8 ;
@@ -723,7 +730,19 @@ struct ProcessGeometryTests {
         END INV_X1
         END LIBRARY
         """
+        if routingPorts {
+            cells = """
+            VERSION 5.8 ; UNITS DATABASE MICRONS 1000 ; END UNITS
+            MACRO INV_X1 CLASS CORE ; SIZE 2 BY 1 ; SYMMETRY X Y R90 ; SITE unit ;
+              PIN Y DIRECTION OUTPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 1.2 0.1 1.8 0.7 ; END END Y
+              PIN A DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 0.1 0.1 0.7 0.7 ; END END A
+              OBS LAYER metH ; RECT 0.9 0 1.1 0.8 ; END
+            END INV_X1 END LIBRARY
+            """
+        }
         switch scenario {
+        case "cut-obs": cells = cells.replacingOccurrences(of: "OBS LAYER metH ; RECT 0.9 0 1.1 0.8 ; END", with: "OBS LAYER metH ; RECT 0.9 0 1.1 0.8 ; LAYER cutHV ; RECT -10 -10 20 20 ; END")
+        case "port-cut-spacing": cells = cells.replacingOccurrences(of: "END INV_X1", with: "PIN Z1 DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; VIA 2.5 2.5 hv ; END END Z1\nPIN Z2 DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; VIA 2.599 2.5 hv ; END END Z2\nEND INV_X1")
         case "site-y": technology = technology.replacingOccurrences(of: "SYMMETRY X Y R90 ; END unit", with: "SYMMETRY Y ; END unit")
         case "missing-site": cells = cells.replacingOccurrences(of: "SITE unit", with: "SITE missing")
         case "duplicate-site": technology = technology.replacingOccurrences(of: "END LIBRARY", with: "SITE unit CLASS CORE ; SIZE 0.1 BY 1 ; END unit\nEND LIBRARY")

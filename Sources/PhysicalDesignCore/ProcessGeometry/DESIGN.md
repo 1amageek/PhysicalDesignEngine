@@ -17,6 +17,7 @@ does not establish route closure, timing closure or process qualification.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
+| [RoutingGeometry](../RoutingGeometry/DESIGN.md) | used by | PORT/OBS/layer/fixed-contact projection | Actual routing geometry | Candidate selection and conductor contact proof belong to routing |
 | [LegalPlacement](../LegalPlacement/DESIGN.md) | used by | Exact SIZE, source symmetry/site and reference pins | Candidate source poses | Allocation retains pin/net identity and final source admission |
 | [Core](../DESIGN.md) | parent / used by | Native snapshot and request | Mutation input preparation | Output must be validated before persistence |
 | [ProcessInputs](../ProcessInputs/DESIGN.md) | depends on | Admitted LEF views and exact DBU | Shared source intake | No file reread or name-based asset selection |
@@ -48,6 +49,7 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
 - LEF ORIGIN is added before the standard orientation. Rotation/reflection uses
   the common DEF mapping. The transformed SIZE lower-left corner is normalized
   to the canonical placement location; pins outside SIZE remain outside.
+- Routing queries own scalar default WIDTH/SPACING admission and cut overlap/edge spacing across expanded source PORT cuts and constructed contacts. RoutingGeometry owns candidate selection and conductor connectivity.
 - Fixed vias retain each of the three declared layer shapes and resistance.
   The source stack requires routing/cut/routing layers, with explicit canonical
   numbers compatible with native lower/upper ordering. Missing geometry or
@@ -58,8 +60,8 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
 - Source manifest and asset content references are retained for exact resume checks.
   The catalogue is transient; it is not a second canonical database or file cache.
 - Snapshot schema 2 retains exact manifest/asset references, standard cell orientation,
-  optional pin access layer, optional row site name/orientation and optional fixed-via
-  master. Optional fields support explicitly unqualified geometry smoke inputs; a
+  optional pin access layer, optional row site name/orientation, optional fixed-via
+  master and optional conductor width. Optional fields support explicitly unqualified geometry smoke inputs; a
   process-bound snapshot requires every referenced process meaning to be resolved.
 - Resumption requires the same manifest and full asset-ID/reference map. Omitting or
   substituting a source cannot downgrade a process-bound snapshot to geometry smoke.
@@ -112,8 +114,9 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
   not a lossless resume authority.
 - DEF export requires a valid snapshot and explicit die. The current process-bound
   floorplan/cell subset emits exact source layer/site names, orientations and FIXED
-  status without synthetic cell-dimension properties. Routed/via/top-port/special-net
-  export fails before persistence until B6 establishes its standard contract.
+  status without synthetic cell-dimension properties. RoutingGeometry owns bounded
+  normal-net default-width/named-contact export. Top-port/special-net export and
+  routed import remain unsupported until their standard contracts are established.
 
 ## State, Ownership, and Lifecycle
 

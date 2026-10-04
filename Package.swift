@@ -55,7 +55,7 @@ let package = Package(
                 .product(name: "DEF", package: "swift-mask-data"),
                 .product(name: "MaskGeometry", package: "swift-mask-data")
             ],
-            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md", "ProcessGeometry/DESIGN.md", "LegalPlacement/DESIGN.md"]
+            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md", "ProcessGeometry/DESIGN.md", "LegalPlacement/DESIGN.md", "RoutingGeometry/DESIGN.md"]
         ),
         .target(
             name: "FloorplanEngine",

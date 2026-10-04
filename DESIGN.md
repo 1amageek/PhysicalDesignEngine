@@ -85,7 +85,8 @@ Geometry-only re-execution clears preceding timing estimates because no timing
 model was evaluated for the new routes.
 These direction rules compose with declared-grid admission owned by
 [PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md). Native off-grid pin
-access, cell pin shapes, legal via stacks and complete process rules remain incomplete.
+access and bounded conductor/contact output are owned by PhysicalDesignCore through
+RoutingGeometry. Complete process rules and production qualification remain separate.
 
 Routing checks every segment against other nets on that segment's actual layer.
 Coincident geometry on different layers is not a same-layer spacing violation.
@@ -136,9 +137,9 @@ and shutdown remain outside the native mutation engine.
 Malformed configuration, ambiguous inputs, invalid snapshots, routing blockages,
 same-layer spacing conflicts, incomplete nets and unsupported fidelity produce
 structured failures. Per-request configuration owns route width/spacing, allowed
-layers, geometry and repair constraints. Existing deterministic Manhattan routing
-is a limited native algorithm; it does not establish timing-driven or foundry-rule
-closure. WASM and Embedded execution are not claimed by this Foundation-based
+layers, geometry and repair constraints. RoutingGeometry owns bounded source-bound
+search and truthful default-width output. Source-free geometry smoke remains a limited
+algorithm. Neither path establishes timing-driven or foundry-rule closure. WASM and Embedded execution are not claimed by this Foundation-based
 macOS package or by macOS-only verification evidence.
 
 Technology input preparation and declared-grid validation are specified by

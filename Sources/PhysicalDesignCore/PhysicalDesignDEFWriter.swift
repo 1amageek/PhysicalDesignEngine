@@ -16,10 +16,26 @@ public struct PhysicalDesignDEFWriter: Sendable {
             // Mutation already admitted this output; export checks identity and loss without repeating shape projection.
             guard let processGeometry, snapshot.processManifest == processGeometry.manifestReference,
                   snapshot.processAssets == processGeometry.sources else { throw PhysicalDesignDEFExportError.unresolvedProcessSources }
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Native process-bound DEF output currently preserves floorplan/cell geometry and connectivity only. Routed metal/vias, top-level port shapes and special nets need exact standard interchange before this API/CLI path may export them successfully.
-            guard snapshot.routes.isEmpty, snapshot.vias.isEmpty, snapshot.powerStructures.isEmpty,
-                  snapshot.pins.allSatisfy({ $0.cellID != nil }) else {
-                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Exact routed/via/top-port/special-net DEF interchange is not complete.")
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Source-bound top-level PORT and special-net geometry require exact standard interchange. API/CLI export must reject those profiles until their geometry is represented without loss.
+            guard snapshot.powerStructures.isEmpty, snapshot.pins.allSatisfy({ $0.cellID != nil }) else {
+                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Top-port and special-net DEF interchange is not complete.")
+            }
+            for route in snapshot.routes {
+                for segment in route.segments {
+                    guard let width = segment.widthDBU else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Normal-net conductor width is unqualified.") }
+                    do {
+                        _ = try processGeometry.routingWidthAndSpacing(layer: segment.layer, units: snapshot.unitsPerMicron, width: width)
+                        _ = try PhysicalDesignSourceRouter.conductor(segment, width: width)
+                    } catch let error as PhysicalDesignRoutingSourceError {
+                        throw PhysicalDesignDEFExportError.unsupportedProcessGeometry(error.message)
+                    } catch let error as PhysicalDesignSourceRouter.Failure {
+                        throw PhysicalDesignDEFExportError.invalidSnapshot(error.message)
+                    }
+                }
+            }
+            for via in snapshot.vias {
+                guard via.master != nil else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Contact master is unqualified.") }
+                _ = try processGeometry.resolveVia(via, within: die)
             }
         }
         func layerName(_ number: Int) throws -> String {
@@ -91,8 +107,13 @@ public struct PhysicalDesignDEFWriter: Sendable {
             if net.isClock { line += " + USE CLOCK" }
             for route in routesByNet[net.id, default: []].sorted(by: { $0.id < $1.id }) {
                 for segment in route.segments.sorted(by: { $0.id < $1.id }) {
-                    line += " + ROUTED M\(segment.layer) 0 ( \(segment.x1) \(segment.y1) ) ( \(segment.x2) \(segment.y2) )"
+                    line += " + ROUTED \(try layerName(segment.layer)) ( \(segment.x1) \(segment.y1) ) ( \(segment.x2) \(segment.y2) )"
                 }
+            }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Source-free smoke has no fixed contact declaration and cannot qualify routed DEF contact semantics. Exact contact emission belongs to the source-bound profile.
+            for via in (processGeometry == nil ? [] : snapshot.vias.filter({ $0.netID == net.id })).sorted(by: { $0.id < $1.id }) {
+                guard let master = via.master else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Fixed contact export requires its exact master name.") }
+                line += " + ROUTED \(try layerName(via.lowerLayer)) ( \(via.x) \(via.y) ) \(master)"
             }
             lines.append(line + " ;")
         }

@@ -7,7 +7,8 @@ Parent: [package design](../../DESIGN.md). Child:
 [TechnologyConstraints](TechnologyConstraints/DESIGN.md),
 [ProcessInputs](ProcessInputs/DESIGN.md),
 [MasterGeometry](MasterGeometry/DESIGN.md),
-[LegalPlacement](LegalPlacement/DESIGN.md), and
+[LegalPlacement](LegalPlacement/DESIGN.md),
+[RoutingGeometry](RoutingGeometry/DESIGN.md), and
 [ProcessGeometry](ProcessGeometry/DESIGN.md).
 
 ## Responsibilities and Boundaries
@@ -22,6 +23,7 @@ release and database persistence remain outside this module.
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Execution and artifact invariants | Public stage behavior | Production remains blocked |
 | [TechnologyConstraints](TechnologyConstraints/DESIGN.md) | child | Verified snapshot preparation | PDK/LEF to native tracks | No process qualification claim |
+| [RoutingGeometry](RoutingGeometry/DESIGN.md) | child | Source-bound access, search and conductor/contact geometry | Bounded native routing | Canonical widths and exact source geometry are required |
 | [LegalPlacement](LegalPlacement/DESIGN.md) | child | Bounded legal-row allocation | Exact occupied intervals and source poses | Geometry allocation does not establish timing-driven closure |
 | [ProcessGeometry](ProcessGeometry/DESIGN.md) | child | Exact mapped cell/pin/site/via shapes | Native process projection | Projection alone does not prove native closure |
 | [MasterGeometry](MasterGeometry/DESIGN.md) | child | Required exact LEF master dimensions | Canonical cell construction | No fabricated dimensions |
@@ -65,10 +67,12 @@ Unknown attributes/sections and incomplete headers fail in the process-bound pro
 existing track layers resolve explicitly and CLOCK use comes from the declaration.
 Input byte identity is verified before decoding. Combined row/rectangle bounds use
 checked arithmetic, so malformed input cannot trap before geometry admission.
-Qualified DEF top ports/routes remain explicitly unsupported until B6. Source layers
+Qualified DEF top ports and routed import remain explicitly unsupported until B6.
+Bounded normal-net routing output is owned by RoutingGeometry. Source layers
 resolve through the projection; names are never converted by stripping an M prefix.
 The no-track geometry-smoke convention remains an explicitly incomplete path.
-Off-grid pin access is unsupported and blocks; it is not rounded or snapped.
+Source-free off-grid point access remains unsupported. Source-bound routing selects
+actual width-aware locations inside exact PORT areas through RoutingGeometry.
 
 ECO resizing is an explicit master replacement: `ecoReplacementMaster` must name a
 selected exact process master. Without process sources or a selected master the
@@ -132,7 +136,9 @@ owns input byte verification. No shared mutable state or conditional isolation i
 ## Failure, Concurrency, and Constraints
 
 Failed preparation or grid validation produces diagnostics and no successful revision.
-Routing retains the existing cancellation and single-bend algorithm boundaries.
+[RoutingGeometry](RoutingGeometry/DESIGN.md) owns source-bound search, cancellation,
+conductor widths, contact admission and bounded normal-net output. Source-free smoke
+retains an explicitly incomplete single-bend algorithm.
 
 ## Verification and Change Impact
 

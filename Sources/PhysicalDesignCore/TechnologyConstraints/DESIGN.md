@@ -4,7 +4,7 @@
 
 Prepare process-bound routing constraints for native geometry execution.
 Parent: [PhysicalDesignCore](../DESIGN.md). No children. This is a routing-grid technology
-LEF subset; pin access, via stacks, advanced spacing and process qualification remain incomplete.
+LEF grid subset. RoutingGeometry owns source pin access and fixed contacts; advanced rules and process qualification remain incomplete.
 
 ## Responsibilities and Boundaries
 
@@ -17,6 +17,7 @@ The native mutation engine owns routing and grid admission.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [PhysicalDesignCore](../DESIGN.md) | parent / used by | Snapshot and artifact store | Executor input preparation | Preserve original snapshot for diff generation |
+| [RoutingGeometry](../RoutingGeometry/DESIGN.md) | coordinates with | Scalar source clearance selection | Source-bound routing admission | Routing owns max(source SPACING, caller clearance) |
 | [ProcessInputs](../ProcessInputs/DESIGN.md) | depends on | Admitted manifest and technology views | Shared parsed inputs | No repeated read or parsing |
 | [PDKKit](../../../../PDKKit/DESIGN.md) | depends on | PDKManifestCodec, manifest values | Exact process/layer identity | Do not infer layer numbers from names |
 | [swift-mask-data](../../../../swift-mask-data/DESIGN.md) | depends on | LEFLibraryReader, shared typed axis values | Exact technology routing view | Common codec rejects unretained grammar; engine rejects unsupported rules |
@@ -47,7 +48,7 @@ Offset is required rather than inferred. Non-finite, negative, missing or
 non-representable values fail. Micron values are scaled by snapshot units; nearest
 integer DBU is admitted only within one floating-point ULP and below 2^53, retaining
 integer precision. Width must satisfy MINWIDTH/default WIDTH and optional MAXWIDTH;
-configured spacing must satisfy base SPACING. Qualified SPACING is rejected by
+configured spacing must satisfy base SPACING outside source-bound global/detailed routing and selected-net ECO rerouting. Those routing paths retain the source value and let RoutingGeometry select the greater of source SPACING and caller clearance. Qualified SPACING is rejected by
 the common codec; SPACINGTABLE is retained by the codec but unsupported by this
 native routing profile and explicitly fails before mutation.
 
