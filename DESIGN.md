@@ -27,6 +27,9 @@ layout integration.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md) | child | Exact state admission and native mutation | Component-owned bounded placement | Geometry success is separate from timing and production |
+| [TimingEngine](../TimingEngine/DESIGN.md) | depends on for CTS | Strict selected-source Liberty characterization | Checked pin/cell/threshold semantics | Dependency adoption follows verified immutable lower contracts |
+| [PEXEngine](../PEXEngine/DESIGN.md) | depends on for CTS | Existing passive RC material, mesh and electrodes | Physical electrical model authority | RC coefficients and calibration qualification remain separate |
+| [CoreSpice](../CoreSpice/DESIGN.md) | depends on for CTS | Bounded public passive CPU transient | Existing numerical solver | No nonlinear, Metal or signoff qualification is inferred |
 | [LSI architecture](../docs/platform-architecture.md) | parent system architecture | Native-primary platform ownership | Independent domain engines compose through Xcircuite | Smoke completion does not prove platform completion |
 | [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | Artifact identity, diagnostics, provenance | Shared cross-domain contracts | Content identity is separate from availability |
 | [LogicDesign](../LogicDesign/DESIGN.md) | depends on | Logic design reference | Exact logical input identity | Preserve input digest binding |
@@ -60,8 +63,13 @@ production claims remain distinct. `productionImplementation` fails with
 `native_production_implementation_unsupported` until native production behavior is
 implemented and verified; no caller flag or external backend may bypass this gate.
 
-Geometry uses DBU. Timing estimates use PS only with verified PDK/RC/Liberty/corner
-characterization; missing models and extrapolation fail explicitly.
+Geometry uses DBU. Source-bound CTS model selection, characterized timing units,
+waveforms, failure/resource contracts and typed model observations are owned by
+[ClockTreeSynthesis](Sources/PhysicalDesignCore/ClockTreeSynthesis/DESIGN.md), reached
+through PhysicalDesignCore. Its schema-2 passive transient contract replaces the
+legacy source-read-and-discard/length-only path using verified lower contracts.
+Actual RC node waveforms own sink delay and slew evidence. Model convergence does not grant
+physical signoff or production qualification.
 
 Track direction describes the wire direction: horizontal track positions vary on
 Y across core height; vertical positions vary on X across core width. Floorplan
@@ -72,7 +80,8 @@ exceed `maximumRoutingLayer`. Missing directional coverage blocks execution;
 an unusable explicit set must not trigger odd/even substitution. Layer parity is
 only the synthetic geometry-smoke convention when no tracks exist. Configuration
 validation therefore does not infer a layer's direction from its number.
-CTS records the selected horizontal layer in its clock-route constraints.
+Geometry-smoke CTS records the selected horizontal layer in its clock-route constraints.
+Source-bound CTS layer use and numerical evidence are owned by the linked CTS design.
 Re-execution identifies buffered branches by their owned output pins, replaces
 the family's routes and vias, and updates those constraints to the selected layer;
 it does not synthesize existing branches again as independent clock roots.

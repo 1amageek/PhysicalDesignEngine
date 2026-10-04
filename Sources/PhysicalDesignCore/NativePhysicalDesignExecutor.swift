@@ -87,14 +87,14 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             }
             let sourceBound = try processGeometry?.bind(loaded.snapshot) ?? loaded.snapshot
             let preparedSnapshot = try PhysicalDesignTechnologyConstraints.prepare(sourceBound, request: request, processInputs: processInputs)
-            let timingModel = try await loadClockTimingModel(from: request)
+            let timingModel = try await loadClockTimingModel(from: request, snapshot: preparedSnapshot)
             try Task.checkCancellation()
             let outcome = await mutationEngine.applyPrepared(
                 request,
                 to: preparedSnapshot,
-                clockTimingModel: timingModel,
                 clockTimingModelReference: request.clockTimingModel,
-                processGeometry: processGeometry
+                processGeometry: processGeometry,
+                clockCharacterization: timingModel
             )
             switch outcome.status {
             case .blocked, .cancelled:
@@ -240,15 +240,15 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
     }
 
     private func loadClockTimingModel(
-        from request: PhysicalDesignRequest
-    ) async throws -> PhysicalDesignClockTimingModel? {
+        from request: PhysicalDesignRequest, snapshot: PhysicalDesignSnapshot
+    ) async throws -> PhysicalDesignClockCharacterization? {
         guard let reference = request.clockTimingModel else { return nil }
         guard reference.processID == request.pdk.processID,
               reference.pdkVersion == request.pdk.version,
               reference.pdkManifestArtifact.reference == request.pdk.manifest else {
             throw PhysicalDesignClockTimingModelError.sourceArtifactMismatch("selected PDK")
         }
-        return try await timingModelLoader.load(reference, from: artifactStore)
+        return try await timingModelLoader.load(reference, for: snapshot, from: artifactStore)
     }
 
     private func loadSnapshot(from request: PhysicalDesignRequest, processInputs: PhysicalDesignProcessInputs?) async throws -> LoadedSnapshot {
@@ -341,6 +341,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         processGeometry: PhysicalDesignProcessGeometry?
     ) async throws -> PhysicalDesignResult {
         // Admission and standard export must finish before any revision is persisted.
+        try Task.checkCancellation()
         let defData = Data(try defWriter.write(output, processGeometry: processGeometry).utf8)
         let snapshotData = try codec.encode(output)
         let snapshotPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.json"
@@ -477,7 +478,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 diagnostics.append(diagnostic(
                     severity: .error,
                     code: "native_characterized_timing_stage_unsupported",
-                    message: "The native backend supports characterized timing only for its CTS geometry; placement and routing remain geometry smoke capabilities.",
+                    message: "The native backend computes only the declared passive RC CTS model; physical timing qualification remains blocked.",
                     actions: ["select_geometry_smoke", "use_a_qualified_timing_driven_backend"]
                 ))
             }

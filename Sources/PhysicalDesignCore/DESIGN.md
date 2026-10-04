@@ -8,6 +8,7 @@ Parent: [package design](../../DESIGN.md). Child:
 [ProcessInputs](ProcessInputs/DESIGN.md),
 [MasterGeometry](MasterGeometry/DESIGN.md),
 [LegalPlacement](LegalPlacement/DESIGN.md),
+[ClockTreeSynthesis](ClockTreeSynthesis/DESIGN.md),
 [RoutingGeometry](RoutingGeometry/DESIGN.md), and
 [ProcessGeometry](ProcessGeometry/DESIGN.md).
 
@@ -25,6 +26,7 @@ release and database persistence remain outside this module.
 | [TechnologyConstraints](TechnologyConstraints/DESIGN.md) | child | Verified snapshot preparation | PDK/LEF to native tracks | No process qualification claim |
 | [RoutingGeometry](RoutingGeometry/DESIGN.md) | child | Source-bound access, search and conductor/contact geometry | Bounded native routing | Canonical widths and exact source geometry are required |
 | [LegalPlacement](LegalPlacement/DESIGN.md) | child | Bounded legal-row allocation | Exact occupied intervals and source poses | Geometry allocation does not establish timing-driven closure |
+| [ClockTreeSynthesis](ClockTreeSynthesis/DESIGN.md) | child | Explicit source-bound CTS and passive RC model observations | Bounded lower-contract composition | Model convergence cannot grant physical signoff |
 | [ProcessGeometry](ProcessGeometry/DESIGN.md) | child | Exact mapped cell/pin/site/via shapes | Native process projection | Projection alone does not prove native closure |
 | [MasterGeometry](MasterGeometry/DESIGN.md) | child | Required exact LEF master dimensions | Canonical cell construction | No fabricated dimensions |
 | [ProcessInputs](ProcessInputs/DESIGN.md) | child | Explicit asset-ID-bound standard views | Shared exact physical source intake | Input identity and manifest role are validated before projection |
@@ -100,17 +102,21 @@ and each segment-layer boundary. A bend via alone cannot bridge a different pin
 layer at an endpoint. Repeated same-net transitions at the same position/pair are
 retained once; no process-free pin layer is inferred.
 
+CTS characterization and source-bound passive RC model execution are owned by [ClockTreeSynthesis](ClockTreeSynthesis/DESIGN.md). That component
+composes existing placement, routing, exact process, Liberty, PEX and passive
+transient contracts; it does not introduce a separate physical graph owner.
+
 CTS and ECO inserted buffers require a selected exact source master with one
 declared input and one output signal/clock port. Port names are not assumed to be
 A/Y. Instance dimensions, orientation and placement come from its source SIZE and
-compatible SITE row. One bounded native placement helper owns core/cell/blockage
-admission; process-aware pin access and obstruction closure remain B5.
-`ecoBufferMaster` selects the ECO source; `clockBufferMaster` selects the CTS source.
+compatible SITE row. The bounded placement and source router owners provide core/cell/blockage and
+width-aware PORT/OBS admission.
+`ecoBufferMaster` selects the ECO source. Source-bound CTS selects its buffer master
+through the explicit model contract owned by ClockTreeSynthesis.
 Source-free buffer insertion fails. ECO insertion publishes the exact split-net
 geometry candidate with invalidated route/clock evidence and an explicit routing
-follow-up; it does not implicitly run a second mutating routing stage. CTS creates
-fresh clock geometry using actual buffer pin positions and drops invalidated
-non-clock routes/proofs when it inserts cells. Functional equivalence and timing
+follow-up; it does not implicitly run a second mutating routing stage. Source-bound CTS preserves original cell poses and unrelated routes, then creates
+fresh unpublished clock families before measured model constraints admit a tree. Functional equivalence and timing
 closure remain separate. Antenna protection insertion stays explicitly unsupported
 until B7 can derive and recheck antenna metrics; no fabricated diode or ratio
 improvement is a successful protection result.

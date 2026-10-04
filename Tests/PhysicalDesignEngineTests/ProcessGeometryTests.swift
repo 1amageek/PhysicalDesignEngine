@@ -221,7 +221,7 @@ struct ProcessGeometryTests {
         }
     }
 
-    @Test("routing rejects narrow access while CTS retains its separate fixed-via contract", arguments: [
+    @Test("routing rejects narrow access and source CTS requires characterization before construction", arguments: [
         "routing", "clock", "eco", "power", "source-access", "vertical-access", "no-default-via", "ambiguous-default-via", "offset-via", "clock-no-default", "clock-ambiguous"
     ])
     func constructedFixedVias(scenario: String) async throws {
@@ -262,18 +262,9 @@ struct ProcessGeometryTests {
         try geometry.validate(snapshot)
         let mutation = PhysicalDesignNativeMutationEngine()
         let outcome = await mutation.applyPrepared(request, to: snapshot, processGeometry: geometry)
-        if scenario == "clock" {
-            #expect(outcome.status == .completed, "\(outcome.diagnostics)")
-            let output = try #require(outcome.snapshot)
-            #expect(output.vias.count == 2 && output.vias.allSatisfy { $0.master == "hv" && $0.lowerLayer == 2 && $0.upperLayer == 3 })
-            #expect(output.vias.contains { $0.x == 2100 && $0.y == 1100 })
-            #expect(output.vias.contains { $0.x == 2100 && $0.y == 2000 })
-            try geometry.validate(output)
-        } else {
-            #expect(outcome.status == .blocked && outcome.snapshot == nil)
-            let code = scenario.hasPrefix("clock") || scenario == "power" ? "native_via_source_invalid" : "routing_pin_access_unavailable"
-            #expect(outcome.diagnostics.contains { $0.code.rawValue == code }, "\(outcome.diagnostics)")
-        }
+        #expect(outcome.status == .blocked && outcome.snapshot == nil)
+        let code = scenario.hasPrefix("clock") ? "clock_timing_model_required" : (scenario == "power" ? "native_via_source_invalid" : "routing_pin_access_unavailable")
+        #expect(outcome.diagnostics.contains { $0.code.rawValue == code }, "\(outcome.diagnostics)")
     }
 
     @Test("named non-default vias retain identity and footprint bounds govern redundant candidates")
@@ -360,7 +351,12 @@ struct ProcessGeometryTests {
             }
         }
         let result = await mutation.applyPrepared(request, to: input, processGeometry: geometry)
-        if scenario == "eco" || scenario == "clock" {
+        if scenario == "clock" {
+            #expect(result.status == .blocked && result.snapshot == nil)
+            #expect(result.diagnostics.contains { $0.code.rawValue == "clock_timing_model_required" })
+            return
+        }
+        if scenario == "eco" {
             #expect(result.status == .completed, "\(result.diagnostics)")
             let output = try #require(result.snapshot)
             let cell = try #require(output.cells.first { $0.master == "BUF_EXACT" })

@@ -245,8 +245,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var sourcePinID: String
         public var sinkPinIDs: [String]
         public var bufferCellIDs: [String]
-        public var shortestPathLengthDBU: Int64
-        public var longestPathLengthDBU: Int64
+        public var shortestPathLengthDBU: Int64?
+        public var longestPathLengthDBU: Int64?
         public var timingEstimate: PhysicalDesignClockTimingEstimate?
 
         public init(
@@ -255,8 +255,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             sourcePinID: String,
             sinkPinIDs: [String],
             bufferCellIDs: [String] = [],
-            shortestPathLengthDBU: Int64 = 0,
-            longestPathLengthDBU: Int64 = 0,
+            shortestPathLengthDBU: Int64? = nil,
+            longestPathLengthDBU: Int64? = nil,
             timingEstimate: PhysicalDesignClockTimingEstimate? = nil
         ) {
             self.id = id
@@ -618,7 +618,9 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             if !pinIDs.contains(tree.sourcePinID) || !net.pinIDs.contains(tree.sourcePinID) {
                 diagnostics.append("clock tree \(tree.id) has an invalid source pin")
             }
-            let clockFamilyNets = nets.filter { $0.id == tree.netID || $0.id.hasPrefix("\(tree.netID)_branch_") }
+            let bufferIDs = Set(tree.bufferCellIDs)
+            let branchNetIDs = Set(pins.filter { bufferIDs.contains($0.cellID ?? "") && $0.direction == "output" }.compactMap(\.netID))
+            let clockFamilyNets = nets.filter { $0.id == tree.netID || branchNetIDs.contains($0.id) }
             for sinkPinID in tree.sinkPinIDs where !pinIDs.contains(sinkPinID) || !clockFamilyNets.contains(where: { $0.pinIDs.contains(sinkPinID) }) {
                 diagnostics.append("clock tree \(tree.id) has an invalid sink pin \(sinkPinID)")
             }
@@ -628,16 +630,16 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
                     continue
                 }
             }
-            if tree.shortestPathLengthDBU < 0
-                || tree.longestPathLengthDBU < tree.shortestPathLengthDBU {
+            if (tree.shortestPathLengthDBU == nil) != (tree.longestPathLengthDBU == nil)
+                || (tree.shortestPathLengthDBU.map { $0 < 0 } ?? false)
+                || (tree.longestPathLengthDBU.map { $0 < (tree.shortestPathLengthDBU ?? 0) } ?? false) {
                 diagnostics.append("clock tree \(tree.id) has invalid path-length geometry")
             }
             if let estimate = tree.timingEstimate,
                estimate.cornerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !estimate.estimatedSkewPS.isFinite
                 || !estimate.estimatedLatencyPS.isFinite
-                || estimate.estimatedSkewPS < 0
-                || estimate.estimatedLatencyPS < 0 {
+                || estimate.estimatedSkewPS < 0 {
                 diagnostics.append("clock tree \(tree.id) has an invalid characterized timing estimate")
             }
         }

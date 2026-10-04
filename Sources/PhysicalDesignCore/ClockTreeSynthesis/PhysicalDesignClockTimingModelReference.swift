@@ -6,6 +6,7 @@ public struct PhysicalDesignClockTimingModelReference: Sendable, Hashable, Codab
     public var pdkManifestArtifact: PhysicalDesignArtifactBinding
     public var rcModelArtifact: PhysicalDesignArtifactBinding
     public var cellLibraryArtifact: PhysicalDesignArtifactBinding
+    public var calibrationArtifacts: [PhysicalDesignArtifactBinding]
     public var processID: String
     public var pdkVersion: String
     public var cornerID: String
@@ -15,6 +16,7 @@ public struct PhysicalDesignClockTimingModelReference: Sendable, Hashable, Codab
         pdkManifestArtifact: PhysicalDesignArtifactBinding,
         rcModelArtifact: PhysicalDesignArtifactBinding,
         cellLibraryArtifact: PhysicalDesignArtifactBinding,
+        calibrationArtifacts: [PhysicalDesignArtifactBinding],
         processID: String,
         pdkVersion: String,
         cornerID: String
@@ -23,12 +25,13 @@ public struct PhysicalDesignClockTimingModelReference: Sendable, Hashable, Codab
         self.pdkManifestArtifact = pdkManifestArtifact
         self.rcModelArtifact = rcModelArtifact
         self.cellLibraryArtifact = cellLibraryArtifact
+        self.calibrationArtifacts = calibrationArtifacts
         self.processID = processID
         self.pdkVersion = pdkVersion
         self.cornerID = cornerID
     }
 
     public var sourceArtifacts: [PhysicalDesignArtifactBinding] {
-        [pdkManifestArtifact, rcModelArtifact, cellLibraryArtifact]
+        [pdkManifestArtifact, rcModelArtifact, cellLibraryArtifact] + calibrationArtifacts
     }
 }

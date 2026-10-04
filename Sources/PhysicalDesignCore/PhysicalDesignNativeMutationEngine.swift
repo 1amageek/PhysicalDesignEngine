@@ -49,7 +49,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         to input: PhysicalDesignSnapshot,
         clockTimingModel: PhysicalDesignClockTimingModel? = nil,
         clockTimingModelReference: PhysicalDesignClockTimingModelReference? = nil,
-        processGeometry: PhysicalDesignProcessGeometry?
+        processGeometry: PhysicalDesignProcessGeometry?,
+        clockCharacterization: PhysicalDesignClockCharacterization? = nil
     ) async -> Outcome {
         if Task.isCancelled {
             return Outcome(
@@ -99,13 +100,29 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .placement:
             outcome = placement(input, configuration: request.configuration, processGeometry: processGeometry)
         case .clockTreeSynthesis:
-            outcome = clockTreeSynthesis(
-                input,
-                configuration: request.configuration,
-                timingModel: clockTimingModel,
-                timingModelReference: clockTimingModelReference,
-                processGeometry: processGeometry
-            )
+            if let processGeometry {
+                guard let clockCharacterization else {
+                    return blocked(code: "clock_timing_model_required", message: "Source-bound CTS requires strict Liberty, RC, explicit PWL and constraint admission.", actions: ["provide_source_bound_clock_characterization"])
+                }
+                do {
+                    let snapshot = try await NativePhysicalDesignClockTreeSynthesizer().synthesize(input,
+                        configuration: request.configuration, geometry: processGeometry, characterization: clockCharacterization)
+                    outcome = completed(snapshot, actions: ["review_modeled_clock_evidence", "qualify_physical_timing_independently"],
+                        metrics: metrics(for: snapshot), claims: .init(geometry: .verified, timing: .blocked, production: .blocked))
+                } catch is CancellationError {
+                    return Outcome(snapshot: nil, status: .cancelled)
+                } catch {
+                    if Task.isCancelled { return Outcome(snapshot: nil, status: .cancelled) }
+                    return blocked(code: "cts_characterization_failed", message: String(describing: error),
+                        actions: ["inspect_exact_geometry_characterization_and_numerical_limits"])
+                }
+            } else {
+                guard clockTimingModel == nil, clockCharacterization == nil else {
+                    return blocked(code: "cts_source_geometry_required", message: "Characterized CTS requires exact process geometry.", actions: ["provide_exact_process_sources"])
+                }
+                outcome = clockTreeSynthesis(input, configuration: request.configuration, timingModel: nil,
+                    timingModelReference: nil, processGeometry: nil)
+            }
         case .globalRouting:
             outcome = routing(input, configuration: request.configuration, mode: "global", processGeometry: processGeometry)
         case .detailedRouting:
@@ -758,32 +775,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             if let netIndex = output.nets.firstIndex(where: { $0.id == net.id }) {
                 output.nets[netIndex].pinIDs = parentPinIDs.sorted()
             }
-            let timingEstimate: PhysicalDesignClockTimingEstimate?
-            if let timingModel, let timingModelReference {
-                do {
-                    let delays = try zip(sinkPathLengths, sinkBufferMasters).map { length, masters in
-                        try timingModel.delayPS(pathLengthDBU: length, bufferMasters: masters)
-                    }
-                    timingEstimate = PhysicalDesignClockTimingEstimate(
-                        cornerID: timingModel.cornerID,
-                        estimatedSkewPS: (delays.max() ?? 0) - (delays.min() ?? 0),
-                        estimatedLatencyPS: delays.max() ?? 0,
-                        modelDigest: timingModelReference.modelArtifact.reference.digest.hexadecimalValue,
-                        pdkManifestDigest: timingModelReference.pdkManifestArtifact.reference.digest.hexadecimalValue,
-                        rcModelDigest: timingModelReference.rcModelArtifact.reference.digest.hexadecimalValue,
-                        cellLibraryDigest: timingModelReference.cellLibraryArtifact.reference.digest.hexadecimalValue
-                    )
-                } catch {
-                    return blocked(
-                        code: "cts_timing_characterization_insufficient",
-                        message: error.localizedDescription,
-                        entity: id,
-                        actions: ["extend_the_characterized_path_range", "provide_complete_clock_cell_characterization"]
-                    )
-                }
-            } else {
-                timingEstimate = nil
-            }
+            let timingEstimate: PhysicalDesignClockTimingEstimate? = nil
             output.clockTrees.append(
                 PhysicalDesignSnapshot.ClockTree(
                     id: id,
@@ -871,20 +863,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         }
         output.implementationState = implementationState
         output.metadata["clockTreeStatus"] = "constructed"
-        let timingClaim: PhysicalDesignClaimStatus
-        if timingModel != nil {
-            timingClaim = .verified
-            output.metadata["clockTimingStatus"] = "characterized"
-        } else {
-            timingClaim = .blocked
-            output.metadata["clockTimingStatus"] = "blocked_missing_characterization"
-            timingDiagnostics.append(diagnostic(
-                severity: .warning,
-                code: "cts_timing_characterization_missing",
-                message: "Clock geometry was constructed, but no PDK/RC/cell/corner-bound timing model was supplied; timing and production claims are blocked.",
-                actions: ["provide_clock_timing_model", "run_an_independent_timing_oracle"]
-            ))
-        }
+        let timingClaim: PhysicalDesignClaimStatus = .blocked
+        output.metadata["clockTimingStatus"] = "blocked_missing_characterization"
+        timingDiagnostics.append(diagnostic(severity: .warning, code: "cts_timing_characterization_missing",
+            message: "Geometry smoke CTS carries no characterized timing or production qualification.",
+            actions: ["provide_source_bound_clock_characterization"]))
         return completed(
             output,
             diagnostics: timingDiagnostics,

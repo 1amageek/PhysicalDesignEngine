@@ -336,7 +336,12 @@ struct PhysicalDesignProcessGeometry: Sendable {
         }
     }
 
-    private func transform(_ shapes: [IRBoundary], master: Master, orientation: DEFOrientation, x: Int64, y: Int64) throws -> [IRBoundary] {
+    func projectMasterPoint(_ point: IRPoint, master: Master, orientation: DEFOrientation, x: Int64, y: Int64) throws -> IRPoint {
+        try projectMasterCoordinates(Int64(point.x), Int64(point.y), master: master, orientation: orientation, x: x, y: y)
+    }
+
+    private func projectMasterCoordinates(_ pointX: Int64, _ pointY: Int64, master: Master,
+        orientation: DEFOrientation, x: Int64, y: Int64) throws -> IRPoint {
         let rotation = DEFIRConverter.orientationToTransform(orientation)
         func rotate(_ x: Int64, _ y: Int64) throws -> (Int64, Int64) {
             let reflectedY = rotation.mirrorX ? -y : y
@@ -351,12 +356,17 @@ struct PhysicalDesignProcessGeometry: Sendable {
         let corners = try [rotate(0, 0), rotate(master.width, 0), rotate(0, master.height), rotate(master.width, master.height)]
         let minX = min(corners[0].0, corners[1].0, corners[2].0, corners[3].0)
         let minY = min(corners[0].1, corners[1].1, corners[2].1, corners[3].1)
+        let local = try rotate(pointX, pointY)
+        return try Self.translated(local.0 - minX, local.1 - minY, x: x, y: y)
+    }
+
+    private func transform(_ shapes: [IRBoundary], master: Master, orientation: DEFOrientation, x: Int64, y: Int64) throws -> [IRBoundary] {
         return try shapes.map { shape in
             var projected = shape
             // Instance geometry needs its own coordinates; source point buffers remain immutable.
             projected.points = try shape.points.map { point in
-                let local = try rotate(Int64(point.x) + Int64(master.origin.x), Int64(point.y) + Int64(master.origin.y))
-                return try Self.translated(local.0 - minX, local.1 - minY, x: x, y: y)
+                return try projectMasterCoordinates(Int64(point.x) + Int64(master.origin.x), Int64(point.y) + Int64(master.origin.y),
+                    master: master, orientation: orientation, x: x, y: y)
             }
             return projected
         }

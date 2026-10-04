@@ -552,114 +552,18 @@ struct NativeExecutionTests {
         #expect(result.diagnostics.contains { $0.code.rawValue == "native_cell_source_invalid" })
     }
 
-    @Test("CTS timing estimates require verified PDK RC cell and corner characterization")
+    @Test("legacy arbitrary-byte constant clock models are rejected")
     func characterizedCTSTiming() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
-        let pdk = try await store.registerInput(
-            Data("pdk".utf8),
-            relativePath: "inputs/characterized-pdk.json",
-            kind: .technology,
-            format: .json
-        )
-        let rc = try await store.registerInput(
-            Data("rc".utf8),
-            relativePath: "inputs/clock-rc.json",
-            kind: try ArtifactKind(rawValue: "technology.rc"),
-            format: .json
-        )
-        let library = try await store.registerInput(
-            Data("library".utf8),
-            relativePath: "inputs/clock.lib",
-            kind: try ArtifactKind(rawValue: "timing.library"),
-            format: .liberty
-        )
-        let model = PhysicalDesignClockTimingModel(
-            processID: "fixture-130nm",
-            pdkVersion: "1",
-            cornerID: "typical",
-            pdkManifestDigest: pdk.reference.digest.hexadecimalValue,
-            rcModelDigest: rc.reference.digest.hexadecimalValue,
-            cellLibraryDigest: library.reference.digest.hexadecimalValue,
-            wireDelaySamples: [
-                .init(pathLengthDBU: 0, delayPS: 0),
-                .init(pathLengthDBU: 20_000, delayPS: 40),
-            ],
-            cellDelays: [.init(master: "CLKBUF_X1", delayPS: 5)]
-        )
-        let modelData = try PhysicalDesignJSONCodec().encode(model)
-        let modelArtifact = try await store.registerInput(
-            modelData,
-            relativePath: "inputs/clock-timing-model.json",
-            kind: try ArtifactKind(rawValue: "timing.characterization"),
-            format: .json
-        )
-        let modelReference = PhysicalDesignClockTimingModelReference(
-            modelArtifact: modelArtifact,
-            pdkManifestArtifact: pdk,
-            rcModelArtifact: rc,
-            cellLibraryArtifact: library,
-            processID: "fixture-130nm",
-            pdkVersion: "1",
-            cornerID: "typical"
-        )
-        var request = PhysicalDesignFixtureFactory.request(
-            stage: .clockTreeSynthesis,
-            snapshot: PhysicalDesignFixtureFactory.snapshot()
-        )
-        request.inputs += [modelArtifact, pdk, rc, library].map(\.reference)
-        request.inputBindings += [modelArtifact, pdk, rc, library]
-        request.pdk = PDKReference(
-            manifest: pdk.reference,
-            manifestLocator: PhysicalDesignFixtureFactory.locator(for: pdk),
-            processID: "fixture-130nm",
-            version: "1",
-            digest: pdk.reference.digest.hexadecimalValue
-        )
-        request.executionIntent = .characterizedTiming
-        request.clockTimingModel = modelReference
-
-        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
-
-        #expect(result.status == .completed)
-        #expect(result.payload.claims.timing == .verified)
-        #expect(result.payload.claims.production == .blocked)
-        let output = try await decodedSnapshot(from: result, store: store)
-        let estimate = try #require(output.clockTrees.first?.timingEstimate)
-        #expect(estimate.cornerID == "typical")
-        #expect(estimate.estimatedLatencyPS > 0)
-        #expect(estimate.modelDigest == modelArtifact.reference.digest.hexadecimalValue)
-
-        var changedModel = model
-        changedModel.wireDelaySamples = [
-            .init(pathLengthDBU: 0, delayPS: 0),
-            .init(pathLengthDBU: 20_000, delayPS: 80)
-        ]
-        let changedArtifact = try await store.registerInput(
-            try PhysicalDesignJSONCodec().encode(changedModel),
-            relativePath: "inputs/changed-clock-timing-model.json",
-            kind: try ArtifactKind(rawValue: "timing.characterization"),
-            format: .json
-        )
-        var changedReference = modelReference
-        changedReference.modelArtifact = changedArtifact
-        request.runID = "test-changed-cts-characterization"
-        request.initialSnapshot = output
-        request.clockTimingModel = changedReference
-        request.inputs.append(changedArtifact.reference)
-        request.inputBindings.append(changedArtifact)
-        let replay = try await PhysicalDesignEngine(artifactStore: store).execute(request)
-        #expect(replay.status == .blocked)
-        #expect(replay.payload.claims.timing == .blocked)
-        #expect(replay.artifacts.isEmpty)
-        #expect(replay.diagnostics.contains { $0.code.rawValue == "cts_existing_tree_recharacterization_unsupported" })
-
-        var geometryRequest = PhysicalDesignFixtureFactory.request(stage: .clockTreeSynthesis, snapshot: output)
-        geometryRequest.runID = "test-cts-geometry-reexecution"
-        let geometryReplay = try await PhysicalDesignEngine(artifactStore: store).execute(geometryRequest)
-        #expect(geometryReplay.status == .completed)
-        #expect(geometryReplay.payload.claims.timing == .blocked)
-        let geometryOutput = try await decodedSnapshot(from: geometryReplay, store: store)
-        #expect(geometryOutput.clockTrees.allSatisfy { $0.timingEstimate == nil })
+        let pdk = try await store.registerInput(Data("pdk".utf8), relativePath: "inputs/legacy-pdk.json", kind: .technology, format: .json)
+        let rc = try await store.registerInput(Data("rc".utf8), relativePath: "inputs/legacy-rc.json", kind: .technology, format: .json)
+        let library = try await store.registerInput(Data("library".utf8), relativePath: "inputs/legacy.lib", kind: .technology, format: .liberty)
+        let model = try await store.registerInput(Data("{\"schemaVersion\":1,\"wireDelaySamples\":[{\"pathLengthDBU\":0,\"delayPS\":0}]}".utf8), relativePath: "inputs/legacy-model.json", kind: .technology, format: .json)
+        let reference = PhysicalDesignClockTimingModelReference(modelArtifact: model, pdkManifestArtifact: pdk,
+            rcModelArtifact: rc, cellLibraryArtifact: library, calibrationArtifacts: [], processID: "fixture-130nm", pdkVersion: "1", cornerID: "tt")
+        await #expect(throws: (any Error).self) {
+            _ = try await LocalPhysicalDesignClockTimingModelLoader().load(reference, for: PhysicalDesignFixtureFactory.snapshot(), from: store)
+        }
     }
 
     @Test("execution intent does not encode flow authority")

@@ -1,6 +1,7 @@
 import Foundation
 
 public struct PhysicalDesignClockTimingEstimate: Sendable, Hashable, Codable {
+    public var observations: PhysicalDesignClockTimingEvidence?
     public var cornerID: String
     public var estimatedSkewPS: Double
     public var estimatedLatencyPS: Double
@@ -16,8 +17,10 @@ public struct PhysicalDesignClockTimingEstimate: Sendable, Hashable, Codable {
         modelDigest: String,
         pdkManifestDigest: String,
         rcModelDigest: String,
-        cellLibraryDigest: String
+        cellLibraryDigest: String,
+        observations: PhysicalDesignClockTimingEvidence? = nil
     ) {
+        self.observations = observations
         self.cornerID = cornerID
         self.estimatedSkewPS = estimatedSkewPS
         self.estimatedLatencyPS = estimatedLatencyPS

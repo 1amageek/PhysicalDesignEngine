@@ -50,6 +50,13 @@ let package = Package(
         .target(
             name: "PhysicalDesignCore",
             dependencies: [
+                .product(name: "TimingCore", package: "TimingEngine"),
+                .product(name: "PEXNative", package: "PEXEngine"),
+                .product(name: "PEXCore", package: "PEXEngine"),
+                .product(name: "CoreSpice", package: "CoreSpice"),
+                .product(name: "LayoutCore", package: "semiconductor-layout"),
+                .product(name: "LayoutTech", package: "semiconductor-layout"),
+                .product(name: "LayoutVerify", package: "semiconductor-layout"),
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
@@ -59,7 +66,7 @@ let package = Package(
                 .product(name: "DEF", package: "swift-mask-data"),
                 .product(name: "MaskGeometry", package: "swift-mask-data")
             ],
-            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md", "ProcessGeometry/DESIGN.md", "LegalPlacement/DESIGN.md", "RoutingGeometry/DESIGN.md"]
+            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md", "ProcessGeometry/DESIGN.md", "LegalPlacement/DESIGN.md", "RoutingGeometry/DESIGN.md", "ClockTreeSynthesis/DESIGN.md"]
         ),
         .target(
             name: "FloorplanEngine",

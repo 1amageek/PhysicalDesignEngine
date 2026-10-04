@@ -19,6 +19,7 @@ does not establish route closure, timing closure or process qualification.
 |---|---|---|---|---|
 | [RoutingGeometry](../RoutingGeometry/DESIGN.md) | used by | PORT/OBS/layer/fixed-contact projection | Actual routing geometry | Candidate selection and conductor contact proof belong to routing |
 | [LegalPlacement](../LegalPlacement/DESIGN.md) | used by | Exact SIZE, source symmetry/site and reference pins | Candidate source poses | Allocation retains pin/net identity and final source admission |
+| [ClockTreeSynthesis](../ClockTreeSynthesis/DESIGN.md) | used by | Exact canonical master-point orientation/placement projection | Explicit CTS electrode faces | Face selection is caller-owned; projection cannot select an electrical boundary |
 | [Core](../DESIGN.md) | parent / used by | Native snapshot and request | Mutation input preparation | Output must be validated before persistence |
 | [ProcessInputs](../ProcessInputs/DESIGN.md) | depends on | Admitted LEF views and exact DBU | Shared source intake | No file reread or name-based asset selection |
 | [MasterGeometry](../MasterGeometry/DESIGN.md) | depends on | Required unique master SIZE | Cell bounds | No default dimensions |
