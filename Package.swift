@@ -18,7 +18,7 @@ let pdkKitDependency: Package.Dependency = .package(
 
 let swiftMaskDataDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/swift-mask-data.git",
-    revision: "6c6fbdd444bb2fb8878d129bd0d5e82bbfd2ab53"
+    revision: "d62cc0d52bbe9fa66957d5e2a954765cc885cd4d"
 )
 
 let package = Package(
