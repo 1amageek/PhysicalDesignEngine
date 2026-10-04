@@ -13,12 +13,12 @@ let logicDesignDependency: Package.Dependency = .package(
 
 let pdkKitDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/PDKKit.git",
-    revision: "9b42202a120b2174d0d0e88aa5edbcef53f81405"
+    revision: "b59fbe296850ecd788765fa3cd7418328106d75c"
 )
 
 let swiftMaskDataDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/swift-mask-data.git",
-    revision: "3a02e30e7a7343d800319feff5c912816f34565a"
+    revision: "6c6fbdd444bb2fb8878d129bd0d5e82bbfd2ab53"
 )
 
 let package = Package(
