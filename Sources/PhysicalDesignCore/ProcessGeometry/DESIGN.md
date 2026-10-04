@@ -17,6 +17,7 @@ does not establish route closure, timing closure or process qualification.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
+| [LegalPlacement](../LegalPlacement/DESIGN.md) | used by | Exact SIZE, source symmetry/site and reference pins | Candidate source poses | Allocation retains pin/net identity and final source admission |
 | [Core](../DESIGN.md) | parent / used by | Native snapshot and request | Mutation input preparation | Output must be validated before persistence |
 | [ProcessInputs](../ProcessInputs/DESIGN.md) | depends on | Admitted LEF views and exact DBU | Shared source intake | No file reread or name-based asset selection |
 | [MasterGeometry](../MasterGeometry/DESIGN.md) | depends on | Required unique master SIZE | Cell bounds | No default dimensions |

@@ -26,6 +26,7 @@ layout integration.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
+| [PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md) | child | Exact state admission and native mutation | Component-owned bounded placement | Geometry success is separate from timing and production |
 | [LSI architecture](../docs/platform-architecture.md) | parent system architecture | Native-primary platform ownership | Independent domain engines compose through Xcircuite | Smoke completion does not prove platform completion |
 | [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | Artifact identity, diagnostics, provenance | Shared cross-domain contracts | Content identity is separate from availability |
 | [LogicDesign](../LogicDesign/DESIGN.md) | depends on | Logic design reference | Exact logical input identity | Preserve input digest binding |
@@ -159,7 +160,8 @@ layer identity and source content references. Geometry backend range, invalid
 polygons, unsupported MASK/generated-rule families and contradictory layer types
 fail explicitly. Canonical geometry admission surrounds mutation and preserves exact
 process identity across JSON resume. Floorplan and compatible-site placement consume
-the source declarations. Explicit ECO master replacement adopts exact selected SIZE
+the source declarations. Bounded native row allocation and its failure/resource
+contract are owned by PhysicalDesignCore through its LegalPlacement component. Explicit ECO master replacement adopts exact selected SIZE
 and PORTs after matching the complete physical interface; source-free resize fails.
 CTS/ECO insertion consumes exact selected buffer masters, ports and compatible sites;
 source-free buffering fails. ECO split-net geometry and subsequent routing are

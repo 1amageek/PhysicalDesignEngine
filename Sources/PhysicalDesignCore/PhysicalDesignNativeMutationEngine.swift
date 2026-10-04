@@ -411,90 +411,23 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             )
         }
 
-        var output = input
-        var blockageConflictCount = 0
-        let rows = output.rows.sorted { $0.id < $1.id }
-        let pinIndicesByCell = Dictionary(grouping: output.pins.indices, by: { output.pins[$0].cellID })
-        for cell in output.cells where cell.locked && !cell.placed {
-            return blocked(
-                code: "locked_cell_unplaced",
-                message: "Locked cell \(cell.id) has no legal placement.",
-                entity: cell.id,
-                actions: ["place_or_unlock_the_cell"]
-            )
+        let allocation: PhysicalDesignPlacementAllocation
+        let allocator: any PhysicalDesignPlacementAllocating = NativePhysicalDesignPlacementAllocator()
+        do {
+            allocation = try allocator.allocate(input, configuration: configuration, processGeometry: processGeometry)
+        } catch is CancellationError {
+            return Outcome(snapshot: nil, status: .cancelled,
+                diagnostics: [diagnostic(severity: .warning, code: "execution_cancelled",
+                    message: "Native placement was cancelled before publication.", actions: ["resume_from_the_last_immutable_revision"])])
+        } catch let error as PhysicalDesignPlacementError {
+            return blocked(code: error.code, message: error.localizedDescription,
+                actions: ["repair_placement_constraints", "adjust_placement_candidate_ceiling"])
+        } catch {
+            return blocked(code: "placement_source_geometry_invalid", message: error.localizedDescription,
+                actions: ["repair_exact_process_geometry"])
         }
-        var rowIndex = 0
-        var cursorX = rows[0].originX
-        let sortedCellIDs = output.cells.filter { !$0.locked }.map(\.id).sorted()
-        for cellID in sortedCellIDs {
-            guard let cellIndex = output.cells.firstIndex(where: { $0.id == cellID }) else { continue }
-            var cell = output.cells[cellIndex]
-            guard cell.width > 0, cell.height > 0 else {
-                return blocked(
-                    code: "invalid_cell_geometry",
-                    message: "Cell \(cell.id) has non-positive geometry.",
-                    entity: cell.id,
-                    actions: ["repair_cell_geometry"]
-                )
-            }
-            cell.placed = false
-            while rowIndex < rows.count {
-                let row = rows[rowIndex]
-                let rowEnd = row.originX + row.siteCount * row.siteWidth
-                let alignedX = row.originX + max(0, cursorX - row.originX + row.siteWidth - 1) / row.siteWidth * row.siteWidth
-                let candidate = PhysicalDesignSnapshot.Rect(
-                    x: alignedX,
-                    y: row.originY,
-                    width: cell.width,
-                    height: cell.height
-                )
-                let fitsInRow = cell.height <= row.height && alignedX + cell.width <= rowEnd
-                    && (processGeometry?.canPlace(cell, on: row) ?? true)
-                if fitsInRow, output.blockages.contains(where: { $0.intersects(candidate) }) {
-                    blockageConflictCount += 1
-                    cursorX = alignedX + max(cell.width, configuration.siteWidth) + configuration.placementSpacing
-                    continue
-                }
-                if fitsInRow {
-                    cell.x = alignedX
-                    cell.y = row.originY
-                    cell.placed = true
-                    cursorX = alignedX + cell.width + configuration.placementSpacing
-                    let previousCell = output.cells[cellIndex]
-                    if let failure = relocatePins(from: previousCell, to: cell, indices: pinIndicesByCell[cell.id, default: []], in: &output) {
-                        return Outcome(snapshot: nil, status: .blocked, diagnostics: [failure], candidateActions: ["repair_pin_geometry"])
-                    }
-                    output.cells[cellIndex] = cell
-                    break
-                }
-                cursorX = alignedX + max(cell.width, configuration.siteWidth) + configuration.placementSpacing
-                rowIndex += 1
-                if rowIndex < rows.count {
-                    cursorX = rows[rowIndex].originX
-                }
-            }
-            guard cell.placed else {
-                return blocked(
-                    code: "placement_capacity_exceeded",
-                    message: "No legal placement row has capacity for cell \(cell.id).",
-                    entity: cell.id,
-                    actions: ["increase_core_area", "reduce_cell_density", "change_placement_constraints"]
-                )
-            }
-        }
-
-        for index in output.cells.indices where output.cells[index].locked {
-            guard let core = output.core else { continue }
-            let cell = output.cells[index]
-            guard core.contains(PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)) else {
-                return blocked(
-                    code: "locked_cell_outside_core",
-                    message: "Locked cell \(cell.id) is outside the core.",
-                    entity: cell.id,
-                    actions: ["move_or_unlock_the_cell"]
-                )
-            }
-        }
+        var output = allocation.snapshot
+        let blockageConflictCount = allocation.blockageConflictCount
         let core = output.core
         let placedRects = output.cells.map { cell in
             PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)
@@ -563,6 +496,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             diagnostics: placementDiagnostics,
             actions: ["run_clock_tree_synthesis", "run_global_routing"],
             metrics: metrics(for: output) + [
+                PhysicalDesignMetric(name: "placementCandidateChecks", value: Double(allocation.candidateChecks), unit: "count"),
+                PhysicalDesignMetric(name: "placementCandidateCeiling", value: Double(allocation.candidateCeiling), unit: "count"),
+                PhysicalDesignMetric(name: "placementStructuralCeiling", value: Double(allocation.structuralCeiling), unit: "count"),
                 PhysicalDesignMetric(
                     name: "placedCellRatio",
                     value: Double(output.cells.filter(\.placed).count) / Double(output.cells.count),

@@ -6,7 +6,8 @@ PhysicalDesignCore is the package's state, executor, mutation and persistence mo
 Parent: [package design](../../DESIGN.md). Child:
 [TechnologyConstraints](TechnologyConstraints/DESIGN.md),
 [ProcessInputs](ProcessInputs/DESIGN.md),
-[MasterGeometry](MasterGeometry/DESIGN.md), and
+[MasterGeometry](MasterGeometry/DESIGN.md),
+[LegalPlacement](LegalPlacement/DESIGN.md), and
 [ProcessGeometry](ProcessGeometry/DESIGN.md).
 
 ## Responsibilities and Boundaries
@@ -21,6 +22,7 @@ release and database persistence remain outside this module.
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Execution and artifact invariants | Public stage behavior | Production remains blocked |
 | [TechnologyConstraints](TechnologyConstraints/DESIGN.md) | child | Verified snapshot preparation | PDK/LEF to native tracks | No process qualification claim |
+| [LegalPlacement](LegalPlacement/DESIGN.md) | child | Bounded legal-row allocation | Exact occupied intervals and source poses | Geometry allocation does not establish timing-driven closure |
 | [ProcessGeometry](ProcessGeometry/DESIGN.md) | child | Exact mapped cell/pin/site/via shapes | Native process projection | Projection alone does not prove native closure |
 | [MasterGeometry](MasterGeometry/DESIGN.md) | child | Required exact LEF master dimensions | Canonical cell construction | No fabricated dimensions |
 | [ProcessInputs](ProcessInputs/DESIGN.md) | child | Explicit asset-ID-bound standard views | Shared exact physical source intake | Input identity and manifest role are validated before projection |
@@ -109,9 +111,14 @@ closure remain separate. Antenna protection insertion stays explicitly unsupport
 until B7 can derive and recheck antenna metrics; no fabricated diode or ratio
 improvement is a successful protection result.
 
+[LegalPlacement](LegalPlacement/DESIGN.md) owns native placement candidate search,
+caller/structural ceilings and pin pose changes. The module composes that contract
+with exact source admission and immutable output publication.
+
 ## State, Ownership, and Lifecycle
 
-Native placement and ECO movement share one checked cell-owned pin translation.
+Placement and ECO preserve cell-owned pin offsets through checked translation.
+LegalPlacement reconstructs exact source ports when it selects a different orientation.
 Coordinates remain instance-global and source-relative offsets survive relocation.
 After a cell pose/master/dimension change, retained routes/vias, clock trees and
 global placement/routing/repair evidence no longer prove the new snapshot and are

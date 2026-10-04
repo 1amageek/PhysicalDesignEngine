@@ -472,10 +472,11 @@ struct ProcessGeometryTests {
         placement.stage = .placement
         let outcome = await PhysicalDesignNativeMutationEngine().applyPrepared(placement, to: snapshot, processGeometry: geometry)
         #expect(outcome.status == .completed)
-        #expect(outcome.snapshot?.cells.first?.y == 1000)
+        #expect(outcome.snapshot?.cells.first?.y == 0)
+        #expect(outcome.snapshot?.cells.first?.orientation == .s || outcome.snapshot?.cells.first?.orientation == .fs)
     }
 
-    private func nativeRequest(_ base: PhysicalDesignRequest) -> PhysicalDesignRequest {
+    func nativeRequest(_ base: PhysicalDesignRequest) -> PhysicalDesignRequest {
         var request = base
         request.initialSnapshot = .init(topCell: base.design.topDesignName, die: .init(x: 0, y: 0, width: 10000, height: 10000),
             core: .init(x: 0, y: 0, width: 10000, height: 10000),
@@ -690,7 +691,7 @@ struct ProcessGeometryTests {
         }
     }
 
-    private func fixture(_ scenario: String = "valid", replacement: String? = nil) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
+    func fixture(_ scenario: String = "valid", replacement: String? = nil) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
         let store = InMemoryPhysicalDesignArtifactStore()
         var technology = """
         VERSION 5.8 ;

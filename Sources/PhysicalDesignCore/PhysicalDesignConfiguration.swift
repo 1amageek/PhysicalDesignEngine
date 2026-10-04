@@ -7,6 +7,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
     public var rowHeight: Int64
     public var siteWidth: Int64
     public var placementSpacing: Int64
+    public var maximumPlacementCandidateChecks: Int?
     public var preferredRoutingLayers: [Int]
     public var maximumRoutingLayer: Int
     public var targetUtilization: Double
@@ -32,6 +33,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         case rowHeight
         case siteWidth
         case placementSpacing
+        case maximumPlacementCandidateChecks
         case preferredRoutingLayers
         case maximumRoutingLayer
         case targetUtilization
@@ -58,6 +60,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         rowHeight: Int64 = 10_000,
         siteWidth: Int64 = 1_000,
         placementSpacing: Int64 = 200,
+        maximumPlacementCandidateChecks: Int? = nil,
         preferredRoutingLayers: [Int] = [2, 3, 4, 5],
         maximumRoutingLayer: Int = 6,
         targetUtilization: Double = 0.70,
@@ -82,6 +85,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         self.rowHeight = rowHeight
         self.siteWidth = siteWidth
         self.placementSpacing = placementSpacing
+        self.maximumPlacementCandidateChecks = maximumPlacementCandidateChecks
         self.preferredRoutingLayers = preferredRoutingLayers
         self.maximumRoutingLayer = maximumRoutingLayer
         self.targetUtilization = targetUtilization
@@ -109,6 +113,7 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         rowHeight = try container.decode(Int64.self, forKey: .rowHeight)
         siteWidth = try container.decode(Int64.self, forKey: .siteWidth)
         placementSpacing = try container.decode(Int64.self, forKey: .placementSpacing)
+        maximumPlacementCandidateChecks = try container.decodeIfPresent(Int.self, forKey: .maximumPlacementCandidateChecks)
         preferredRoutingLayers = try container.decode([Int].self, forKey: .preferredRoutingLayers)
         maximumRoutingLayer = try container.decode(Int.self, forKey: .maximumRoutingLayer)
         targetUtilization = try container.decode(Double.self, forKey: .targetUtilization)
@@ -148,6 +153,9 @@ public struct PhysicalDesignConfiguration: Sendable, Hashable, Codable {
         }
         if rowHeight <= 0 || siteWidth <= 0 || placementSpacing < 0 {
             diagnostics.append("placement grid dimensions are invalid")
+        }
+        if let maximumPlacementCandidateChecks, maximumPlacementCandidateChecks <= 0 {
+            diagnostics.append("placement candidate ceiling must be positive")
         }
         if maximumRoutingLayer <= 0 {
             diagnostics.append("maximum routing layer must be positive")

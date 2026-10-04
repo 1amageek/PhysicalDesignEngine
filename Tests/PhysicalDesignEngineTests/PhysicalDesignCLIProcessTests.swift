@@ -73,7 +73,7 @@ struct PhysicalDesignCLIProcessTests {
         #expect(result.payload.claims.production == .blocked)
     }
 
-    private func executableURL(named name: String) throws -> URL {
+    func executableURL(named name: String) throws -> URL {
         var directory = Bundle.module.bundleURL
         // SwiftPM resources are adjacent to products or embedded in .xctest/Contents/Resources.
         for _ in 0..<4 {
