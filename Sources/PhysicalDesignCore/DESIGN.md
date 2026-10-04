@@ -158,3 +158,31 @@ name the stage and output role; immutable content identity remains in the refere
 and storage paths remain in availability. The store preserves the requested ID
 rather than deriving it from a path. This separates semantic output names from
 locations and keeps host identifier validation independent of local filenames.
+
+### ECO blockage admission and dependent evidence
+
+Native `timingECO`/`drcRepair` construction admits retained wire/contact geometry
+against the native routing profile's applicable candidate blockages before recording
+a geometry repair proof. The
+[RoutingGeometry](RoutingGeometry/DESIGN.md) owner uses actual square-cap
+per-segment conductors and exact transformed fixed-via metal regions. The standard
+DEF representation remains a placement blockage. Native source routing conservatively
+excludes that rectangle on its selected eligible metal layers; mutation reuses this
+same policy without adding cut exclusion or spacing. A wire or contact intersection, unknown width/source, arithmetic error, exhausted caller
+check ceiling, or cancellation rejects the invocation-local candidate; retained
+routes are neither deleted nor silently rerouted. New blockage rectangles require
+checked coordinates and core containment.
+
+A successful changed blockage preserves route/via bytes and clock-tree topology,
+but clears preceding routing, placement and repair proofs and clock timing/path
+measurements. A changed route/contact clears preceding repair and clock timing/path
+measurements while retaining the source router's newly established routing evidence.
+An unchanged routing geometry retains its preceding measurements. These geometry
+admissions do not consume PEX, STA, DRC, LVS or qualification feedback; the host
+candidate feedback decision is a separate owner and must bind fresh exact inputs.
+
+Behavioral owner: [ECOGeometryAdmissionTests](../../Tests/PhysicalDesignEngineTests/ECOGeometryAdmissionTests.swift). The same source-bound design tests
+crossing wires, endpoint caps, fixed-contact footprints, disjoint retained geometry,
+unknown geometry, bounded failure/cancellation, immutable API artifacts and route
+change versus no-change invalidation. Existing routing tests own source search and
+standard export; characterized CTS and host feedback are not repeated here.

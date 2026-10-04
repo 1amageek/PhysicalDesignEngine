@@ -114,3 +114,26 @@ The grammar authority is the Cadence-authored
 [LEF/DEF 5.8 reference, NETS and Defining Routing Points](https://coriolis.lip6.fr/doc/lefdef/lefdefref/DEFSyntax.html),
 mirrored by LIP6. Normal NETS width comes from LEF WIDTH; omitted endpoint extension
 is half that width. Local fixed DEF values/reader/writer provide the behavioral oracle.
+
+### Retained conductor/blockage admission
+
+Native ECO repair delegates retained wire/contact blockage checks to this owner.
+Each wire uses its retained positive even width and square endpoint caps. Each
+named fixed contact uses exact translated source metal polygons on the applicable
+layers; a via origin or bounding box is not a contact approximation. A positive-area Region
+intersection rejects the candidate. The shared native profile projects placement
+blockages only onto declared tracks selected by preferred/max routing layers. This
+is a conservative native routing policy, not a DEF ROUTING blockage declaration.
+Unrelated layers and cut polygons are excluded from this blockage policy; exact
+source OBS and cut-spacing admission remain independently authoritative.
+Edge-only adjacency is allowed by this scalar blockage profile; foundry spacing
+qualification is not inferred. Missing wire width or fixed-contact source is a
+typed unsupported input, never a caller-default substitution.
+
+The finite check capacity is the checked product of blockage count and actual
+wire/contact polygon count, including projection checks. The source router itself
+clears preceding repair proofs when geometry changes, including direct CTS routing
+composition; unchanged geometry preserves them. The existing positive caller
+`maximumRoutingCandidateChecks` may lower that capacity. Cancellation is checked
+before geometry projection and each intersection. No second connectivity graph,
+site sampling, new resource cache, or geometry publication is introduced.

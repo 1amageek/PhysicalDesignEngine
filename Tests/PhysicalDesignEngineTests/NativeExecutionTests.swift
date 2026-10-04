@@ -1019,7 +1019,14 @@ struct NativeExecutionTests {
         let drcResult = try await engine.execute(
             PhysicalDesignFixtureFactory.request(stage: .drcRepair, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: drcConfiguration)
         )
-        #expect(drcResult.status == .completed)
+        #expect(drcResult.status == .blocked)
+        #expect(drcResult.diagnostics.contains { $0.code.rawValue == "eco_blockage_layers_missing" })
+        #expect(drcResult.artifactBindings.isEmpty)
+        let unrouted = try await engine.execute(
+            PhysicalDesignFixtureFactory.request(stage: .drcRepair,
+                snapshot: PhysicalDesignFixtureFactory.snapshot(includeRoutes: false, includeVias: false), configuration: drcConfiguration)
+        )
+        #expect(unrouted.status == .completed)
     }
 
     @Test("CLI returns a deterministic structured error for invalid options")

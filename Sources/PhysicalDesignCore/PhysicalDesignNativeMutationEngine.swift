@@ -567,6 +567,16 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         snapshot.metadata["clockTimingStatus"] = "invalidated_by_cell_geometry"
     }
 
+    private func invalidateRoutingMeasurements(in snapshot: inout PhysicalDesignSnapshot) {
+        snapshot.implementationState?.repairProofs.removeAll()
+        for index in snapshot.clockTrees.indices {
+            snapshot.clockTrees[index].timingEstimate = nil
+            snapshot.clockTrees[index].shortestPathLengthDBU = nil
+            snapshot.clockTrees[index].longestPathLengthDBU = nil
+        }
+        snapshot.metadata["clockTimingStatus"] = "invalidated_by_routing_constraints_or_geometry"
+    }
+
     private func invalidateCellGeometryProofs(in state: inout PhysicalDesignImplementationState) {
         state.routingEvidence = nil
         state.placementProof = nil
@@ -1055,7 +1065,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             do {
                 let router: any PhysicalDesignSourceRouting = PhysicalDesignSourceRouter()
                 let result = try router.route(input, configuration: configuration, mode: mode, onlyNetID: onlyNetID, geometry: processGeometry)
-                return completed(result.snapshot, actions: ["run_drc", "run_lvs"], metrics: metrics(for: result.snapshot) + [
+                var routed = result.snapshot
+                if routed.routes != input.routes || routed.vias != input.vias { invalidateRoutingMeasurements(in: &routed) }
+                return completed(routed, actions: ["run_drc", "run_lvs"], metrics: metrics(for: routed) + [
                     .init(name: "routingCandidateChecks", value: Double(result.checks), unit: "checks"),
                     .init(name: "routingStructuralCandidateCeiling", value: Double(result.structuralCeiling), unit: "checks")
                 ], note: "Source-bound native routing materialized full-width conductors and exact fixed contacts.")
@@ -1338,6 +1350,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         }
         output.vias = allVias
         output.routes = output.routes.filter { !reroutedNetIDs.contains($0.netID) } + routes
+        if output.routes != input.routes || output.vias != input.vias { invalidateRoutingMeasurements(in: &output) }
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
         implementationState.routingEvidence = PhysicalDesignImplementationState.RoutingEvidence(
             mode: mode,
@@ -1621,12 +1634,25 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             guard let core = output.core else {
                 return blocked(code: "core_geometry_missing", message: "ECO blockage insertion requires a core rectangle.", actions: ["run_floorplan"])
             }
+            let (x, xOverflow) = core.x.addingReportingOverflow(core.width / 4)
+            let (y, yOverflow) = core.y.addingReportingOverflow(core.height / 4)
+            guard !xOverflow, !yOverflow else {
+                return blocked(code: "eco_blockage_coordinate_overflow", message: "ECO blockage coordinates overflowed.", actions: ["repair_core_geometry"])
+            }
             let geometry = PhysicalDesignSnapshot.Rect(
-                x: core.x + core.width / 4,
-                y: core.y + core.height / 4,
+                x: x,
+                y: y,
                 width: max(configuration.siteWidth, core.width / 20),
                 height: max(configuration.rowHeight, core.height / 20)
             )
+            let (_, maxXOverflow) = geometry.x.addingReportingOverflow(geometry.width)
+            let (_, maxYOverflow) = geometry.y.addingReportingOverflow(geometry.height)
+            guard !maxXOverflow, !maxYOverflow else {
+                return blocked(code: "eco_blockage_coordinate_overflow", message: "ECO blockage extents overflowed.", actions: ["repair_core_geometry"])
+            }
+            guard core.contains(geometry) else {
+                return blocked(code: "eco_blockage_core_conflict", message: "The complete ECO blockage must fit inside its core.", actions: ["choose_a_smaller_repair_region"])
+            }
             guard !output.cells.contains(where: { cell in
                 cell.placed && PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height).intersects(geometry)
             }) else {
@@ -1637,6 +1663,21 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 )
             }
             output.blockages.append(geometry)
+        }
+        do {
+            try PhysicalDesignSourceRouter.validateRetainedBlockages(output, configuration: configuration, geometry: processGeometry)
+        } catch is CancellationError {
+            return cancelled(actions: ["resume_from_the_last_immutable_revision"])
+        } catch let error as PhysicalDesignSourceRouter.Failure {
+            return blocked(code: error.code, message: error.message, actions: ["repair_the_explicit_eco_geometry"])
+        } catch {
+            return blocked(code: "eco_blockage_geometry_invalid", message: error.localizedDescription, actions: ["repair_exact_retained_geometry"])
+        }
+        if output.blockages != input.blockages {
+            invalidateRoutingMeasurements(in: &output)
+            output.implementationState?.routingEvidence = nil
+            output.implementationState?.placementProof = nil
+            output.metadata["routingStatus"] = "invalidated_by_blockage_constraints"
         }
         if let verificationDiagnostic = verifyAndRecordRepair(
             input: input,

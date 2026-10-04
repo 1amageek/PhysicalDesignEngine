@@ -56,7 +56,7 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         let tracks = (input.implementationState?.tracks ?? []).filter {
             configuration.preferredRoutingLayers.contains($0.layer) && $0.layer <= configuration.maximumRoutingLayer
         }
-        let layers = Array(Set(tracks.map(\.layer))).sorted()
+        let layers = Self.blockageLayers(input, configuration: configuration).sorted()
         guard !layers.isEmpty else { throw Failure(code: "routing_tracks_missing", message: "Source routing requires declared tracks.") }
         var clearances: [Int: Int64] = [:]
         for layer in layers {
@@ -275,6 +275,7 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         }
         try geometry.validate(output)
         var state = output.implementationState ?? .init()
+        if output.routes != input.routes || output.vias != input.vias { state.repairProofs.removeAll() }
         state.routingEvidence = .init(mode: mode, routedNetCount: nets.count, skippedNetIDs: [], viaCount: output.vias.count)
         output.implementationState = state
         output.metadata["routingStatus"] = mode
@@ -288,6 +289,64 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         return try box(minX: subtract(min(segment.x1, segment.x2), width / 2), minY: subtract(min(segment.y1, segment.y2), width / 2),
             maxX: add(max(segment.x1, segment.x2), width / 2), maxY: add(max(segment.y1, segment.y2), width / 2), layer: segment.layer)
     }
+    /// Native conservative exclusion policy; standard DEF blockages remain PLACEMENT.
+    static func blockageLayers(_ snapshot: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration) -> Set<Int> {
+        Set((snapshot.implementationState?.tracks ?? []).filter {
+            configuration.preferredRoutingLayers.contains($0.layer) && $0.layer <= configuration.maximumRoutingLayer
+        }.map(\.layer))
+    }
+
+    /// Admits retained actual geometry without editing or approximating a route/contact.
+    static func validateRetainedBlockages(_ snapshot: PhysicalDesignSnapshot,
+        configuration: PhysicalDesignConfiguration, geometry: PhysicalDesignProcessGeometry?) throws {
+        try Task.checkCancellation()
+        guard !snapshot.blockages.isEmpty, !snapshot.routes.isEmpty || !snapshot.vias.isEmpty else { return }
+        let layers = blockageLayers(snapshot, configuration: configuration)
+        guard !layers.isEmpty else {
+            throw Failure(code: "eco_blockage_layers_missing", message: "Retained geometry requires declared eligible metal-layer tracks for native blockage admission.")
+        }
+        var shapeCount = 0
+        for route in snapshot.routes {
+            for segment in route.segments where layers.contains(segment.layer) { shapeCount = try add(shapeCount, 1) }
+        }
+        for via in snapshot.vias {
+            try Task.checkCancellation()
+            guard let master = via.master, let source = geometry?.vias[master] else {
+                throw Failure(code: "eco_blockage_via_source_missing", message: "Retained contact blockage admission requires its exact fixed source geometry.")
+            }
+            for shape in source.shapes where layers.contains(Int(shape.layer)) { shapeCount = try add(shapeCount, 1) }
+        }
+        var budget = Budget(caller: configuration.maximumRoutingCandidateChecks)
+        try budget.extend(try add(try multiply(shapeCount, try add(snapshot.blockages.count, 1)), snapshot.vias.count))
+        func admit(_ region: Region, layer: Int, budget: inout Budget) throws {
+            for rect in snapshot.blockages {
+                try budget.admit()
+                if try !region.intersection(rectangle(rect, layer: layer)).isEmpty {
+                    throw Failure(code: "eco_blockage_route_intersection", message: "A retained conductor/contact intersects the native profile's applicable blockage area.")
+                }
+            }
+        }
+        for route in snapshot.routes {
+            for segment in route.segments where layers.contains(segment.layer) {
+                try budget.admit()
+                guard let width = segment.widthDBU else {
+                    throw Failure(code: "eco_blockage_width_missing", message: "Retained conductor blockage admission requires its qualified width.")
+                }
+                try admit(conductor(segment, width: width), layer: segment.layer, budget: &budget)
+            }
+        }
+        for via in snapshot.vias {
+            try budget.admit()
+            guard let master = via.master, let geometry else {
+                throw Failure(code: "eco_blockage_via_source_missing", message: "Retained contact requires its exact fixed source geometry.")
+            }
+            for shape in try geometry.viaShapes(master: master, x: via.x, y: via.y) where layers.contains(Int(shape.layer)) {
+                try budget.admit()
+                try admit(Region(layer: shape.layer, polygons: [shape]), layer: Int(shape.layer), budget: &budget)
+            }
+        }
+    }
+
     static func cap(x: Int64, y: Int64, width: Int64, layer: Int) throws -> Region {
         try box(minX: subtract(x, width / 2), minY: subtract(y, width / 2), maxX: add(x, width / 2), maxY: add(y, width / 2), layer: layer)
     }
