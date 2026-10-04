@@ -41,6 +41,10 @@ let package = Package(
         logicDesignDependency,
         pdkKitDependency,
         swiftMaskDataDependency,
+        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "8fbcee58575b37a01795e11110731cfc16566520"),
+        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "fe1895d30958127d6c59ee5d55567159f4cd40c6"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "9dad85f41c7f8e3ad596ef80ac2904cf20d6852d"),
+        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "688ffac1839a0705e907e8a5ed665f32e591b057"),
     ],
     targets: [
         .target(
