@@ -208,3 +208,6 @@ shared function. DEF changes affect stored output and EDAInteroperability import
 Verify the affected behavioral tests, then the non-Metal SwiftPM package with a
 process timeout. Platform signoff and independent process qualification require
 separate evidence; package tests cannot establish them.
+
+Public source-bound deterministic DEF pairing is owned by
+[StandardLayoutExport](Sources/PhysicalDesignCore/StandardLayoutExport/DESIGN.md).

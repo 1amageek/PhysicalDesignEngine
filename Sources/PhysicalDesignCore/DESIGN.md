@@ -10,7 +10,8 @@ Parent: [package design](../../DESIGN.md). Child:
 [LegalPlacement](LegalPlacement/DESIGN.md),
 [ClockTreeSynthesis](ClockTreeSynthesis/DESIGN.md),
 [RoutingGeometry](RoutingGeometry/DESIGN.md), and
-[ProcessGeometry](ProcessGeometry/DESIGN.md).
+[ProcessGeometry](ProcessGeometry/DESIGN.md), and
+[StandardLayoutExport](StandardLayoutExport/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -30,6 +31,7 @@ release and database persistence remain outside this module.
 | [ProcessGeometry](ProcessGeometry/DESIGN.md) | child | Exact mapped cell/pin/site/via shapes | Native process projection | Projection alone does not prove native closure |
 | [MasterGeometry](MasterGeometry/DESIGN.md) | child | Required exact LEF master dimensions | Canonical cell construction | No fabricated dimensions |
 | [ProcessInputs](ProcessInputs/DESIGN.md) | child | Explicit asset-ID-bound standard views | Shared exact physical source intake | Input identity and manifest role are validated before projection |
+| [StandardLayoutExport](StandardLayoutExport/DESIGN.md) | child | Bounded source-bound DEF pairing | Public native serializer access | Same snapshot/request; no stage rerun |
 | [PDKKit](../../../PDKKit/DESIGN.md) | depends on | PDKCore manifest values | Process identity and layer mappings | Use the fixed package implementation |
 | [swift-mask-data](../../../swift-mask-data/DESIGN.md) | depends on | LEF reader and typed axis values | Standard view parsing | Common codec owns loss admission; native profiles own rule support |
 

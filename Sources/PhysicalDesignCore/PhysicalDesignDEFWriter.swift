@@ -7,7 +7,7 @@ public struct PhysicalDesignDEFWriter: Sendable {
         try write(snapshot, processGeometry: nil)
     }
 
-    func write(_ snapshot: PhysicalDesignSnapshot, processGeometry: PhysicalDesignProcessGeometry?) throws -> String {
+    func write(_ snapshot: PhysicalDesignSnapshot, processGeometry: PhysicalDesignProcessGeometry?, maximumOutputByteCount: UInt64? = nil) throws -> String {
         let issues = snapshot.validationDiagnostics()
         guard issues.isEmpty, let die = snapshot.die else {
             throw PhysicalDesignDEFExportError.invalidSnapshot(issues.isEmpty ? "DEF export requires explicit die geometry." : issues.joined(separator: "; "))
@@ -53,36 +53,35 @@ public struct PhysicalDesignDEFWriter: Sendable {
             (lhs.x, lhs.y, lhs.width, lhs.height) < (rhs.x, rhs.y, rhs.width, rhs.height)
         }
         let sortedPowerStructures = snapshot.powerStructures.sorted { $0.id < $1.id }
-        var lines: [String] = [
+        var text = PhysicalDesignDEFText(limit: maximumOutputByteCount)
+        for line in [
             "VERSION 5.8 ;",
             "DIVIDERCHAR \"/\" ;",
             "BUSBITCHARS \"[]\" ;",
             "DESIGN \(snapshot.topCell) ;",
             "UNITS DISTANCE MICRONS \(snapshot.unitsPerMicron) ;",
             "DIEAREA ( \(die.x) \(die.y) ) ( \(die.maxX) \(die.maxY) ) ;"
-        ]
+        ] { try text.line(line) }
         for row in sortedRows {
             // FIXME(INCOMPLETE_IMPLEMENTATION): Unqualified smoke rows have no LEF site source. The explicit smoke STEP-y height is retained until every such caller supplies a standard site definition; it does not prove process correctness.
             let stepY = processGeometry == nil ? row.height : 0
-            lines.append("ROW \(row.id) \(row.siteName ?? "coreSite") \(row.originX) \(row.originY) \(row.orientation.rawValue) DO \(row.siteCount) BY 1 STEP \(row.siteWidth) \(stepY) ;")
+            try text.line("ROW \(row.id) \(row.siteName ?? "coreSite") \(row.originX) \(row.originY) \(row.orientation.rawValue) DO \(row.siteCount) BY 1 STEP \(row.siteWidth) \(stepY) ;")
         }
         for track in snapshot.implementationState?.tracks.sorted(by: { $0.id < $1.id }) ?? [] {
             let axis = track.direction.lowercased() == "vertical" ? "X" : "Y"
-            lines.append("TRACKS \(axis) \(track.origin) DO \(track.count) STEP \(track.spacing) LAYER \(try layerName(track.layer)) ;")
+            try text.line("TRACKS \(axis) \(track.origin) DO \(track.count) STEP \(track.spacing) LAYER \(try layerName(track.layer)) ;")
         }
-        lines.append(contentsOf: [
-            "COMPONENTS \(sortedCells.count) ;"
-        ])
+        try text.line("COMPONENTS \(sortedCells.count) ;")
         for cell in sortedCells {
             let placement = cell.placed ? (cell.locked ? "FIXED" : "PLACED") : "UNPLACED"
             let location = cell.placed ? " ( \(cell.x) \(cell.y) ) \(cell.orientation.rawValue)" : ""
             let dimensions = processGeometry == nil ? " + PROPERTY XCI_CELL_WIDTH \"\(cell.width)\" + PROPERTY XCI_CELL_HEIGHT \"\(cell.height)\"" : ""
-            lines.append("- \(cell.id) \(cell.master) + \(placement)\(location)\(dimensions) ;")
+            try text.line("- \(cell.id) \(cell.master) + \(placement)\(location)\(dimensions) ;")
         }
-        lines.append("END COMPONENTS")
+        try text.line("END COMPONENTS")
 
         if !topPins.isEmpty {
-            lines.append("PINS \(topPins.count) ;")
+            try text.line("PINS \(topPins.count) ;")
             let padByPinID = Dictionary(uniqueKeysWithValues: (snapshot.implementationState?.pads ?? []).map { ($0.pinID, $0) })
             for pin in topPins {
                 let net = pin.netID ?? "UNCONNECTED"
@@ -91,51 +90,55 @@ public struct PhysicalDesignDEFWriter: Sendable {
                 if let pad = padByPinID[pin.id] {
                     line += " + PROPERTY XCI_PAD_SIDE \"\(pad.side)\" + PROPERTY XCI_PAD_X \(pad.geometry.x) + PROPERTY XCI_PAD_Y \(pad.geometry.y) + PROPERTY XCI_PAD_WIDTH \(pad.geometry.width) + PROPERTY XCI_PAD_HEIGHT \(pad.geometry.height)"
                 }
-                lines.append(line + " ;")
+                try text.line(line + " ;")
             }
-            lines.append("END PINS")
+            try text.line("END PINS")
         }
 
-        lines.append("NETS \(sortedNets.count) ;")
+        try text.line("NETS \(sortedNets.count) ;")
         let pinByID = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
         let routesByNet = Dictionary(grouping: snapshot.routes, by: \.netID)
         for net in sortedNets {
-            let pinNames = net.pinIDs.sorted().compactMap { pinByID[$0] }.map { pin in
-                "( \(pin.cellID ?? "PIN") \(pin.name) )"
-            }.joined(separator: " ")
-            var line = "- \(net.id) \(pinNames)"
-            if net.isClock { line += " + USE CLOCK" }
+            try text.append("- \(net.id) ")
+            var separator = ""
+            for pinID in net.pinIDs.sorted() {
+                guard let pin = pinByID[pinID] else { continue }
+                try text.append(separator)
+                try text.append("( \(pin.cellID ?? "PIN") \(pin.name) )")
+                separator = " "
+            }
+            if net.isClock { try text.append(" + USE CLOCK") }
             for route in routesByNet[net.id, default: []].sorted(by: { $0.id < $1.id }) {
                 for segment in route.segments.sorted(by: { $0.id < $1.id }) {
-                    line += " + ROUTED \(try layerName(segment.layer)) ( \(segment.x1) \(segment.y1) ) ( \(segment.x2) \(segment.y2) )"
+                    try text.append(" + ROUTED \(try layerName(segment.layer)) ( \(segment.x1) \(segment.y1) ) ( \(segment.x2) \(segment.y2) )")
                 }
             }
             // FIXME(INCOMPLETE_IMPLEMENTATION): Source-free smoke has no fixed contact declaration and cannot qualify routed DEF contact semantics. Exact contact emission belongs to the source-bound profile.
             for via in (processGeometry == nil ? [] : snapshot.vias.filter({ $0.netID == net.id })).sorted(by: { $0.id < $1.id }) {
                 guard let master = via.master else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Fixed contact export requires its exact master name.") }
-                line += " + ROUTED \(try layerName(via.lowerLayer)) ( \(via.x) \(via.y) ) \(master)"
+                try text.append(" + ROUTED \(try layerName(via.lowerLayer)) ( \(via.x) \(via.y) ) \(master)")
             }
-            lines.append(line + " ;")
+            try text.line(" ;")
         }
-        lines.append("END NETS")
+        try text.line("END NETS")
 
         if !sortedBlockages.isEmpty {
-            lines.append("BLOCKAGES \(sortedBlockages.count) ;")
+            try text.line("BLOCKAGES \(sortedBlockages.count) ;")
             for blockage in sortedBlockages {
-                lines.append("- PLACEMENT RECT ( \(blockage.x) \(blockage.y) ) ( \(blockage.maxX) \(blockage.maxY) ) ;")
+                try text.line("- PLACEMENT RECT ( \(blockage.x) \(blockage.y) ) ( \(blockage.maxX) \(blockage.maxY) ) ;")
             }
-            lines.append("END BLOCKAGES")
+            try text.line("END BLOCKAGES")
         }
 
         if !sortedPowerStructures.isEmpty {
-            lines.append("SPECIALNETS \(sortedPowerStructures.count) ;")
+            try text.line("SPECIALNETS \(sortedPowerStructures.count) ;")
             for structure in sortedPowerStructures {
-                lines.append("- \(structure.netID) + USE \(structure.kind.uppercased()) + PROPERTY XCI_POWER_ID \"\(structure.id)\" + ROUTED M\(structure.layer) 0 ( \(structure.geometry.x) \(structure.geometry.y) ) ( \(structure.geometry.maxX) \(structure.geometry.maxY) ) ;")
+                try text.line("- \(structure.netID) + USE \(structure.kind.uppercased()) + PROPERTY XCI_POWER_ID \"\(structure.id)\" + ROUTED M\(structure.layer) 0 ( \(structure.geometry.x) \(structure.geometry.y) ) ( \(structure.geometry.maxX) \(structure.geometry.maxY) ) ;")
             }
-            lines.append("END SPECIALNETS")
+            try text.line("END SPECIALNETS")
         }
 
-        lines.append("END DESIGN")
-        return lines.joined(separator: "\n") + "\n"
+        try text.line("END DESIGN")
+        return text.value
     }
 }
