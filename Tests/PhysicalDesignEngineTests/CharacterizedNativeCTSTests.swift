@@ -11,6 +11,24 @@ import LogicIR
 
 @Suite("Source-bound passive RC native CTS", .timeLimit(.minutes(2)))
 struct CharacterizedNativeCTSTests {
+    @Test("source DBU mesh span preserves physical resolution after conductive pin capture", arguments: [Int32(500), Int32.max / 2])
+    func sourceMeshSpanAfterCapture(span: Int32) async throws {
+        var (request, store, model, reference) = try await fixture(buffered: false)
+        model.numerics.maximumCellSpanDBU = span
+        reference.modelArtifact = try await store.registerInput(try PhysicalDesignJSONCodec().encode(model), relativePath: "inputs/span-model.json", kind: .technology, format: .json)
+        request.clockTimingModel = reference
+        let snapshot = try #require(request.initialSnapshot)
+        let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
+        let geometry = try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: snapshot.unitsPerMicron)
+        let characterization = try await LocalPhysicalDesignClockTimingModelLoader().load(reference, for: snapshot, from: store)
+        let projection = try PhysicalDesignClockConductorProjection(snapshot: snapshot, geometry: geometry,
+            characterization: characterization, selectedPins: ["source", "sink"])
+        let network = projection.electrodes.network
+        let captureScale = network.snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer
+        #expect(captureScale > Double(snapshot.unitsPerMicron))
+        #expect(Double(network.maximumCellSpanDatabaseUnits) / captureScale == Double(span) / Double(snapshot.unitsPerMicron))
+        print("CTS source mesh span: sourceDBU=\(span); sourceScale=\(snapshot.unitsPerMicron); captureDBU=\(network.maximumCellSpanDatabaseUnits); captureScale=\(captureScale)")
+    }
     @Test("actual API routes and measures both clock edges without asserting physical signoff")
     func actualDirectCTS() async throws {
         let (request, store, _, _) = try await fixture(buffered: false)
@@ -99,7 +117,7 @@ struct CharacterizedNativeCTSTests {
         let timing = try #require(output.clockTrees.first?.timingEstimate)
         #expect(timing.estimatedLatencyPS < 0 && timing.observations!.sinks.allSatisfy { $0.latencySeconds < 0 })
     }
-    @Test("bad source, clock model, constraint and resource inputs publish no candidate", arguments: ["corner", "waveform", "clock", "electrode", "limits", "constraints", "missing"])
+    @Test("bad source, clock model, constraint and resource inputs publish no candidate", arguments: ["corner", "waveform", "clock", "electrode", "limits", "spanOverflow", "constraints", "missing"])
     func rejection(reason: String) async throws {
         var (request, store, model, reference) = try await fixture(buffered: false)
         switch reason {
@@ -107,6 +125,7 @@ struct CharacterizedNativeCTSTests {
         case "waveform": model.riseReversedForTest()
         case "clock": model.clocks[0].sourcePinID = "sink"
         case "electrode": model.electrodes[0].faces = [.init(side: .minX, coordinate: 999, begin: 100, end: 700)]
+        case "spanOverflow": model.numerics.maximumCellSpanDBU = .max
         case "limits": model.numerics.transient = .init(maximumAcceptedSteps: 1, maximumSolveAttempts: 1, maximumNewtonIterations: 1,
             maximumSavedScalars: 1, maximumMatrixDimension: 1, maximumWorkUnits: 1, maximumBreakpoints: 1)
         case "constraints": model.constraints.maximumLatencySeconds = 1e-18
@@ -120,6 +139,9 @@ struct CharacterizedNativeCTSTests {
         let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
         #expect(result.status == .blocked && result.artifactBindings.isEmpty, "\(result.diagnostics)")
         #expect(result.payload.physicalDesign == nil && result.payload.claims.timing == .blocked)
+        if reason == "spanOverflow" {
+            #expect(result.diagnostics.contains { $0.summary.contains("capture mesh span arithmetic") })
+        }
     }
     @Test("pre-cancelled native CTS never publishes artifacts")
     func cancellation() async throws {

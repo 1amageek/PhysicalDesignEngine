@@ -137,6 +137,10 @@ struct PhysicalDesignClockConductorProjection {
         let canonicalPins = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
         let multiplier = capture.coordinateUnits.scale.databaseUnitsPerMicrometer / scale
         guard let integerMultiplier = Int64(exactly: multiplier), integerMultiplier > 0 else { throw Self.invalid("capture electrode coordinate scale") }
+        let spanProduct = Int64(policy.maximumCellSpanDBU).multipliedReportingOverflow(by: integerMultiplier)
+        guard !spanProduct.overflow, let captureCellSpan = Int32(exactly: spanProduct.partialValue), captureCellSpan > 0 else {
+            throw Self.invalid("capture mesh span arithmetic")
+        }
         for (index, pin) in capture.pins.enumerated() {
             try Task.checkCancellation()
             guard let id = pinByUUID[capture.hierarchy.pins[pin.sourcePinIndex].id], let canonical = canonicalPins[id],
@@ -170,7 +174,7 @@ struct PhysicalDesignClockConductorProjection {
             bindings.append(.init(pinIndex: index, terminal: .init(netName: .init(netID), nodeName: .init(id)), faces: faces))
         }
         let network = try RectilinearPEXCalculator().calculate(snapshot: capture, technology: characterization.technology,
-            corner: characterization.corner, layerNames: layerNames, maximumCellSpanDatabaseUnits: policy.maximumCellSpanDBU,
+            corner: characterization.corner, layerNames: layerNames, maximumCellSpanDatabaseUnits: captureCellSpan,
             limits: policy.extraction)
         electrodes = try RectilinearPEXElectrodeBuilder().build(network: network, bindings: bindings, limits: policy.electrodes)
         pinIndices = indices

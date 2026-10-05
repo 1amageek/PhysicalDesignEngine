@@ -95,6 +95,13 @@ of the selected source PORT/conductor; mesh refinement does not change their
 physical identity. Missing, overlapping, floating, shorted, disconnected or
 ambiguous terminal contacts fail. The existing PEX law and dimensional ranges
 apply unchanged; no new capacitance law or aggregate via resistance is introduced.
+`PhysicalDesignClockNumerics.maximumCellSpanDBU` is a positive span in the source
+`PhysicalDesignSnapshot.unitsPerMicron` scale. Projection converts that span to
+`capture.coordinateUnits` using the same exact positive integer capture/source
+multiplier used for electrode coordinates. The checked product must fit `Int32`
+before PEX mesh construction; failure is a typed model rejection. A refined
+capture grid therefore preserves the caller's physical mesh resolution and does
+not consume a finer-mesh transient budget merely because pin capture refines DBU.
 The caller supplies electrode profiles by exact master and PORT name in the
 canonical N-oriented, ORIGIN-adjusted master DBU frame. ProcessGeometry's existing
 orientation/placement transform applies them to each occurrence, including newly
@@ -184,6 +191,7 @@ signoff; model success does not grant foundry or tool qualification.
 | Real Liberty units/cap/threshold/arc semantics and no extrapolation | TimingEngine strict-characterization tests |
 | Public PWL, passive RC waveform and bounded solve/cancellation | CoreSpice bounded-transient tests |
 | RC material/mesh/cut/contact and exact electrical topology | Existing PEX component tests |
+| Source DBU mesh span survives capture-grid refinement; span overflow rejects atomically | `CharacterizedNativeCTSTests` real projection and engine rejection tests |
 | Native source-bound CTS composition | PhysicalDesignEngine ClockTreeSynthesis tests through actual API and CLI |
 | Actual sink delay/slew/load/skew | Independent one-pole and two-section analytic fixtures, asymmetric Liberty tables and fanout loads |
 | Missing/unknown/unsupported input and constraint failure | Actual engine typed blocked result and empty artifacts |

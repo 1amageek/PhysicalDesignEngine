@@ -13,6 +13,8 @@ public struct PhysicalDesignClockNumerics: Sendable, Codable {
     public var maximumStepReductions: Int
     public var maximumRefinements: Int
     public var crossingAgreementSeconds: Double
+    /// Positive maximum mesh span in the source snapshot's `unitsPerMicron` scale.
+    /// Conductor projection converts it to the capture grid before PEX extraction.
     public var maximumCellSpanDBU: Int32
     public var maximumInputBytes: Int
     public var maximumProjectionRecords: Int
