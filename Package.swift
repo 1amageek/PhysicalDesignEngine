@@ -42,9 +42,9 @@ let package = Package(
         pdkKitDependency,
         swiftMaskDataDependency,
         .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "305d0933018f8a987c73c5186f53740ca315a516"),
-        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "a254e14ff73a62b0d9da696c9b5796468c0bc85d"),
-        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "560002372a665a9348a3a67fa32f5322295b68ed"),
-        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "aada7526e4408c75f1940d3aa7372aaf523e2a42"),
+        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "fd2da609067a2bd1760051a4e4e85cd8720473e8"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "8098df0e5ab51a1afb9b19907c2c03c47d1b12a8"),
+        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "49cf05b1a833b1e0549a1796aef15a74f11fb927"),
     ],
     targets: [
         .target(

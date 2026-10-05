@@ -155,7 +155,7 @@ struct CharacterizedNativeCTSTests {
         let (_, base, store) = try await ProcessGeometryTests().fixture(replacement: "buffer", routingPorts: true)
         let calibration = try await store.registerInput(Data("analytical passive sheet calibration".utf8), relativePath: "inputs/calibration.txt", kind: .technology, format: .json)
         let range = PEXDimensionRangeMeters(minimumMeters: 1e-12, maximumMeters: 1)
-        let electrical = PEXElectricalModel(law: .rectilinearSheetV1, processName: "fixture-130nm", cornerID: "tt", temperatureKelvin: 298.15,
+        let electrical = PEXElectricalModel(law: .analyticalRectilinearV1, coplanarScreening: nil, processName: "fixture-130nm", cornerID: "tt", temperatureKelvin: 298.15,
             voltageVolts: 1, parameters: [:], referenceNodeName: "0", calibrationArtifacts: [calibration.reference.id],
             conductors: [("M1", 0.0), ("M2", 2e-6)].map { .init(layerName: $0.0, bottomHeightMeters: $0.1, thicknessMeters: 1e-6,
                 resistivityOhmMeters: 1e-4, groundAreaFaradsPerSquareMeter: 1e-4, groundPerimeterFaradsPerMeter: 1e-10, widthRange: range, lengthRange: range) },
