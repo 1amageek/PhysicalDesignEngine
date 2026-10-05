@@ -810,7 +810,11 @@ struct NativeExecutionTests {
         )
         #expect(ecoResult.status == .completed)
         let ecoOutput = try await decodedSnapshot(from: ecoResult, store: store)
-        #expect(ecoOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.timingECO.rawValue && $0.verified } == true)
+        #expect(ecoOutput.metadata["routingStatus"] == "requires_routing" && ecoOutput.routes.isEmpty)
+        #expect(ecoOutput.implementationState?.repairProofs.contains {
+            $0.stage == PhysicalDesignStage.timingECO.rawValue && !$0.verified
+                && $0.details.contains("candidate_requires_source_routing_reverification")
+        } == true)
 
         var antennaConfiguration = PhysicalDesignFixtureFactory.configuration
         antennaConfiguration.repairConstraints = PhysicalDesignRepairConstraints(antennaStrategy: .protectionDevice)

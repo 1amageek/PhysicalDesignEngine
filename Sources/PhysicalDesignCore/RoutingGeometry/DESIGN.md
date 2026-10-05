@@ -2,9 +2,9 @@
 
 ## Purpose and Scope
 
-Own bounded source-bound native signal routing and selected-net ECO rerouting.
+Own bounded source-bound native signal routing, finite special-net routing and selected-net ECO rerouting.
 Parent: [PhysicalDesignCore](../DESIGN.md). No children. Existing stage wrappers
-compose this responsibility directly; CTS and production qualification are separate. Source routing rejects existing CTS topology records and declared power nets/special-net structures whose reconciliation/export belongs to separate owners.
+compose this responsibility directly; CTS and production qualification are separate. Source routing rejects existing CTS topology records and synthetic power-grid structures. Finite special-net point-to-point routing does not synthesize a power grid.
 
 ## Responsibilities and Boundaries
 
@@ -39,8 +39,8 @@ Exact source admission -> actual PORT/OBS/layer/via regions + declared tracks
 - Each conductor retains positive `widthDBU` on its canonical RouteSegment.
   Source-bound routing requires width on retained conductors; an absent width is
   unqualified geometry, never silently interpreted using the new request.
-- This integer-geometry profile uses even DBU widths matching the selected layer's
-  declared LEF WIDTH exactly. Missing WIDTH, nondefault widths, wrong-way wires and
+- The regular-net integer-geometry profile uses even DBU widths matching the selected layer's
+  declared LEF WIDTH exactly. Missing WIDTH, nondefault regular widths, wrong-way wires and
   advanced rule semantics fail. Effective scalar conductor clearance is the greater
   of source SPACING (when present) and caller routeSpacing.
 - Standard normal NETS uses the declared default width. Native wire construction
@@ -182,7 +182,19 @@ default source WIDTH; SPECIALNETS retains its explicit width and supported scala
 source rules. DEF serialization preserves container class, declared USE, status,
 special SHAPE, and explicit nonnegative ordered point extensions. Negative signed
 geometry can be represented canonically but is typed unsupported for DEF output.
-Native signal routing refuses modifying special-net route ownership. Legacy
+Finite native SPECIALNETS mutation preserves the original net container and optional
+USE without deriving USE from net names or source PORT roles. It requires an explicit
+`implementationConstraints.routeWidth`, checked against exact source scalar
+MINWIDTH/MAXWIDTH/SPACING rules, and one common terminal access layer. It generates
+unshielded ROUTED wires with no SHAPE and explicit half-width endpoint extensions;
+original input endpoints and flush caps remain unchanged in the input revision.
+Generated widths must equal the selected retained special widths before replacement.
+FIXED/COVER, SHAPE-qualified, unqualified-width and special-via paths are refused
+before deleting selected geometry. Routes on unselected nets remain exact obstacles.
+Different terminal layers or a same-layer domain with no legal path do not fall back
+to unsupported special-net contact serialization or a regular NETS container.
+Caller-selected power net names do not exclude an explicitly special finite net.
+Legacy
 synthetic PowerStructure export and arbitrary source-bound routed DEF intake
 remain incomplete and explicitly refused. This contract does not implement wider
 special-net grouping or power-grid synthesis.
@@ -195,3 +207,9 @@ No database dependency, new shared state, or target-specific isolation is added.
 owns the public width-only red, ordered signed footprint/overflow/retraction cases,
 exact four-special-route producer/export pairing and atomic unsupported failures.
 Existing ECO and source-routing tests exercise the actual shared projection.
+[SpecialNetRepairTests](../../../Tests/PhysicalDesignEngineTests/SpecialNetRepairTests.swift)
+owns actual four-special-net cell-change/reroute API behavior, exact class/USE/width,
+source/PORT preservation, protected metadata and unavailable-path/limit/cancellation
+refusals. Placement and ECO cell geometry changes pass the same special deletion gate.
+Special topology splitting remains explicitly unsupported. Cell geometry changes invalidate routing rather than proving a repaired
+electrical design; the module owns that candidate lifecycle contract.

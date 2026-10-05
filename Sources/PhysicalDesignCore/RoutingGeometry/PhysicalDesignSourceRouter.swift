@@ -58,24 +58,22 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         }
         let layers = Self.blockageLayers(input, configuration: configuration).sorted()
         guard !layers.isEmpty else { throw Failure(code: "routing_tracks_missing", message: "Source routing requires declared tracks.") }
-        var clearances: [Int: Int64] = [:]
         for layer in layers {
             guard let number = Int16(exactly: layer), let direction = geometry.sourceLayers[number]?.direction?.rawValue.lowercased(),
                   tracks.filter({ $0.layer == layer }).allSatisfy({ $0.direction.lowercased() == direction }) else {
                 throw Failure(code: "routing_tracks_invalid", message: "Retained track direction contradicts the exact source layer.")
             }
-            clearances[layer] = max(constraints.routeSpacing,
-                try geometry.routingWidthAndSpacing(layer: layer, units: input.unitsPerMicron, width: width).spacing)
         }
         let power = Set(configuration.powerNetNames)
-        let nets = input.nets.filter { !power.contains($0.id) && (onlyNetID == nil || $0.id == onlyNetID) }.sorted { $0.id < $1.id }
+        let nets = input.nets.filter { ($0.routingClass == .special || !power.contains($0.id)) && (onlyNetID == nil || $0.id == onlyNetID) }.sorted { $0.id < $1.id }
         let selected = Set(nets.map(\.id))
+        try Self.validateSpecialNetMutation(input, selectedNetIDs: selected, configuration: configuration, geometry: geometry)
         // FIXME(INCOMPLETE_IMPLEMENTATION): Ordinary source routing cannot update characterized CTS topology/timing records. Requests selecting CTS-owned net families must remain blocked until that owner provides exact reroute reconciliation.
         guard input.clockTrees.isEmpty else {
             throw Failure(code: "routing_clock_tree_unsupported", message: "Routing cannot reconcile an existing clock tree's topology and timing evidence.")
         }
-        guard input.powerStructures.isEmpty, !input.nets.contains(where: { power.contains($0.id) }) else {
-            throw Failure(code: "routing_special_nets_unsupported", message: "This source-bound routing/export profile requires normal nets without special-net structures.")
+        guard input.powerStructures.isEmpty, !input.nets.contains(where: { power.contains($0.id) && $0.routingClass != .special }) else {
+            throw Failure(code: "routing_special_nets_unsupported", message: "Finite routing cannot synthesize power structures or reconcile regular power-grid ownership.")
         }
         var output = input
         var occupancy: [Occupancy] = []
@@ -157,11 +155,24 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         }
         try geometry.validateRoutingCuts(output.vias, sourceCuts: sourceCuts)
         var budget = Budget(caller: configuration.maximumRoutingCandidateChecks)
+        let eligibleLayers = layers
         for net in nets {
             try Task.checkCancellation()
-            // FIXME(INCOMPLETE_IMPLEMENTATION): The native signal router does not synthesize or reroute special-net ownership. Its API/CLI must refuse selected special nets until a source-qualified special-net mutation contract is implemented.
-            guard net.routingClass == .regular else {
-                throw Failure(code: "routing_net_class_unsupported", message: "Native signal routing requires an explicitly regular net; special-net ownership is retained without conversion.")
+            guard let routeClass = net.routingClass else {
+                throw Failure(code: "routing_net_class_unsupported", message: "Native routing requires an explicitly qualified net container.")
+            }
+            let layers: [Int]
+            if routeClass == .special {
+                let access = Set(input.pins.filter { net.pinIDs.contains($0.id) }.compactMap(\.accessLayer))
+                guard access.count == 1, let layer = access.first, eligibleLayers.contains(layer) else {
+                    throw Failure(code: "routing_special_layer_unsupported", message: "Finite special routing requires one common eligible source PORT layer.")
+                }
+                layers = [layer]
+            } else { layers = eligibleLayers }
+            var clearances: [Int: Int64] = [:]
+            for layer in layers {
+                clearances[layer] = max(constraints.routeSpacing,
+                    try geometry.routingWidthAndSpacing(layer: layer, units: input.unitsPerMicron, width: width, explicitSpecialWidth: routeClass == .special).spacing)
             }
             let terminals = try net.pinIDs.sorted().map { id -> PhysicalDesignSnapshot.Pin in
                 guard let pin = pins[id], pin.netID == net.id,
@@ -289,7 +300,7 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
             for segment in segments { occupancy.append(.init(layer: segment.layer, region: try Self.conductor(segment, width: width), netID: net.id, pinID: nil, blockage: false)) }
             for via in contacts { try Self.appendMetal(via, geometry: geometry, to: &occupancy) }
             output.vias.append(contentsOf: contacts)
-            output.routes.append(.init(id: "route_\(net.id)", netID: net.id, segments: segments))
+            output.routes.append(.init(id: "route_\(net.id)", netID: net.id, segments: segments, defStatus: .routed, defShape: nil))
         }
         try geometry.validate(output)
         var state = output.implementationState ?? .init()
@@ -298,6 +309,55 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         output.implementationState = state
         output.metadata["routingStatus"] = mode
         return .init(snapshot: output, checks: budget.checks, structuralCeiling: budget.capacity)
+    }
+
+    /// Admits the complete special-net deletion set before geometry or route evidence is discarded.
+    /// The same gate protects direct routing and cell mutations whose invalidation deletes all routes.
+    static func validateSpecialNetMutation(_ snapshot: PhysicalDesignSnapshot, selectedNetIDs: Set<String>,
+        configuration: PhysicalDesignConfiguration, geometry: PhysicalDesignProcessGeometry) throws {
+        let selected = snapshot.nets.filter { selectedNetIDs.contains($0.id) && $0.routingClass == .special }
+        guard !selected.isEmpty else { return }
+        try Task.checkCancellation()
+        guard let constraints = configuration.implementationConstraints, constraints.routeWidth > 0,
+              constraints.routeWidth.isMultiple(of: 2) else {
+            throw Failure(code: "routing_special_width_required", message: "Finite special routing requires an explicit even positive generation width.")
+        }
+        let specialIDs = Set(selected.map(\.id))
+        guard !snapshot.vias.contains(where: { specialIDs.contains($0.netID) }) else {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Special-net contact serialization has no retained route-profile owner. Native API/CLI mutation refuses special contacts until exact status/width/contact ownership and standard export are implemented together.
+            throw Failure(code: "routing_special_via_unsupported", message: "Finite special routing supports wires on one source layer, without special contacts.")
+        }
+        var accessLayers: [String: Int] = [:]
+        for net in selected {
+            try Task.checkCancellation()
+            let terminals = snapshot.pins.filter { net.pinIDs.contains($0.id) }
+            let layers = Set(terminals.compactMap(\.accessLayer))
+            guard terminals.count == net.pinIDs.count, layers.count == 1, let layer = layers.first,
+                  terminals.allSatisfy({ $0.accessLayer == layer }),
+                  configuration.preferredRoutingLayers.contains(layer), layer <= configuration.maximumRoutingLayer else {
+                throw Failure(code: "routing_special_layer_unsupported", message: "Finite special routing requires all original terminals on one selected source routing layer.")
+            }
+            accessLayers[net.id] = layer
+            _ = try geometry.routingWidthAndSpacing(layer: layer, units: snapshot.unitsPerMicron,
+                width: constraints.routeWidth, explicitSpecialWidth: true)
+        }
+        for route in snapshot.routes where specialIDs.contains(route.netID) {
+            try Task.checkCancellation()
+            guard route.defStatus == .routed, route.defShape == nil else {
+                throw Failure(code: "routing_special_route_protected", message: "Only unshielded ROUTED special wires without SHAPE may be replaced; fixed or shaped ownership remains unchanged.")
+            }
+            for segment in route.segments {
+                guard segment.layer == accessLayers[route.netID] else {
+                    throw Failure(code: "routing_special_layer_unsupported", message: "Selected special conductors must retain the common terminal layer without requiring contacts.")
+                }
+                guard let width = segment.widthDBU, width == constraints.routeWidth else {
+                    throw Failure(code: "routing_special_width_mismatch", message: "Explicit special generation width must equal every selected retained conductor width.")
+                }
+                _ = try segment.qualifiedFootprint()
+                _ = try geometry.routingWidthAndSpacing(layer: segment.layer, units: snapshot.unitsPerMicron,
+                    width: width, explicitSpecialWidth: true)
+            }
+        }
     }
 
     static func conductor(_ segment: PhysicalDesignSnapshot.RouteSegment, width: Int64) throws -> Region {

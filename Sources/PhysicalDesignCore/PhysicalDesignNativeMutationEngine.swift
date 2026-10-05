@@ -477,7 +477,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         let wirelengthObjectiveDBU = estimatedWirelength(output)
         let congestionObjective = maximumRowUtilization(output)
         let legalCellCount = max(0, output.cells.count - overlapCount - outsideCoreCount)
-        if output.cells != input.cells { invalidateCellGeometryDependents(in: &output) }
+        if output.cells != input.cells {
+            if let failure = specialCellMutationFailure(input, configuration: configuration, processGeometry: processGeometry) { return failure }
+            invalidateCellGeometryDependents(in: &output)
+        }
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
         implementationState.placementProof = PhysicalDesignImplementationState.PlacementProof(
             cellCount: output.cells.count,
@@ -1500,7 +1503,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["choose_another_eco_target", "move_adjacent_cells", "increase_core_area"]
                 )
             }
-            if previous != output.cells[index] { invalidateCellGeometryDependents(in: &output) }
+            if previous != output.cells[index] {
+                if let failure = specialCellMutationFailure(input, configuration: configuration, processGeometry: processGeometry) { return failure }
+                invalidateCellGeometryDependents(in: &output)
+            }
         case .moveCell:
             guard let target = configuration.ecoTargetCellID,
                   let index = output.cells.firstIndex(where: { $0.id == target }) else {
@@ -1561,12 +1567,20 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             if let failure = relocatePins(from: cell, to: output.cells[index], indices: indices, in: &output) {
                 return Outcome(snapshot: nil, status: .blocked, diagnostics: [failure], candidateActions: ["repair_pin_geometry"])
             }
-            if cell != output.cells[index] { invalidateCellGeometryDependents(in: &output) }
+            if cell != output.cells[index] {
+                if let failure = specialCellMutationFailure(input, configuration: configuration, processGeometry: processGeometry) { return failure }
+                invalidateCellGeometryDependents(in: &output)
+            }
         // FIXME(INCOMPLETE_IMPLEMENTATION): Native ECO buffer insertion creates an exact physical connectivity candidate only. Functional equivalence and characterized timing must be established before production ECO completion.
         case .bufferInsertion:
             guard let netID = configuration.ecoTargetNetID,
                   let netIndex = output.nets.firstIndex(where: { $0.id == netID }) else {
                 return blocked(code: "eco_target_net_missing", message: "Buffer insertion requires an existing target net.", actions: ["set_eco_target_net_id"])
+            }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Native buffer insertion has no special-net split ownership contract. API/CLI must reject it until original container, optional USE and source role semantics are preserved across both resulting nets.
+            guard output.nets[netIndex].routingClass != .special else {
+                return blocked(code: "eco_special_topology_unsupported", message: "Finite special repair retains original net identity and does not split its topology.",
+                    entity: netID, actions: ["preserve_exact_special_net_topology"])
             }
             guard let processGeometry, let master = configuration.ecoBufferMaster else {
                 return blocked(code: "native_cell_source_invalid", message: "ECO buffer insertion requires an explicit master and exact process sources.",
@@ -1610,6 +1624,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 let buffer = try insertedCell(id: bufferID, master: master, near: (source.x, source.y), snapshot: output, geometry: processGeometry)
                 let inputPin = try processGeometry.referencePin(.init(id: inputPinID, cellID: bufferID, name: ports.input, netID: netID), for: buffer)
                 let outputPin = try processGeometry.referencePin(.init(id: outputPinID, cellID: bufferID, name: ports.output, netID: branchNetID), for: buffer)
+                if let failure = specialCellMutationFailure(input, configuration: configuration, processGeometry: processGeometry) { return failure }
                 invalidateCellGeometryDependents(in: &output)
                 output.cells.append(buffer)
                 output.pins.append(contentsOf: [inputPin, outputPin])
@@ -2079,6 +2094,25 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         )
     }
 
+    private func specialCellMutationFailure(_ input: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration,
+        processGeometry: PhysicalDesignProcessGeometry?) -> Outcome? {
+        guard input.nets.contains(where: { $0.routingClass == .special }) else { return nil }
+        guard let processGeometry else {
+            return blocked(code: "routing_special_sources_required", message: "Special-net cell mutation requires exact selected process sources.", actions: ["supply_exact_process_sources"])
+        }
+        do {
+            try PhysicalDesignSourceRouter.validateSpecialNetMutation(input, selectedNetIDs: Set(input.nets.map(\.id)),
+                configuration: configuration, geometry: processGeometry)
+            return nil
+        } catch is CancellationError {
+            return cancelled(actions: ["resume_from_the_last_immutable_revision"])
+        } catch let error as PhysicalDesignSourceRouter.Failure {
+            return blocked(code: error.code, message: error.message, actions: ["preserve_exact_special_route_ownership"])
+        } catch {
+            return blocked(code: "routing_special_geometry_invalid", message: error.localizedDescription, actions: ["repair_exact_special_geometry"])
+        }
+    }
+
     private func verifyAndRecordRepair(
         input: PhysicalDesignSnapshot,
         output: inout PhysicalDesignSnapshot,
@@ -2098,6 +2132,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             configuration: configuration,
             stage: stage
         )
+        let requiresRouting = output.metadata["routingStatus"] == "requires_routing"
         var implementationState = output.implementationState ?? PhysicalDesignImplementationState()
         implementationState.repairProofs.append(
             PhysicalDesignImplementationState.RepairProof(
@@ -2106,8 +2141,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 targetIDs: uniqueStrings(targetIDs),
                 violationsBefore: before,
                 violationsAfter: after,
-                verified: after == 0,
-                details: details
+                verified: after == 0 && !requiresRouting,
+                details: requiresRouting ? ["rechecked_native_placement_geometry", "candidate_requires_source_routing_reverification"] : details
             )
         )
         output.implementationState = implementationState

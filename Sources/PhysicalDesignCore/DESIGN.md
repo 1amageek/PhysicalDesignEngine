@@ -139,6 +139,15 @@ invalidated before fresh stage evidence is produced. Re-running an unchanged pos
 preserves existing evidence. Routing and CTS must be rerun for changed geometry;
 geometry-smoke stage completion does not claim timing or routing closure.
 
+Before placement or ECO cell changes discard retained special-net conductors, RoutingGeometry
+admits that deletion set against its finite mutable routing profile. FIXED/COVER,
+SHAPE ownership, missing width, implicit generation width and special contacts
+cannot be erased by invalidation and then appear eligible for ordinary routing.
+Successful cell geometry changes publish a candidate with `requires_routing`,
+empty old conductors and no verified repair proof. Placement validity does not
+establish restored connectivity. Source-qualified routing and subsequent independent
+DRC/LVS/PEX/timing observations refine that candidate; production remains blocked.
+
 Technology and mutation values are invocation-local, Sendable values. The store
 owns input byte verification. No shared mutable state or conditional isolation is added.
 
