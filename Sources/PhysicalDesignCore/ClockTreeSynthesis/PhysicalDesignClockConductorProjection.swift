@@ -84,14 +84,9 @@ struct PhysicalDesignClockConductorProjection {
                 try admit()
                 guard let width = segment.widthDBU, width > 0, width.isMultiple(of: 2), let number = Int16(exactly: segment.layer),
                       segment.x1 == segment.x2 || segment.y1 == segment.y2 else { throw Self.invalid("exact full-width rectilinear route") }
-                func add(_ a: Int64, _ b: Int64) throws -> Int64 {
-                    let v = a.addingReportingOverflow(b); guard !v.overflow else { throw Self.invalid("conductor arithmetic") }; return v.partialValue
-                }
-                let half = width / 2
-                let x0 = try add(min(segment.x1, segment.x2), -half), x1 = try add(max(segment.x1, segment.x2), half)
-                let y0 = try add(min(segment.y1, segment.y2), -half), y1 = try add(max(segment.y1, segment.y2), half)
-                let rect = LayoutRect(origin: .init(x: Double(x0) / scale, y: Double(y0) / scale),
-                    size: .init(width: Double(x1 - x0) / scale, height: Double(y1 - y0) / scale))
+                let footprint = try segment.qualifiedFootprint()
+                let rect = LayoutRect(origin: .init(x: Double(footprint.x) / scale, y: Double(footprint.y) / scale),
+                    size: .init(width: Double(footprint.width) / scale, height: Double(footprint.height) / scale))
                 shapes.append(.init(id: try Self.identity("route:" + segment.id), layer: try layer(number), netID: netIDs[route.netID], geometry: .rect(rect)))
             }
         }

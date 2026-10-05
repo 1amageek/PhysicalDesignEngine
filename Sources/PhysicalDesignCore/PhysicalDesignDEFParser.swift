@@ -852,6 +852,7 @@ public struct PhysicalDesignDEFParser: Sendable {
                 id: netID,
                 pinIDs: pinIDs.sorted(),
                 isClock: processFactory == nil ? netID.lowercased().contains("clk") : declaredClock == true,
+                routingClass: .regular, defUse: declaredClock.map { $0 ? .clock : .signal },
                 antennaRatio: nil,
                 maximumAntennaRatio: nil
             ))

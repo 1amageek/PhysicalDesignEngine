@@ -21,7 +21,7 @@ port authority; points, route widths and floorplan pads never generate its shape
 | [Core](../DESIGN.md) | parent | Snapshot and validation | Canonical JSON is resume authority |
 | [ProcessGeometry](../ProcessGeometry/DESIGN.md) | used by | Exact routing-layer mapping and process admission | No inferred layer or metal |
 | [RoutingGeometry](../RoutingGeometry/DESIGN.md) | used by | Exact surface as terminal PORT and occupancy | Existing width/track/search budgets remain unchanged |
-| [StandardLayoutExport](../StandardLayoutExport/DESIGN.md) | used by | Bounded native DEF publication | Special nets remain unsupported |
+| [StandardLayoutExport](../StandardLayoutExport/DESIGN.md) | used by | Bounded native DEF publication | Route semantics belong to RoutingGeometry |
 | [Physical database schema](../../../../PhysicalDesignDatabaseIntegration/Sources/PhysicalDesignDatabaseSchema/DESIGN.md) | used by | Lossless value/codec/page retention | Missing required geometry is rejected |
 
 ## Architecture

@@ -763,7 +763,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 output.nets.append(PhysicalDesignSnapshot.Net(
                     id: branchNetID,
                     pinIDs: [outputPinID, sink.id],
-                    isClock: true
+                    isClock: true, routingClass: .regular, defUse: .clock
                 ))
                 parentPinIDs.append(inputPinID)
                 bufferCellIDs.append(bufferID)

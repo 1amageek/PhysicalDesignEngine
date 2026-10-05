@@ -141,7 +141,7 @@ struct NativePhysicalDesignClockTreeSynthesizer {
             output.pins.append(try geometry.referencePin(.init(id: inputID, cellID: id, name: ports.input, netID: clock.netID), for: cell))
             output.pins.append(try geometry.referencePin(.init(id: outputID, cellID: id, name: ports.output, netID: net), for: cell))
             output.pins[sinkIndex].netID = net
-            output.nets.append(.init(id: net, pinIDs: [outputID, sinkID], isClock: true)); family.insert(net); buffers.append(id); upstream.append(inputID)
+            output.nets.append(.init(id: net, pinIDs: [outputID, sinkID], isClock: true, routingClass: .regular, defUse: .clock)); family.insert(net); buffers.append(id); upstream.append(inputID)
             branches[sinkID] = .init(netID: net, master: masterName, inputPinID: inputID, outputPinID: outputID, inputName: ports.input, outputName: ports.output)
         }
         guard let index = output.nets.firstIndex(where: { $0.id == clock.netID }) else { throw invalid("clock net identity") }

@@ -71,8 +71,8 @@ struct RoutingGeometryTests {
         case "budget": request.configuration.maximumRoutingCandidateChecks = 1
         case "width": request.configuration.implementationConstraints?.routeWidth = 102
         case "retained-width": request.initialSnapshot?.routes = [.init(id: "old", netID: "N", segments: [.init(id: "old-h", layer: 2, x1: 1900, y1: 1300, x2: 2100, y2: 1300)])]
-        case "retained-offcore": request.initialSnapshot?.routes = [.init(id: "old", netID: "N", segments: [.init(id: "old-h", layer: 2, x1: 0, y1: 900, x2: 500, y2: 900, widthDBU: 100)])]
-        case "retained-direction": request.initialSnapshot?.routes = [.init(id: "old", netID: "N", segments: [.init(id: "old-h", layer: 2, x1: 2100, y1: 1300, x2: 2100, y2: 1500, widthDBU: 100)])]
+        case "retained-offcore": request.initialSnapshot?.routes = [.init(id: "old", netID: "N", segments: [.init(id: "old-h", layer: 2, x1: 0, y1: 900, x2: 500, y2: 900, widthDBU: 100, endpointExtensions: .init(beginDBU: 50, endDBU: 50))])]
+        case "retained-direction": request.initialSnapshot?.routes = [.init(id: "old", netID: "N", segments: [.init(id: "old-h", layer: 2, x1: 2100, y1: 1300, x2: 2100, y2: 1500, widthDBU: 100, endpointExtensions: .init(beginDBU: 50, endDBU: 50))])]
         case "no-path": request.initialSnapshot?.blockages = [.init(x: 2800, y: 0, width: 1000, height: 10000)]
         default: break
         }
@@ -131,7 +131,7 @@ struct RoutingGeometryTests {
         request.runID = "routing-preserved"; request.stage = .timingECO
         request.configuration.ecoAction = .rerouteNet; request.configuration.ecoTargetNetID = "N"
         request.configuration.implementationConstraints?.routeSpacing = 0
-        let preserved = PhysicalDesignSnapshot.Route(id: "keep", netID: "M", segments: [.init(id: "keep-h", layer: 2, x1: 8300, y1: 9100, x2: 8700, y2: 9100, widthDBU: 100)])
+        let preserved = PhysicalDesignSnapshot.Route(id: "keep", netID: "M", segments: [.init(id: "keep-h", layer: 2, x1: 8300, y1: 9100, x2: 8700, y2: 9100, widthDBU: 100, endpointExtensions: .init(beginDBU: 50, endDBU: 50))])
         let contact = PhysicalDesignSnapshot.Via(id: "keep-via", netID: "M", x: 8500, y: 9100, lowerLayer: 2, upperLayer: 3, master: "hv")
         request.initialSnapshot?.nets.append(.init(id: "M", pinIDs: []))
         request.initialSnapshot?.routes = [preserved]; request.initialSnapshot?.vias = [contact]
@@ -269,7 +269,7 @@ struct RoutingGeometryTests {
                 #expect(route.points.count == 2)
                 let a = route.points[0], b = route.points[1]
                 let width = try geometry.routingWidthAndSpacing(layer: Int(layer), units: snapshot.unitsPerMicron, width: 100).width
-                try merge(PhysicalDesignSourceRouter.conductor(.init(id: "oracle", layer: Int(layer), x1: Int64(a.x), y1: Int64(a.y), x2: Int64(b.x), y2: Int64(b.y), widthDBU: width), width: width), into: &standard)
+                try merge(PhysicalDesignSourceRouter.conductor(.init(id: "oracle", layer: Int(layer), x1: Int64(a.x), y1: Int64(a.y), x2: Int64(b.x), y2: Int64(b.y), widthDBU: width, endpointExtensions: .init(beginDBU: width / 2, endDBU: width / 2)), width: width), into: &standard)
             }
         }
         #expect(Set(standard.keys) == Set(canonical.keys))

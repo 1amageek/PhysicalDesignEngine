@@ -164,6 +164,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var id: String
         public var pinIDs: [String]
         public var isClock: Bool
+        public var routingClass: PhysicalDesignRouteClass?
+        public var defUse: DEFSpecialNet.NetUse?
         public var antennaRatio: Double?
         public var maximumAntennaRatio: Double?
 
@@ -171,12 +173,16 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             id: String,
             pinIDs: [String],
             isClock: Bool = false,
+            routingClass: PhysicalDesignRouteClass? = .regular,
+            defUse: DEFSpecialNet.NetUse? = nil,
             antennaRatio: Double? = nil,
             maximumAntennaRatio: Double? = nil
         ) {
             self.id = id
             self.pinIDs = pinIDs
             self.isClock = isClock
+            self.routingClass = routingClass
+            self.defUse = defUse
             self.antennaRatio = antennaRatio
             self.maximumAntennaRatio = maximumAntennaRatio
         }
@@ -191,6 +197,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var y2: Int64
         /// Absent width denotes unqualified geometry; source-bound routing never infers it.
         public var widthDBU: Int64?
+        public var endpointExtensions: PhysicalDesignRouteEndpointExtensions?
         public var isJumper: Bool
 
         public init(
@@ -201,6 +208,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             x2: Int64,
             y2: Int64,
             widthDBU: Int64? = nil,
+            endpointExtensions: PhysicalDesignRouteEndpointExtensions? = nil,
             isJumper: Bool = false
         ) {
             self.id = id
@@ -210,6 +218,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             self.x2 = x2
             self.y2 = y2
             self.widthDBU = widthDBU
+            self.endpointExtensions = endpointExtensions
             self.isJumper = isJumper
         }
     }
@@ -218,11 +227,16 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var id: String
         public var netID: String
         public var segments: [RouteSegment]
+        public var defStatus: DEFRouteWire.RouteStatus?
+        public var defShape: DEFRouteSegment.RouteShape?
 
-        public init(id: String, netID: String, segments: [RouteSegment]) {
+        public init(id: String, netID: String, segments: [RouteSegment],
+                    defStatus: DEFRouteWire.RouteStatus? = .routed, defShape: DEFRouteSegment.RouteShape? = nil) {
             self.id = id
             self.netID = netID
             self.segments = segments
+            self.defStatus = defStatus
+            self.defShape = defShape
         }
     }
 
@@ -567,6 +581,10 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
                     diagnostics.append("route segment \(segment.id) has invalid orthogonal geometry")
                 }
                 if let width = segment.widthDBU, width <= 0 { diagnostics.append("route segment \(segment.id) width must be positive") }
+                if segment.endpointExtensions != nil {
+                    do { _ = try segment.qualifiedFootprint() }
+                    catch { diagnostics.append("route segment \(segment.id) endpoint geometry is invalid: \(error)") }
+                }
                 if !routeSegmentIDs.insert(segment.id).inserted {
                     diagnostics.append("duplicate route segment identifier \(segment.id)")
                 }

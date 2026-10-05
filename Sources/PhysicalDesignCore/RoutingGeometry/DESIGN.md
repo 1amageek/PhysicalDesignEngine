@@ -43,8 +43,9 @@ Exact source admission -> actual PORT/OBS/layer/via regions + declared tracks
   declared LEF WIDTH exactly. Missing WIDTH, nondefault widths, wrong-way wires and
   advanced rule semantics fail. Effective scalar conductor clearance is the greater
   of source SPACING (when present) and caller routeSpacing.
-- Standard normal NETS uses the declared default width and implicit half-width
-  endpoint extension. Actual wire rectangles include those square end caps.
+- Standard normal NETS uses the declared default width. Native wire construction
+  explicitly chooses half-width endpoint extensions; retained geometry follows the
+  exact ordered extension contract below.
   A chosen access cap must be wholly contained in the exact PORT union on its
   selected layer; point containment or corner-only contact does not prove access.
 - Every segment lies on a declared track of its layer/direction and fits the core.
@@ -76,7 +77,7 @@ Exact source admission -> actual PORT/OBS/layer/via regions + declared tracks
   named vias and exact process bindings. Unselected routes/vias are preserved.
 - Bounded source-bound DEF output represents normal-net default-width segments and
   named fixed contacts using exact layer names and standard routing points. NDR,
-  special-net, advanced geometry and source-bound routed DEF import remain
+  advanced special-net geometry and source-bound routed DEF import remain
   typed unsupported. Canonical JSON is the resume authority.
 
 ## Runtime Flows
@@ -118,7 +119,7 @@ is half that width. Local fixed DEF values/reader/writer provide the behavioral 
 ### Retained conductor/blockage admission
 
 Native ECO repair delegates retained wire/contact blockage checks to this owner.
-Each wire uses its retained positive even width and square endpoint caps. Each
+Each wire uses its retained positive even width and explicit ordered endpoint extensions. Each
 named fixed contact uses exact translated source metal polygons on the applicable
 layers; a via origin or bounding box is not a contact approximation. A positive-area Region
 intersection rejects the candidate. The shared native profile projects placement
@@ -144,3 +145,53 @@ The same full-width track-access/search/clearance/budget algorithm applies to
 cell and top ports. Routing may update derived Pin access coordinates while the
 immutable source rectangle, placement origin/orientation/status and use remain
 unchanged. Missing geometry and obstructed access fail atomically.
+
+## Exact Retained Route Contract
+
+The canonical snapshot owns ordered original centerline points and width. A
+`PhysicalDesignRouteEndpointExtensions` immutable value owns signed `beginDBU`
+and `endDBU` distances along the outward tangents of those original points.
+`RouteSegment.endpointExtensions` retains this value; `qualifiedFootprint()` is
+the shared checked positive rectilinear rectangle projection. Lateral extent is
+half the even positive width. Signed truncation is retained exactly. No consumer
+rewrites centerline endpoints to encode a cap, pads a flush path, or infers missing
+extension meaning from width. Native source routing explicitly creates half-width
+extensions; geometry-smoke paths remain explicitly unqualified.
+Each endpoint retraction is strictly shorter than the original segment length;
+positive total area cannot admit a retracted endpoint beyond its original segment.
+
+`Net.routingClass` uses `PhysicalDesignRouteClass.regular` or `.special` and
+`Net.defUse` retains optional declared DEF USE. `Route.defStatus` retains typed
+ROUTED/FIXED/COVER and `Route.defShape` retains optional special-route SHAPE.
+Constructors choose regular/ROUTED explicitly; decoding absent qualification stays
+absent and operations that need it reject. Optional USE absence remains absence,
+including special nets and clock-family topology: port use and net isClock do not
+infer source USE. Input attributes outside this finite profile are refused before
+projection, including NEW/grouping, SHIELD/NOSHIELD, SOURCE/WEIGHT and properties.
+
+| Invariant | Owner / consumer | Behavioral evidence |
+|---|---|---|
+| Ordered endpoints, width and signed caps remain exact | Snapshot / endpoint value | Reversed, vertical, flush, asymmetric and negative-cap footprint cases |
+| One checked full footprint governs real metal | Router occupancy, ECO admission, characterized CTS projection | Retained flush path avoids false half-cap collision; malformed/missing geometry rejects |
+| Container/use/status/shape survives output | Native DEF writer / public exporter | Four original special routes, width 200, unchanged points, flush caps and omitted USE |
+| Missing or unsupported meaning cannot become success | Qualified projection / DEF export | Old absent extensions/class/status and negative DEF extension typed refusal |
+| Immutable pages retain all new values | Host schema canonicalizer/codec | Exact bytes/page roundtrip and geometry-dependent facet identity |
+
+The producer and exporter share this contract. Regular NETS must use the declared
+default source WIDTH; SPECIALNETS retains its explicit width and supported scalar
+source rules. DEF serialization preserves container class, declared USE, status,
+special SHAPE, and explicit nonnegative ordered point extensions. Negative signed
+geometry can be represented canonically but is typed unsupported for DEF output.
+Native signal routing refuses modifying special-net route ownership. Legacy
+synthetic PowerStructure export and arbitrary source-bound routed DEF intake
+remain incomplete and explicitly refused. This contract does not implement wider
+special-net grouping or power-grid synthesis.
+
+Values and footprint arithmetic are invocation-local Sendable state. Existing
+route/search/input/output budgets and cancellation boundaries remain authoritative.
+No database dependency, new shared state, or target-specific isolation is added.
+
+[RouteEndpointGeometryTests](../../../Tests/PhysicalDesignEngineTests/RouteEndpointGeometryTests.swift)
+owns the public width-only red, ordered signed footprint/overflow/retraction cases,
+exact four-special-route producer/export pairing and atomic unsupported failures.
+Existing ECO and source-routing tests exercise the actual shared projection.

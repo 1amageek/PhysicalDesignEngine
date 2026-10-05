@@ -1,4 +1,5 @@
 import Foundation
+import DEF
 
 public struct PhysicalDesignDEFWriter: Sendable {
     public init() {}
@@ -16,20 +17,29 @@ public struct PhysicalDesignDEFWriter: Sendable {
             // Mutation already admitted this output; export checks identity and loss without repeating shape projection.
             guard let processGeometry, snapshot.processManifest == processGeometry.manifestReference,
                   snapshot.processAssets == processGeometry.sources else { throw PhysicalDesignDEFExportError.unresolvedProcessSources }
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Source-bound special-net geometry requires exact standard interchange. API/CLI export rejects it until its complete geometry can be represented without loss.
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Synthetic power-structure geometry has no exact standard source profile. API/CLI export rejects it until complete geometry can be represented without loss; retained finite SPECIALNETS routes are handled separately.
             guard snapshot.powerStructures.isEmpty else {
-                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Special-net DEF interchange is not complete.")
+                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Synthetic power-structure DEF geometry is not complete.")
+            }
+            guard snapshot.nets.allSatisfy({ $0.routingClass != nil }) else {
+                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Source-bound net container class is unqualified.")
             }
             for route in snapshot.routes {
+                // FIXME(INCOMPLETE_IMPLEMENTATION): NEW/grouping and shield profiles have no retained statement ordering or shield identity. Native producer/public exporter reject them until their exact standard semantics are representable.
+                guard let net = snapshot.nets.first(where: { $0.id == route.netID }),
+                      let status = route.defStatus, [.routed, .fixed, .cover].contains(status),
+                      net.routingClass == .special || route.defShape == nil else {
+                    throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Route container, status or shape is outside the exact profile.")
+                }
                 for segment in route.segments {
                     guard let width = segment.widthDBU else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Normal-net conductor width is unqualified.") }
                     do {
-                        _ = try processGeometry.routingWidthAndSpacing(layer: segment.layer, units: snapshot.unitsPerMicron, width: width)
-                        _ = try PhysicalDesignSourceRouter.conductor(segment, width: width)
+                        _ = try processGeometry.routingWidthAndSpacing(layer: segment.layer, units: snapshot.unitsPerMicron, width: width, explicitSpecialWidth: net.routingClass == .special)
+                        _ = try segment.qualifiedFootprint()
                     } catch let error as PhysicalDesignRoutingSourceError {
                         throw PhysicalDesignDEFExportError.unsupportedProcessGeometry(error.message)
-                    } catch let error as PhysicalDesignSourceRouter.Failure {
-                        throw PhysicalDesignDEFExportError.invalidSnapshot(error.message)
+                    } catch let error as PhysicalDesignRouteEndpointExtensions.GeometryError {
+                        throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Endpoint geometry is unqualified or invalid: \(error)")
                     }
                 }
             }
@@ -101,32 +111,56 @@ public struct PhysicalDesignDEFWriter: Sendable {
             try text.line("END PINS")
         }
 
-        try text.line("NETS \(sortedNets.count) ;")
         let pinByID = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
         let routesByNet = Dictionary(grouping: snapshot.routes, by: \.netID)
-        for net in sortedNets {
-            try text.append("- \(net.id) ")
-            var separator = ""
-            for pinID in net.pinIDs.sorted() {
-                guard let pin = pinByID[pinID] else { continue }
-                try text.append(separator)
-                try text.append("( \(pin.cellID ?? "PIN") \(pin.name) )")
-                separator = " "
-            }
-            if net.isClock { try text.append(" + USE CLOCK") }
-            for route in routesByNet[net.id, default: []].sorted(by: { $0.id < $1.id }) {
-                for segment in route.segments.sorted(by: { $0.id < $1.id }) {
-                    try text.append(" + ROUTED \(try layerName(segment.layer)) ( \(segment.x1) \(segment.y1) ) ( \(segment.x2) \(segment.y2) )")
+        for special in [false, true] {
+            let nets = sortedNets.filter { ($0.routingClass == .special) == special }
+            if special && nets.isEmpty { continue }
+            let section = special ? "SPECIALNETS" : "NETS"
+            try text.line("\(section) \(nets.count) ;")
+            for net in nets {
+                try text.append("- \(net.id) ")
+                var separator = ""
+                for pinID in net.pinIDs.sorted() {
+                    guard let pin = pinByID[pinID] else { continue }
+                    try text.append(separator)
+                    try text.append("( \(pin.cellID ?? "PIN") \(pin.name) )")
+                    separator = " "
                 }
+                if let use = net.defUse { try text.append(" + USE \(use.rawValue)") }
+                for route in routesByNet[net.id, default: []].sorted(by: { $0.id < $1.id }) {
+                    for segment in route.segments.sorted(by: { $0.id < $1.id }) {
+                        if let extensions = segment.endpointExtensions {
+                            guard net.routingClass != nil, let status = route.defStatus,
+                                  [.routed, .fixed, .cover].contains(status),
+                                  special || route.defShape == nil,
+                                  let width = segment.widthDBU, Int32(exactly: width) != nil,
+                                  extensions.beginDBU >= 0, extensions.endDBU >= 0,
+                                  Int32(exactly: extensions.beginDBU) != nil, Int32(exactly: extensions.endDBU) != nil else {
+                                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Exact DEF routes require retained class/status, supported shape and nonnegative representable extensions.")
+                            }
+                            _ = try segment.qualifiedFootprint()
+                            let widthText = special ? " \(width)" : ""
+                            let shapeText = route.defShape.map { " + SHAPE " + $0.rawValue } ?? ""
+                            try text.append(" + \(status.rawValue) \(try layerName(segment.layer))\(widthText)\(shapeText) ( \(segment.x1) \(segment.y1) \(extensions.beginDBU) ) ( \(segment.x2) \(segment.y2) \(extensions.endDBU) )")
+                        } else {
+                            // FIXME(INCOMPLETE_IMPLEMENTATION): Point-only source-free smoke routes lack exact endpoint semantics. Qualified source-bound publication refuses them above; this legacy output cannot prove physical interchange.
+                            guard processGeometry == nil, !special else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Route endpoint extensions are unqualified.") }
+                            try text.append(" + ROUTED \(try layerName(segment.layer)) ( \(segment.x1) \(segment.y1) ) ( \(segment.x2) \(segment.y2) )")
+                        }
+                    }
+                }
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Special-net standalone contacts lack retained route profile. Source-bound export must refuse them until exact standard contact semantics are owned; normal fixed contacts retain their existing profile.
+                let contacts = processGeometry == nil ? [] : snapshot.vias.filter { $0.netID == net.id }
+                guard !special || contacts.isEmpty else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Special-net standalone contact export is unsupported.") }
+                for via in contacts.sorted(by: { $0.id < $1.id }) {
+                    guard let master = via.master else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Fixed contact export requires its exact master name.") }
+                    try text.append(" + ROUTED \(try layerName(via.lowerLayer)) ( \(via.x) \(via.y) ) \(master)")
+                }
+                try text.line(" ;")
             }
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Source-free smoke has no fixed contact declaration and cannot qualify routed DEF contact semantics. Exact contact emission belongs to the source-bound profile.
-            for via in (processGeometry == nil ? [] : snapshot.vias.filter({ $0.netID == net.id })).sorted(by: { $0.id < $1.id }) {
-                guard let master = via.master else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Fixed contact export requires its exact master name.") }
-                try text.append(" + ROUTED \(try layerName(via.lowerLayer)) ( \(via.x) \(via.y) ) \(master)")
-            }
-            try text.line(" ;")
+            try text.line("END \(section)")
         }
-        try text.line("END NETS")
 
         if !sortedBlockages.isEmpty {
             try text.line("BLOCKAGES \(sortedBlockages.count) ;")

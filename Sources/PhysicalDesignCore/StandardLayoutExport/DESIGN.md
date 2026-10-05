@@ -19,7 +19,7 @@ claim arbitrary DEF semantic equivalence. Canonical JSON remains resume authorit
 | [Core](../DESIGN.md) | parent | Snapshot/request/store | Public composition | No canonical mutation |
 | [ProcessInputs](../ProcessInputs/DESIGN.md) | depends on | Exact manifest/asset intake | Existing source reader | Read adapter independently verifies bytes |
 | [ProcessGeometry](../ProcessGeometry/DESIGN.md) | depends on | Constructor and snapshot admission | Existing geometry owner | No projection exposed publicly |
-| [RoutingGeometry](../RoutingGeometry/DESIGN.md) | depends on | Native DEF profile | Same writer as native publication | Exact single-RECT top ports; special nets still fail |
+| [RoutingGeometry](../RoutingGeometry/DESIGN.md) | depends on | Native DEF profile | Same writer as native publication | Finite exact NETS/SPECIALNETS contract |
 
 ## Architecture
 

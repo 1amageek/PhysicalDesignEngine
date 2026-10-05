@@ -2,7 +2,7 @@ import MaskGeometry
 import LayoutIR
 
 extension PhysicalDesignProcessGeometry {
-    func routingWidthAndSpacing(layer: Int, units: Int, width: Int64) throws -> (width: Int64, spacing: Int64) {
+    func routingWidthAndSpacing(layer: Int, units: Int, width: Int64, explicitSpecialWidth: Bool = false) throws -> (width: Int64, spacing: Int64) {
         guard let native = Int16(exactly: layer), let source = sourceLayers[native], source.type == .routing,
               let declared = source.width, source.direction != nil else {
             throw PhysicalDesignRoutingSourceError(code: "routing_layer_semantics_missing", message: "Layer \(layer) requires exact source WIDTH and DIRECTION.")
@@ -12,7 +12,7 @@ extension PhysicalDesignProcessGeometry {
             throw PhysicalDesignRoutingSourceError(code: "routing_layer_rules_unsupported", message: "Advanced routing layer rules are outside the scalar native profile.")
         }
         let actual = try PhysicalDesignProcessInputs.dbu(declared, units: units, field: "\(source.name).WIDTH")
-        guard width == actual, actual > 0, actual.isMultiple(of: 2) else {
+        guard (explicitSpecialWidth || width == actual), actual > 0, width > 0, width.isMultiple(of: 2) else {
             throw PhysicalDesignRoutingSourceError(code: "routing_width_unsupported", message: "Conductor width must match the even exact declared default WIDTH of \(source.name).")
         }
         if let minimum = source.minwidth, width < (try PhysicalDesignProcessInputs.dbu(minimum, units: units, field: "MINWIDTH")) {
@@ -23,7 +23,7 @@ extension PhysicalDesignProcessGeometry {
         }
         let spacing = try source.spacing.map { try PhysicalDesignProcessInputs.dbu($0, units: units, field: "\(source.name).SPACING") } ?? 0
         guard spacing >= 0 else { throw PhysicalDesignTechnologyError.invalid("Routing SPACING cannot be negative.") }
-        return (actual, spacing)
+        return (width, spacing)
     }
 
     func validateRoutingCuts(_ contacts: [PhysicalDesignSnapshot.Via], sourceCuts: [IRBoundary] = []) throws {

@@ -115,9 +115,14 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         for fill in input.fills { occupancy.append(.init(layer: fill.layer, region: try Self.rectangle(fill.geometry, layer: fill.layer), netID: nil, pinID: nil, blockage: false)) }
         // Validate all retained widths before deleting selected geometry: unknown facts never become request defaults.
         for route in input.routes {
+            guard let owner = input.nets.first(where: { $0.id == route.netID }), let routeClass = owner.routingClass,
+                  let status = route.defStatus, [.routed, .fixed, .cover].contains(status),
+                  routeClass == .special || route.defShape == nil else {
+                throw Failure(code: "routing_retained_profile_invalid", message: "Retained route requires exact net container, status and supported shape semantics.")
+            }
             for segment in route.segments {
                 guard let retainedWidth = segment.widthDBU else { throw Failure(code: "routing_retained_width_missing", message: "Retained conductor \(segment.id) has no qualified width.") }
-                _ = try geometry.routingWidthAndSpacing(layer: segment.layer, units: input.unitsPerMicron, width: retainedWidth)
+                _ = try geometry.routingWidthAndSpacing(layer: segment.layer, units: input.unitsPerMicron, width: retainedWidth, explicitSpecialWidth: routeClass == .special)
                 let region = try Self.conductor(segment, width: retainedWidth)
                 let horizontal = segment.y1 == segment.y2
                 guard let source = geometry.sourceLayers[Int16(segment.layer)], source.direction?.rawValue.lowercased() == (horizontal ? "horizontal" : "vertical"),
@@ -127,7 +132,7 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
                     throw Failure(code: "routing_retained_geometry_invalid", message: "Retained conductor direction, grid or full-width bounds are inconsistent with its sources.")
                 }
                 if !selected.contains(route.netID) {
-                    let spacing = max(constraints.routeSpacing, try geometry.routingWidthAndSpacing(layer: segment.layer, units: input.unitsPerMicron, width: retainedWidth).spacing)
+                    let spacing = max(constraints.routeSpacing, try geometry.routingWidthAndSpacing(layer: segment.layer, units: input.unitsPerMicron, width: retainedWidth, explicitSpecialWidth: routeClass == .special).spacing)
                     guard try Self.clear(region, layer: segment.layer, obstacles: occupancy.filter { $0.blockage || $0.netID != route.netID }, spacing: spacing) else {
                         throw Failure(code: "routing_retained_geometry_invalid", message: "Retained conductor intersects excluded source geometry or violates clearance.")
                     }
@@ -154,6 +159,10 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         var budget = Budget(caller: configuration.maximumRoutingCandidateChecks)
         for net in nets {
             try Task.checkCancellation()
+            // FIXME(INCOMPLETE_IMPLEMENTATION): The native signal router does not synthesize or reroute special-net ownership. Its API/CLI must refuse selected special nets until a source-qualified special-net mutation contract is implemented.
+            guard net.routingClass == .regular else {
+                throw Failure(code: "routing_net_class_unsupported", message: "Native signal routing requires an explicitly regular net; special-net ownership is retained without conversion.")
+            }
             let terminals = try net.pinIDs.sorted().map { id -> PhysicalDesignSnapshot.Pin in
                 guard let pin = pins[id], pin.netID == net.id,
                       pin.cellID.map({ cells[$0] != nil }) ?? (pin.topPort != nil),
@@ -226,7 +235,7 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
                         let a = point(node), b = point(next)
                         var via: PhysicalDesignSnapshot.Via?
                         if node.layer == next.layer {
-                            let segment = PhysicalDesignSnapshot.RouteSegment(id: "candidate", layer: node.layer, x1: a.0, y1: a.1, x2: b.0, y2: b.1, widthDBU: width)
+                            let segment = PhysicalDesignSnapshot.RouteSegment(id: "candidate", layer: node.layer, x1: a.0, y1: a.1, x2: b.0, y2: b.1, widthDBU: width, endpointExtensions: .init(beginDBU: width / 2, endDBU: width / 2))
                             let conductor = try Self.conductor(segment, width: width)
                             guard try Self.fits(conductor, core: core), try clear(conductor, layer: node.layer) else { continue }
                         } else {
@@ -266,7 +275,7 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
                         }
                     } else {
                         segments.append(.init(id: "route_\(net.id)_segment_\(segments.count)", layer: end.layer,
-                            x1: a.0, y1: a.1, x2: b.0, y2: b.1, widthDBU: width))
+                            x1: a.0, y1: a.1, x2: b.0, y2: b.1, widthDBU: width, endpointExtensions: .init(beginDBU: width / 2, endDBU: width / 2)))
                     }
                     end = step.previous
                 }
@@ -292,11 +301,13 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
     }
 
     static func conductor(_ segment: PhysicalDesignSnapshot.RouteSegment, width: Int64) throws -> Region {
-        guard width > 0, width.isMultiple(of: 2), (segment.x1 == segment.x2) != (segment.y1 == segment.y2) else {
-            throw Failure(code: "routing_width_unsupported", message: "A conductor requires nonzero orthogonal geometry and an even positive width.")
+        guard segment.widthDBU == width else {
+            throw Failure(code: "routing_width_unsupported", message: "Conductor width must equal its retained qualified width.")
         }
-        return try box(minX: subtract(min(segment.x1, segment.x2), width / 2), minY: subtract(min(segment.y1, segment.y2), width / 2),
-            maxX: add(max(segment.x1, segment.x2), width / 2), maxY: add(max(segment.y1, segment.y2), width / 2), layer: segment.layer)
+        do { return try rectangle(segment.qualifiedFootprint(), layer: segment.layer) }
+        catch let error as PhysicalDesignRouteEndpointExtensions.GeometryError {
+            throw Failure(code: "routing_endpoint_geometry_invalid", message: "Retained conductor \(segment.id) has invalid or unqualified endpoint geometry: \(error).")
+        }
     }
     /// Native conservative exclusion policy; standard DEF blockages remain PLACEMENT.
     static func blockageLayers(_ snapshot: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration) -> Set<Int> {

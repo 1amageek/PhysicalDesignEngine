@@ -5,6 +5,19 @@ import PhysicalDesignEngine
 
 @Suite("Native ECO geometry admission")
 struct ECOGeometryAdmissionTests {
+    @Test("flush retained endpoints do not acquire fabricated half-width caps")
+    func flushRetainedEndpointAdmission() async throws {
+        let fixture = try await prepared(y: 1100)
+        var snapshot = try #require(fixture.request.initialSnapshot)
+        snapshot.routes[0].segments[0].endpointExtensions = .init(beginDBU: 0, endDBU: 0)
+        snapshot.blockages = [.init(x: 1450, y: 1075, width: 25, height: 50)]
+        try PhysicalDesignSourceRouter.validateRetainedBlockages(snapshot, configuration: fixture.request.configuration, geometry: fixture.geometry)
+        snapshot.routes[0].segments[0].endpointExtensions = .init(beginDBU: 50, endDBU: 50)
+        #expect(throws: PhysicalDesignSourceRouter.Failure.self) {
+            try PhysicalDesignSourceRouter.validateRetainedBlockages(snapshot, configuration: fixture.request.configuration, geometry: fixture.geometry)
+        }
+    }
+
     @Test("crossing a retained conductor rejects the same-design candidate without artifacts", .timeLimit(.minutes(1)))
     func crossingBlockageIsAtomic() async throws {
         let fixture = try await prepared()
@@ -65,7 +78,7 @@ struct ECOGeometryAdmissionTests {
         input.vias[0].x = 2400
         try PhysicalDesignSourceRouter.validateRetainedBlockages(input, configuration: fixture.request.configuration, geometry: fixture.geometry)
         input.vias = []
-        input.routes = [.init(id: "unselected", netID: "N", segments: [.init(id: "vertical", layer: 3, x1: 2700, y1: 1100, x2: 2700, y2: 2300, widthDBU: 100)])]
+        input.routes = [.init(id: "unselected", netID: "N", segments: [.init(id: "vertical", layer: 3, x1: 2700, y1: 1100, x2: 2700, y2: 2300, widthDBU: 100, endpointExtensions: .init(beginDBU: 50, endDBU: 50))])]
         var onlyHorizontal = fixture.request.configuration; onlyHorizontal.preferredRoutingLayers = [2]
         try PhysicalDesignSourceRouter.validateRetainedBlockages(input, configuration: onlyHorizontal, geometry: fixture.geometry)
     }
@@ -88,12 +101,12 @@ struct ECOGeometryAdmissionTests {
         #expect(result.status == .blocked && result.artifactBindings.isEmpty && result.payload.physicalDesign == nil, "\(result.diagnostics)")
         let code: String
         switch scenario {
-        case "width": code = "eco_blockage_width_missing"
+        case "width": code = "physical_technology_invalid"
         case "budget": code = "routing_candidate_budget_exhausted"
         case "via", "retained-conflict": code = "eco_blockage_route_intersection"
         default: code = "eco_blockage_core_conflict"
         }
-        #expect(result.diagnostics.contains { $0.code.rawValue == code })
+        #expect(result.diagnostics.contains { $0.code.rawValue == code }, "\(result.diagnostics)")
         #expect(try PhysicalDesignJSONCodec().encode(try #require(fixture.request.initialSnapshot)) == before)
     }
 
@@ -148,7 +161,7 @@ struct ECOGeometryAdmissionTests {
             .init(id: "U2/A", cellID: "U2", name: "A", x: 7500, y: y, netID: "N", direction: "input", accessLayer: 2)]
         snapshot.nets = [.init(id: "N", pinIDs: ["U1/Y", "U2/A"])]
         snapshot.rows = [.init(id: "row", originX: 0, originY: 1000, siteWidth: 100, height: 1000, siteCount: 100, siteName: "unit")]
-        snapshot.routes = [.init(id: "retained", netID: "N", segments: [.init(id: "wire", layer: 2, x1: 1500, y1: y, x2: 7500, y2: y, widthDBU: 100)])]
+        snapshot.routes = [.init(id: "retained", netID: "N", segments: [.init(id: "wire", layer: 2, x1: 1500, y1: y, x2: 7500, y2: y, widthDBU: 100, endpointExtensions: .init(beginDBU: 50, endDBU: 50))])]
         snapshot.implementationState = .init(tracks: [.init(id: "H", layer: 2, direction: "horizontal", origin: 100, spacing: 200, count: 25),
             .init(id: "V", layer: 3, direction: "vertical", origin: 100, spacing: 400, count: 25)])
         try geometry.validate(snapshot)

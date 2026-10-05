@@ -36,7 +36,13 @@ public struct NativePhysicalDesignStandardLayoutExporter: PhysicalDesignStandard
                 try store.charge(UInt64(pin.name.utf8.count)); try store.charge(UInt64(pin.cellID?.utf8.count ?? 0))
                 if let port = pin.topPort { try store.charge(UInt64(port.use.rawValue.utf8.count)); try store.charge(UInt64(port.placementStatus.rawValue.utf8.count)) }
             }
-            for net in snapshot.nets { try store.charge(UInt64(net.id.utf8.count)) }
+            for net in snapshot.nets {
+                try store.charge(UInt64(net.id.utf8.count)); try store.charge(UInt64(net.routingClass?.rawValue.utf8.count ?? 0))
+                try store.charge(UInt64(net.defUse?.rawValue.utf8.count ?? 0))
+            }
+            for route in snapshot.routes {
+                try store.charge(UInt64(route.defStatus?.rawValue.utf8.count ?? 0)); try store.charge(UInt64(route.defShape?.rawValue.utf8.count ?? 0))
+            }
             for via in snapshot.vias { try store.charge(UInt64(via.master?.utf8.count ?? 0)) }
             guard let inputs = try await PhysicalDesignProcessInputs.load(request: request, store: store), !inputs.cellViews.isEmpty else {
                 throw PhysicalDesignStandardLayoutExportError.invalidSource("Source-bound export requires selected technology and cell views.")

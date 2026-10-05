@@ -88,7 +88,7 @@ JSON and supported standard DEF. Changed geometry invalidates preceding proofs;
 unrelated evidence cannot be relabeled as fresh verification.
 
 Conductor capture includes the generated clock wires with their actual width and
-square endpoint caps, exact transformed PORT metal, fixed via metal/cuts, and
+the shared [qualified endpoint footprint](../RoutingGeometry/DESIGN.md), exact transformed PORT metal, fixed via metal/cuts, and
 retained modeled conductors. Pin labels do not add ideal wires. Explicit electrode
 faces are expressed in the capture's DBU scale and must be covered exposed faces
 of the selected source PORT/conductor; mesh refinement does not change their
