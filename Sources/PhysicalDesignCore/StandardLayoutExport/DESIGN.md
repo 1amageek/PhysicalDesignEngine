@@ -19,7 +19,7 @@ claim arbitrary DEF semantic equivalence. Canonical JSON remains resume authorit
 | [Core](../DESIGN.md) | parent | Snapshot/request/store | Public composition | No canonical mutation |
 | [ProcessInputs](../ProcessInputs/DESIGN.md) | depends on | Exact manifest/asset intake | Existing source reader | Read adapter independently verifies bytes |
 | [ProcessGeometry](../ProcessGeometry/DESIGN.md) | depends on | Constructor and snapshot admission | Existing geometry owner | No projection exposed publicly |
-| [RoutingGeometry](../RoutingGeometry/DESIGN.md) | depends on | Native DEF profile | Same writer as native publication | Unsupported top ports/special nets still fail |
+| [RoutingGeometry](../RoutingGeometry/DESIGN.md) | depends on | Native DEF profile | Same writer as native publication | Exact single-RECT top ports; special nets still fail |
 
 ## Architecture
 
@@ -92,3 +92,7 @@ compares actual native producer bytes with public export, retains proof bytes, a
 rejects source substitution, forged store bytes, each budget and cancellation.
 Changes to native writer formatting require the pairing fixture and existing DEF
 producer tests; source admission changes require the corresponding lower tests.
+
+Top-level single-RECT geometry, pose, net/direction/use and typed refusal are owned
+by [TopPorts](../TopPorts/DESIGN.md). Their vertices and use/status identifiers are
+charged before serialization; the public exporter does not infer geometry.

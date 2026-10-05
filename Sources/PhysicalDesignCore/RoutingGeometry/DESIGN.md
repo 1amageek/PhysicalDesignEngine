@@ -76,7 +76,7 @@ Exact source admission -> actual PORT/OBS/layer/via regions + declared tracks
   named vias and exact process bindings. Unselected routes/vias are preserved.
 - Bounded source-bound DEF output represents normal-net default-width segments and
   named fixed contacts using exact layer names and standard routing points. NDR,
-  top-port, special-net, advanced geometry and source-bound routed DEF import remain
+  special-net, advanced geometry and source-bound routed DEF import remain
   typed unsupported. Canonical JSON is the resume authority.
 
 ## Runtime Flows
@@ -137,3 +137,10 @@ composition; unchanged geometry preserves them. The existing positive caller
 `maximumRoutingCandidateChecks` may lower that capacity. Cancellation is checked
 before geometry projection and each intersection. No second connectivity graph,
 site sampling, new resource cache, or geometry publication is introduced.
+
+Exact single-RECT top ports use [TopPorts](../TopPorts/DESIGN.md). Their actual
+transformed surface joins the existing terminal PORT map and net-owned occupancy.
+The same full-width track-access/search/clearance/budget algorithm applies to
+cell and top ports. Routing may update derived Pin access coordinates while the
+immutable source rectangle, placement origin/orientation/status and use remain
+unchanged. Missing geometry and obstructed access fail atomically.

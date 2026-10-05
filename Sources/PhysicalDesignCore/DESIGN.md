@@ -11,7 +11,8 @@ Parent: [package design](../../DESIGN.md). Child:
 [ClockTreeSynthesis](ClockTreeSynthesis/DESIGN.md),
 [RoutingGeometry](RoutingGeometry/DESIGN.md), and
 [ProcessGeometry](ProcessGeometry/DESIGN.md), and
-[StandardLayoutExport](StandardLayoutExport/DESIGN.md).
+[StandardLayoutExport](StandardLayoutExport/DESIGN.md), and
+[TopPorts](TopPorts/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -71,7 +72,7 @@ Unknown attributes/sections and incomplete headers fail in the process-bound pro
 existing track layers resolve explicitly and CLOCK use comes from the declaration.
 Input byte identity is verified before decoding. Combined row/rectangle bounds use
 checked arithmetic, so malformed input cannot trap before geometry admission.
-Qualified DEF top ports and routed import remain explicitly unsupported until B6.
+Exact single-RECT top ports use [TopPorts](TopPorts/DESIGN.md); routed import remains explicitly unsupported.
 Bounded normal-net routing output is owned by RoutingGeometry. Source layers
 resolve through the projection; names are never converted by stripping an M prefix.
 The no-track geometry-smoke convention remains an explicitly incomplete path.

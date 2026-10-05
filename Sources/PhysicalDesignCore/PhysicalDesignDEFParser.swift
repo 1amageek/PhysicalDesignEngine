@@ -610,11 +610,6 @@ public struct PhysicalDesignDEFParser: Sendable {
 
         private mutating func parsePins(_ token: PhysicalDesignDEFToken) {
             guard let expectedCount = beginSection(named: "PINS", token: token) else { return }
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Process-bound DEF top ports require exact layer shapes and placement transforms. Native API/CLI must reject this section until B6 preserves those standard semantics instead of synthesizing ports.
-            if processFactory != nil, expectedCount > 0 {
-                addDiagnostic(severity: .error, code: "def_process_top_ports_unsupported", message: "Exact process-bound DEF top-port interchange is not complete.",
-                    token: token, section: "PINS", suggestedActions: ["provide_supported_exact_top_port_interchange"])
-            }
             var actualCount = 0
             while !isAtEnd {
                 if isEndSection(named: "PINS") {
@@ -623,12 +618,89 @@ public struct PhysicalDesignDEFParser: Sendable {
                 }
                 guard consumeSectionMarker(named: "PINS") else { continue }
                 let item = readStatementTokens()
-                parsePin(item)
+                if processFactory != nil { parseExactTopPin(item) }
+                else { parsePin(item) }
                 actualCount += 1
             }
             finishSection(named: "PINS", expectedCount: expectedCount, actualCount: actualCount, token: token)
         }
 
+        private mutating func parseExactTopPin(_ item: [PhysicalDesignDEFToken]) {
+            guard let nameToken = item.first else { return }
+            do {
+                guard topPinNameToID[nameToken.text] == nil else { throw PhysicalDesignTechnologyError.invalid("Duplicate top-level pin identity.") }
+                var position = 1
+                var seen: Set<String> = []
+                var net: String?
+                var direction: DEFPin.Direction?
+                var use: DEFSpecialNet.NetUse?
+                var layer: Int?
+                var rectangle: PhysicalDesignSnapshot.Rect?
+                var placement: (Int64, Int64)?
+                var orientation: DEFOrientation?
+                var status: DEFComponent.PlacementStatus?
+                func take() throws -> PhysicalDesignDEFToken {
+                    guard position < item.count else { throw PhysicalDesignTechnologyError.invalid("Incomplete exact top-port clause.") }
+                    defer { position += 1 }
+                    return item[position]
+                }
+                func point() throws -> (Int64, Int64) {
+                    let open = try take(), x = try take(), y = try take(), close = try take()
+                    guard open.text == "(", close.text == ")", let px = Int64(x.text), let py = Int64(y.text),
+                          Int32(exactly: px) != nil, Int32(exactly: py) != nil else {
+                        throw PhysicalDesignTechnologyError.invalid("Top-port coordinates require exact Int32 DBU pairs.")
+                    }
+                    return (px, py)
+                }
+                while position < item.count {
+                    guard try take().text == "+" else { throw PhysicalDesignTechnologyError.unsupported("Top-port attributes require the supported single-RECT profile.") }
+                    let clause = try take().text.uppercased()
+                    let key = ["PLACED", "FIXED", "COVER"].contains(clause) ? "placement" : clause
+                    guard seen.insert(key).inserted else { throw PhysicalDesignTechnologyError.unsupported("Repeated top-port attribute or surface.") }
+                    switch clause {
+                    case "NET": net = try take().text
+                    case "DIRECTION":
+                        direction = DEFPin.Direction(rawValue: try take().text.uppercased())
+                    case "USE": use = DEFSpecialNet.NetUse(rawValue: try take().text.uppercased())
+                    case "LAYER":
+                        let token = try take()
+                        guard let mapped = parseLayer(token) else { throw PhysicalDesignTechnologyError.invalid("Top-port layer has no exact process mapping.") }
+                        layer = mapped
+                        let a = try point(), b = try point()
+                        rectangle = .init(x: a.0, y: a.1, width: b.0 - a.0, height: b.1 - a.1)
+                    case "PLACED", "FIXED", "COVER":
+                        status = DEFComponent.PlacementStatus(rawValue: clause)
+                        placement = try point()
+                        orientation = DEFOrientation(rawValue: try take().text.uppercased())
+                    default:
+                        throw PhysicalDesignTechnologyError.unsupported("Top-port attribute \(clause) is outside the exact single-RECT profile.")
+                    }
+                }
+                guard let net, !net.isEmpty, net != "UNCONNECTED", let direction, let use,
+                      let layer, let rectangle, let placement, let orientation, let status else {
+                    throw PhysicalDesignTechnologyError.invalid("Exact top-port NET/DIRECTION/USE/LAYER/RECT and placement pose are required.")
+                }
+                let port = PhysicalDesignTopPort(rectangle: rectangle, layer: layer,
+                    placementX: placement.0, placementY: placement.1, orientation: orientation,
+                    placementStatus: status, use: use)
+                let world = try port.worldRectangle()
+                // Access metadata is derived from actual source geometry, never from a
+                // nearest wire, width or pad. The original pose stays separately retained.
+                let containsOrigin = world.containsPoint(x: placement.0, y: placement.1)
+                let id = "pin_\(nameToken.text)"
+                topPinNameToID[nameToken.text] = id
+                pinIndexByKey[pinKey(cellID: nil, name: nameToken.text)] = pins.count
+                pins.append(.init(id: id, name: nameToken.text,
+                    x: containsOrigin ? placement.0 : world.x, y: containsOrigin ? placement.1 : world.y,
+                    netID: net, direction: direction.rawValue.lowercased(), accessLayer: layer, topPort: port))
+            } catch {
+                addDiagnostic(severity: .error, code: "def_process_top_port_invalid", message: String(describing: error),
+                    token: nameToken, section: "PINS", entity: nameToken.text,
+                    suggestedActions: ["provide_exact_single_rect_top_port_and_source_bindings"])
+            }
+        }
+
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Source-free geometry-smoke DEF intake retains point-only pins. Exact physical top-port interchange requires the process-bound branch and real source RECT/pose; this smoke path cannot establish it.
         private mutating func parsePin(_ item: [PhysicalDesignDEFToken]) {
             guard let nameToken = item.first else { return }
             let name = nameToken.text
@@ -1057,6 +1129,11 @@ public struct PhysicalDesignDEFParser: Sendable {
 
         private mutating func setNetID(_ netID: String, forPinID pinID: String) {
             guard let pinIndex = pins.firstIndex(where: { $0.id == pinID }) else { return }
+            if pins[pinIndex].topPort != nil, pins[pinIndex].netID != netID {
+                addDiagnostic(severity: .error, code: "def_process_top_pin_net_mismatch", message: "Top-port NET contradicts its declared connection.",
+                    line: firstLine, section: "NETS", entity: pinID, suggestedActions: ["align_the_exact_top_port_net_binding"])
+                return
+            }
             pins[pinIndex].netID = netID
         }
 

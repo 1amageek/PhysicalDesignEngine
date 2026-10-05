@@ -97,7 +97,14 @@ extension PhysicalDesignProcessGeometry {
                 throw PhysicalDesignTechnologyError.invalid("Pin \(pin.id) requires an explicit mapped routing access layer.")
             }
             let number = try requireRoutingLayer(layer)
-            guard let cellID = pin.cellID else { continue }
+            guard let cellID = pin.cellID else {
+                guard let port = pin.topPort, port.layer == layer,
+                      DEFPin.Direction(rawValue: pin.direction.uppercased()) != nil else {
+                    throw PhysicalDesignTechnologyError.invalid("Top pin \(pin.id) requires exact source rectangle, pose, direction and layer.")
+                }
+                _ = try port.worldRectangle()
+                continue
+            }
             guard let cell = cells[cellID], let sourcePin = masters[cell.master]?.pins[pin.name],
                   let direction = sourcePin.definition.direction,
                   pin.direction.uppercased() == direction.rawValue else {

@@ -16,9 +16,9 @@ public struct PhysicalDesignDEFWriter: Sendable {
             // Mutation already admitted this output; export checks identity and loss without repeating shape projection.
             guard let processGeometry, snapshot.processManifest == processGeometry.manifestReference,
                   snapshot.processAssets == processGeometry.sources else { throw PhysicalDesignDEFExportError.unresolvedProcessSources }
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Source-bound top-level PORT and special-net geometry require exact standard interchange. API/CLI export must reject those profiles until their geometry is represented without loss.
-            guard snapshot.powerStructures.isEmpty, snapshot.pins.allSatisfy({ $0.cellID != nil }) else {
-                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Top-port and special-net DEF interchange is not complete.")
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Source-bound special-net geometry requires exact standard interchange. API/CLI export rejects it until its complete geometry can be represented without loss.
+            guard snapshot.powerStructures.isEmpty else {
+                throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Special-net DEF interchange is not complete.")
             }
             for route in snapshot.routes {
                 for segment in route.segments {
@@ -86,6 +86,12 @@ public struct PhysicalDesignDEFWriter: Sendable {
             for pin in topPins {
                 let net = pin.netID ?? "UNCONNECTED"
                 let direction = pin.direction.uppercased()
+                if let port = pin.topPort {
+                    _ = try port.worldRectangle()
+                    try text.line("- \(pin.name) + NET \(net) + DIRECTION \(direction) + USE \(port.use.rawValue) + LAYER \(try layerName(port.layer)) ( \(port.rectangle.x) \(port.rectangle.y) ) ( \(port.rectangle.maxX) \(port.rectangle.maxY) ) + \(port.placementStatus.rawValue) ( \(port.placementX) \(port.placementY) ) \(port.orientation.rawValue) ;")
+                    continue
+                }
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Source-free geometry-smoke pads have no source PORT surface. Only explicit topPort geometry can establish exact physical interchange; this legacy smoke branch cannot qualify it.
                 var line = "- \(pin.name) + NET \(net) + DIRECTION \(direction) + USE SIGNAL + PLACED ( \(pin.x) \(pin.y) ) N"
                 if let pad = padByPinID[pin.id] {
                     line += " + PROPERTY XCI_PAD_SIDE \"\(pad.side)\" + PROPERTY XCI_PAD_X \(pad.geometry.x) + PROPERTY XCI_PAD_Y \(pad.geometry.y) + PROPERTY XCI_PAD_WIDTH \(pad.geometry.width) + PROPERTY XCI_PAD_HEIGHT \(pad.geometry.height)"

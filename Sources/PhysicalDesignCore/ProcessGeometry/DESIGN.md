@@ -116,7 +116,7 @@ Exact manifest + selected LEF views -> explicit cross-view layer/master mapping
 - DEF export requires a valid snapshot and explicit die. The current process-bound
   floorplan/cell subset emits exact source layer/site names, orientations and FIXED
   status without synthetic cell-dimension properties. RoutingGeometry owns bounded
-  normal-net default-width/named-contact export. Top-port/special-net export and
+  normal-net default-width/named-contact export. Exact top-port export uses [TopPorts](../TopPorts/DESIGN.md). Special-net export and
   routed import remain unsupported until their standard contracts are established.
 
 ## State, Ownership, and Lifecycle

@@ -101,6 +101,14 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
                 occupancy.append(.init(layer: layer, region: Region(layer: Int16(layer), polygons: values), netID: nil, pinID: nil, blockage: false))
             }
         }
+        for pin in input.pins where pin.cellID == nil {
+            guard let port = pin.topPort, pin.accessLayer == port.layer, pin.netID != nil else {
+                throw Failure(code: "routing_pin_source_invalid", message: "Top terminal \(pin.id) requires exact source RECT, layer and net identity.")
+            }
+            let surface = try Self.rectangle(port.worldRectangle(), layer: port.layer)
+            ports[pin.id] = surface.polygons
+            occupancy.append(.init(layer: port.layer, region: surface, netID: pin.netID, pinID: pin.id, blockage: false))
+        }
         for rect in input.blockages {
             for layer in layers { occupancy.append(.init(layer: layer, region: try Self.rectangle(rect, layer: layer), netID: nil, pinID: nil, blockage: true)) }
         }
@@ -147,9 +155,10 @@ struct PhysicalDesignSourceRouter: PhysicalDesignSourceRouting {
         for net in nets {
             try Task.checkCancellation()
             let terminals = try net.pinIDs.sorted().map { id -> PhysicalDesignSnapshot.Pin in
-                guard let pin = pins[id], pin.netID == net.id, let cellID = pin.cellID, cells[cellID] != nil,
+                guard let pin = pins[id], pin.netID == net.id,
+                      pin.cellID.map({ cells[$0] != nil }) ?? (pin.topPort != nil),
                       let layer = pin.accessLayer, layers.contains(layer), ports[id] != nil else {
-                    throw Failure(code: "routing_pin_source_invalid", message: "Net \(net.id) requires exact component PORTs, explicit layers and matching terminal identities.")
+                    throw Failure(code: "routing_pin_source_invalid", message: "Net \(net.id) requires exact cell or top PORTs, explicit layers and matching terminal identities.")
                 }
                 return pin
             }

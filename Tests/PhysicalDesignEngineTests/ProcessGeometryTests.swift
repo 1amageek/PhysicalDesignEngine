@@ -650,7 +650,9 @@ struct ProcessGeometryTests {
             case "track": snapshot.implementationState = .init(tracks: [.init(id: "T", layer: layer, direction: "horizontal", origin: 100, spacing: 200, count: 5)])
             case "clock-constraint": snapshot.implementationState = .init(clockRouteConstraints: [.init(id: "C", netID: "N", layer: layer, width: 100, spacing: 100, maximumLength: 1000)])
             default:
-                snapshot.pins = [.init(id: "P", cellID: nil, name: "P", x: 100, y: 100, netID: "N", direction: "input", accessLayer: layer)]
+                snapshot.pins = [.init(id: "P", cellID: nil, name: "P", x: 100, y: 100, netID: "N", direction: "input", accessLayer: layer,
+                    topPort: .init(rectangle: .init(x: -50, y: -50, width: 100, height: 100), layer: layer,
+                        placementX: 100, placementY: 100, orientation: .n, placementStatus: .fixed, use: .signal))]
                 snapshot.nets[0].pinIDs = ["P"]
             }
             #expect(snapshot.validationDiagnostics().isEmpty, "\(snapshot.validationDiagnostics())")

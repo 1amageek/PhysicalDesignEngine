@@ -135,6 +135,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var netID: String?
         public var direction: String
         public var accessLayer: Int?
+        public var topPort: PhysicalDesignTopPort?
 
         public init(
             id: String,
@@ -144,7 +145,8 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             y: Int64 = 0,
             netID: String? = nil,
             direction: String = "input",
-            accessLayer: Int? = nil
+            accessLayer: Int? = nil,
+            topPort: PhysicalDesignTopPort? = nil
         ) {
             self.id = id
             self.cellID = cellID
@@ -154,6 +156,7 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             self.netID = netID
             self.direction = direction
             self.accessLayer = accessLayer
+            self.topPort = topPort
         }
     }
 
@@ -514,6 +517,20 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
             }
             if let netID = pin.netID, netID != "UNCONNECTED", !netIDs.contains(netID) {
                 diagnostics.append("pin \(pin.id) refers to missing net \(netID)")
+            }
+            if let port = pin.topPort {
+                if pin.cellID != nil { diagnostics.append("cell pin \(pin.id) cannot own top-port geometry") }
+                if port.layer <= 0 || pin.accessLayer != port.layer { diagnostics.append("top pin \(pin.id) has contradictory port/access layers") }
+                if DEFPin.Direction(rawValue: pin.direction.uppercased()) == nil { diagnostics.append("top pin \(pin.id) has invalid source direction") }
+                if pin.netID == nil || pin.netID == "UNCONNECTED" || nets.filter({ $0.id == pin.netID && $0.pinIDs.contains(pin.id) }).count != 1 {
+                    diagnostics.append("top pin \(pin.id) requires exact net membership")
+                }
+                do {
+                    let world = try port.worldRectangle()
+                    if !world.containsPoint(x: pin.x, y: pin.y) { diagnostics.append("top pin \(pin.id) access point leaves its source rectangle") }
+                } catch { diagnostics.append("top pin \(pin.id) has invalid source geometry: \(error)") }
+            } else if processManifest != nil, pin.cellID == nil {
+                diagnostics.append("source-bound top pin \(pin.id) requires exact top-port geometry")
             }
         }
         for net in nets {

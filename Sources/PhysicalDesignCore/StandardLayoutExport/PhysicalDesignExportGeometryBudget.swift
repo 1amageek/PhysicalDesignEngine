@@ -71,6 +71,7 @@ struct PhysicalDesignExportGeometryBudget {
                       snapshot.vias.count, snapshot.fills.count, snapshot.clockTrees.count,
                       snapshot.implementationState?.tracks.count ?? 0,
                       snapshot.implementationState?.clockRouteConstraints.count ?? 0] { try budget.add(count) }
+        for pin in snapshot.pins where pin.topPort != nil { try budget.add(5) }
         for net in snapshot.nets { try budget.add(net.pinIDs.count) }
         for route in snapshot.routes { try budget.add(route.segments.count) }
     }

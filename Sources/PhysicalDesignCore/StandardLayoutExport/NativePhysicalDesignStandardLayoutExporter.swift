@@ -32,7 +32,10 @@ public struct NativePhysicalDesignStandardLayoutExporter: PhysicalDesignStandard
             try store.charge(UInt64(snapshot.topCell.utf8.count))
             for row in snapshot.rows { try store.charge(UInt64(row.id.utf8.count)); try store.charge(UInt64(row.siteName?.utf8.count ?? 0)) }
             for cell in snapshot.cells { try store.charge(UInt64(cell.id.utf8.count)); try store.charge(UInt64(cell.master.utf8.count)) }
-            for pin in snapshot.pins { try store.charge(UInt64(pin.name.utf8.count)); try store.charge(UInt64(pin.cellID?.utf8.count ?? 0)) }
+            for pin in snapshot.pins {
+                try store.charge(UInt64(pin.name.utf8.count)); try store.charge(UInt64(pin.cellID?.utf8.count ?? 0))
+                if let port = pin.topPort { try store.charge(UInt64(port.use.rawValue.utf8.count)); try store.charge(UInt64(port.placementStatus.rawValue.utf8.count)) }
+            }
             for net in snapshot.nets { try store.charge(UInt64(net.id.utf8.count)) }
             for via in snapshot.vias { try store.charge(UInt64(via.master?.utf8.count ?? 0)) }
             guard let inputs = try await PhysicalDesignProcessInputs.load(request: request, store: store), !inputs.cellViews.isEmpty else {
