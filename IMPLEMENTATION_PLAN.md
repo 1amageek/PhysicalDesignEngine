@@ -14,7 +14,7 @@ owns cross-package dependencies and the platform acceptance gate.
 Native routing now checks spacing on the actual segment layer and preserves
 replacement vias. DEF decoding stops each supported route clause at its boundary.
 Behavioral regressions cover rejection, different-layer crossing, repeated routing
-and the actual retained multilayer DEF. Developer fixtures use schema 5 and bind
+and the actual retained multilayer DEF. Developer fixtures use schema 7 and bind
 real checked-in input bytes rather than fabricated digests.
 
 Non-square floorplans generate tracks on the correct axis. Signal/ECO routing and

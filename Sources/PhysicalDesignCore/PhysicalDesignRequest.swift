@@ -4,7 +4,7 @@ import LogicIR
 import PDKCore
 
 public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 7
 
     public var schemaVersion: Int
     public var runID: String

@@ -41,10 +41,10 @@ def verify(executable):
             assert len(bindings) == 4
             for binding in bindings:
                 read(binding)
-            binding = next(item for item in bindings if item["logicalID"].endswith("/revision.json"))
-            manifest_binding = next(item for item in bindings if item["logicalID"].endswith("/run-manifest.json"))
+            binding = next(item for item in bindings if item["logicalID"] == result["payload"]["physicalDesign"]["layoutArtifact"]["logicalID"])
+            manifest_binding = next(item for item in bindings if item["logicalID"] == result["payload"]["runManifest"]["logicalID"])
             manifest = json.loads(read(manifest_binding))
-            assert template["pdk"]["digest"] == manifest["pdk"]["digest"]
+            assert template["pdk"]["manifest"] == manifest["pdk"]["manifest"]
             assert manifest["processAssets"] == template["processAssets"], "Process asset identity and availability were not retained"
             return binding, json.loads(read(binding)), manifest
 

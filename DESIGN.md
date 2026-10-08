@@ -56,7 +56,7 @@ identities. Source-bound geometry admission surrounds mutation; canonical JSON i
 resume reference. Standard DEF export is independently bounded and cannot replace
 process identity, orientation or other canonical state during same-run continuation.
 
-Request schema 6 rejects legacy schema values. Exactly one initial snapshot or
+Request schema 7 rejects legacy schema values. Exactly one initial snapshot or
 retained layout supplies the physical state. A completed mutation must pass snapshot
 validation; blocked mutations publish no successful revision. Geometry, timing and
 production claims remain distinct. `productionImplementation` fails with
@@ -154,7 +154,7 @@ macOS package or by macOS-only verification evidence.
 Technology input preparation and declared-grid validation are specified by
 [PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md) and its
 [TechnologyConstraints component](Sources/PhysicalDesignCore/TechnologyConstraints/DESIGN.md).
-Schema-6 requests and run manifests retain an explicit manifest asset ID to source
+Schema-7 requests and run manifests retain an explicit manifest asset ID to source
 binding map (`processAssets`). ProcessInputs admits and parses these sources once
 for routing and cell geometry consumers. The technology path keeps native
 production blocked, and adds a direct dependency on the fixed swift-mask-data LEF

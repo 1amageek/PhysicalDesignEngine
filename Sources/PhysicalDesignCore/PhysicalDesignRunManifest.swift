@@ -4,7 +4,7 @@ import PDKCore
 import CircuiteFoundation
 
 public struct PhysicalDesignRunManifest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 7
 
     public var schemaVersion: Int
     public var runID: String

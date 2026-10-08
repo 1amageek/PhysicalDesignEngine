@@ -264,8 +264,8 @@ struct SpecialNetRepairTests {
         var request = PhysicalDesignRequest(runID: "special-move", inputBindings: [design, constraints, pdk, tech, cells],
             design: .init(artifact: design.reference, topDesignName: "TOP", designDigest: design.reference.digest.hexadecimalValue),
             constraints: constraints, requestedModeIDs: base.requestedModeIDs,
-            pdk: .init(manifest: pdk.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: pdk), processID: base.pdk.processID,
-                version: base.pdk.version, digest: pdk.reference.digest.hexadecimalValue), stage: .timingECO, configuration: configuration,
+            pdk: try PDKReference(manifest: pdk.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: pdk), processID: base.pdk.processID,
+                version: base.pdk.version), stage: .timingECO, configuration: configuration,
             initialSnapshot: snapshot, processAssets: ["tech": tech, "cells": cells])
         let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
         let geometry = try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: snapshot.unitsPerMicron)

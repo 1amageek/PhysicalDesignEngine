@@ -53,6 +53,12 @@ source geometry before and after mutation. Public bare mutation cannot bypass in
 The native result's physical reference is JSON for lossless same-source resume; DEF
 remains the separate bounded standard interchange artifact.
 
+Request and run-manifest schema 7 consume checked immutable
+[PDK identity schema 2](../../../PDKKit/Sources/PDKCore/Identity/DESIGN.md).
+The complete manifest reference is the sole digest authority; metadata is checked
+against actual retained bytes by process intake. Old nested or envelope schemas
+are rejected rather than defaulted.
+
 The package design owns stage/result and artifact contracts. With explicit tracks,
 every generated signal/ECO/clock segment must lie on at least one declared track
 of the same layer and direction: coordinate minus origin is nonnegative, divisible

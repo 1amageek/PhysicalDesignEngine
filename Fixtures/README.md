@@ -1,6 +1,6 @@
 # PhysicalDesignEngine Fixtures
 
-The schema-6 positive request exercises native geometry-smoke floorplanning and
+The schema-7 positive request exercises native geometry-smoke floorplanning and
 emits verified JSON, DEF, design diff and manifest artifacts. The returned physical
 reference identifies schema-2 JSON as the lossless resume authority; DEF is the
 separate standard interchange artifact. The retained Verilog,

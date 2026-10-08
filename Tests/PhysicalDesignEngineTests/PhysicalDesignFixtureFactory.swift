@@ -115,6 +115,11 @@ enum PhysicalDesignFixtureFactory {
             format: .json,
             digest: pdkDigest
         )
+        let pdkReference: PDKReference
+        do {
+            pdkReference = try PDKReference(manifest: pdk.reference, manifestLocator: locator(for: pdk),
+                                            processID: "fixture-130nm", version: "1")
+        } catch { fatalError("Invalid PDK fixture reference: \(error)") }
         return PhysicalDesignRequest(
             runID: "test-\(stage.rawValue)",
             inputBindings: [design, constraints, pdk],
@@ -125,13 +130,7 @@ enum PhysicalDesignFixtureFactory {
             ),
             constraints: constraints,
             requestedModeIDs: ["func"],
-            pdk: PDKReference(
-                manifest: pdk.reference,
-                manifestLocator: locator(for: pdk),
-                processID: "fixture-130nm",
-                version: "1",
-                digest: pdkDigest
-            ),
+            pdk: pdkReference,
             stage: stage,
             configuration: configuration,
             initialSnapshot: snapshot

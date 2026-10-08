@@ -151,8 +151,8 @@ struct ProcessGeometryTests {
         let changedManifest = try await store.registerInput(try PDKManifestCodec.encode(manifest), relativePath: "inputs/changed-process.json", kind: .technology, format: .json)
         let changedRequest = PhysicalDesignRequest(runID: "changed-source", inputBindings: [changedManifest, placedReference.layoutArtifact] + request.inputBindings.filter { $0.reference == request.design.artifact || $0.reference == request.constraints.reference },
             design: request.design, constraints: request.constraints, requestedModeIDs: request.requestedModeIDs,
-            pdk: .init(manifest: changedManifest.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: changedManifest),
-                processID: request.pdk.processID, version: request.pdk.version, digest: changedManifest.reference.digest.hexadecimalValue),
+            pdk: try PDKReference(manifest: changedManifest.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: changedManifest),
+                processID: request.pdk.processID, version: request.pdk.version),
             inputLayout: placedReference, stage: .placement, configuration: request.configuration,
             processAssets: ["cells": changedCell, "tech": try #require(request.processAssets["tech"])])
         let changedResult = try await engine.execute(changedRequest)
@@ -831,8 +831,8 @@ struct ProcessGeometryTests {
         let manifestBinding = try await store.registerInput(try PDKManifestCodec.encode(manifest), relativePath: "inputs/process.json", kind: .technology, format: .json)
         let base = PhysicalDesignFixtureFactory.request(stage: .floorplan)
         let request = PhysicalDesignRequest(runID: "geometry-projection", inputBindings: [manifestBinding] + base.inputBindings.filter { $0.reference == base.design.artifact || $0.reference == base.constraints.reference }, design: base.design, constraints: base.constraints,
-            requestedModeIDs: base.requestedModeIDs, pdk: .init(manifest: manifestBinding.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: manifestBinding),
-                processID: "fixture-130nm", version: "1", digest: manifestBinding.reference.digest.hexadecimalValue),
+            requestedModeIDs: base.requestedModeIDs, pdk: try PDKReference(manifest: manifestBinding.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: manifestBinding),
+                processID: "fixture-130nm", version: "1"),
             processAssets: ["tech": technologyBinding, "cells": cellsBinding])
         let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
         return (try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: 1000), request, store)

@@ -234,7 +234,7 @@ struct CharacterizedNativeCTSTests {
             cellLibraryArtifact: library, calibrationArtifacts: [calibration], processID: "fixture-130nm", pdkVersion: "1", cornerID: "tt")
         var request = PhysicalDesignRequest(runID: "actual-cts", inputBindings: [designBinding, constraintsBinding, pdk],
             design: design, constraints: constraintsBinding, requestedModeIDs: base.requestedModeIDs,
-            pdk: .init(manifest: pdk.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: pdk), processID: "fixture-130nm", version: "1", digest: pdk.reference.digest.hexadecimalValue),
+            pdk: try PDKReference(manifest: pdk.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: pdk), processID: "fixture-130nm", version: "1"),
             stage: .clockTreeSynthesis, initialSnapshot: snapshot, clockTimingModel: reference, processAssets: processAssets)
         request.executionIntent = .characterizedTiming
         request.configuration.preferredRoutingLayers = secondSink ? [2] : [2, 3]; request.configuration.maximumRoutingLayer = 3

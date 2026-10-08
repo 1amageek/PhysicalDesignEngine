@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "runID": "fixture-native-technology-floorplan",
   "executionIntent": "geometrySmoke",
   "inputs": [
@@ -83,7 +83,6 @@
     },
     "processID": "fixture-130nm",
     "version": "1",
-    "digest": "2de17c8f960f5f7513c31608aefcee614cfc0368842fd189060f2df77b3274c6",
     "manifestLocator": {
       "location": {
         "storage": "workspaceRelative",
@@ -92,7 +91,8 @@
       "role": "input",
       "kind": "technology",
       "format": "json"
-    }
+    },
+    "schemaVersion": 2
   },
   "stage": "floorplan",
   "configuration": {

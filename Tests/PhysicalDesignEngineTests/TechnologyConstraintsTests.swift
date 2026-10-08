@@ -54,7 +54,13 @@ struct TechnologyConstraintsTests {
             sameBytes.role = .cell
             manifest.assets.append(sameBytes)
         }
-        let manifestBinding = try await store.registerInput(try PDKManifestCodec.encode(manifest), relativePath: "inputs/process.json", kind: .technology, format: .json)
+        var manifestBinding = try await store.registerInput(try PDKManifestCodec.encode(manifest), relativePath: "inputs/process.json", kind: .technology, format: .json)
+        if scenario == "wrong-manifest-digest" {
+            manifestBinding = PhysicalDesignFixtureFactory.binding(
+                path: manifestBinding.path, kind: .technology, format: .json,
+                digest: String(repeating: "0", count: 64), byteCount: manifestBinding.reference.byteCount
+            )
+        }
         var configuration = PhysicalDesignFixtureFactory.configuration
         configuration.dieWidth = 180_000
         configuration.preferredRoutingLayers = [2, 3]
@@ -75,8 +81,8 @@ struct TechnologyConstraintsTests {
             ])
         }
         var request = PhysicalDesignFixtureFactory.request(stage: .floorplan, snapshot: snapshot, configuration: configuration)
-        request.pdk = PDKReference(manifest: manifestBinding.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: manifestBinding),
-                                   processID: "fixture-130nm", version: "1", digest: scenario == "wrong-manifest-digest" ? String(repeating: "0", count: 64) : manifestBinding.reference.digest.hexadecimalValue)
+        request.pdk = try PDKReference(manifest: manifestBinding.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: manifestBinding),
+                                   processID: "fixture-130nm", version: "1")
         request.inputs.append(contentsOf: [manifestBinding.reference, technology.reference])
         request.inputBindings.append(contentsOf: [manifestBinding, technology])
         request.processAssets = ["tech": technology]
@@ -144,7 +150,11 @@ struct TechnologyConstraintsTests {
         } else {
             #expect(result.status == .blocked)
             #expect(result.artifacts.isEmpty)
-            #expect(result.diagnostics.contains { $0.code.rawValue.hasPrefix("physical_technology_") })
+            if scenario == "wrong-manifest-digest" {
+                #expect(result.diagnostics.contains { $0.code.rawValue == "physical_input_artifact_invalid" && $0.summary.contains("SHA-256") })
+            } else {
+                #expect(result.diagnostics.contains { $0.code.rawValue.hasPrefix("physical_technology_") })
+            }
         }
         #expect(result.payload.claims.production == .blocked)
     }

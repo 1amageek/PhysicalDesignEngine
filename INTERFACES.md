@@ -8,14 +8,14 @@ routing, ECO and DFM protocols refine the same engine contract. Their native
 implementations and `PhysicalDesignEngine` use `NativePhysicalDesignExecutor`.
 Canonical ownership, invariants and failure behavior are defined in [DESIGN.md](DESIGN.md).
 
-## Request Schema 5
+## Request Schema 7
 
 | Field | Meaning |
 |---|---|
 | `inputs` / `inputBindings` | Content identities and separate artifact availability |
 | `design` | Mapped logical design identity and top cell |
 | `constraints` / `requestedModeIDs` | Retained SDC and explicit timing modes |
-| `pdk` | Exact process manifest identity |
+| `pdk` | Checked immutable PDKReference schema 2, exact process manifest identity |
 | `initialSnapshot` / `inputLayout` | Initial physical state or retained JSON/DEF |
 | `configuration` | Deterministic geometry and repair controls |
 | `executionIntent` | Geometry smoke, characterized CTS, or explicitly unsupported native production |
@@ -32,11 +32,11 @@ content identities rather than obsolete path-bearing artifact references.
 `PhysicalDesignResult` exposes status, diagnostics, execution provenance,
 artifact bindings and a domain payload. A completed native stage writes
 `revision.json`, `revision.def`, `design-diff.json` and `run-manifest.json`.
-`PhysicalDesignRunManifest` is schema 5. JSON contains the complete execution
+`PhysicalDesignRunManifest` is schema 7. JSON contains the complete execution
 state; DEF carries the supported interchange subset described by the design.
-The additive schema-5 manifest field `technologyLEFs` retains exact input bindings
-and availability used by native technology preparation. Earlier non-technology
-manifests decode this field as an empty list; new technology runs persist it.
+The retained manifest field `technologyLEFs` retains exact input bindings
+and availability used by native technology preparation. Current-schema non-technology manifests may omit this field and decode it as an
+empty list; technology runs persist it. Legacy envelope schemas are rejected.
 
 Input-role bindings with kind `technology` and format `lef` activate native scalar
 technology preparation without adding a schema field. Their source/constraint
