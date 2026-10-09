@@ -12,7 +12,7 @@ let logicDesignDependency: Package.Dependency = .package(
 )
 
 let pdkKitDependency: Package.Dependency = .package(url: "https://github.com/1amageek/PDKKit.git",
-    revision: "5977da8fd7e00a7693d7a1a6112aeb30c5f71372"
+    revision: "5f114d2e03c65803f6565ace38b803e75948c91c"
 )
 
 let swiftMaskDataDependency: Package.Dependency = .package(
@@ -40,9 +40,9 @@ let package = Package(
         logicDesignDependency,
         pdkKitDependency,
         swiftMaskDataDependency,
-        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "c391318fed04e1a47fc44b0bd19b2aaa74657eaa"),
+        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "9c4c4926a77134eb541e0769a4b51d2f91983f35"),
         .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "6fdd2e1a6a8183e5e1196455bc8741063111206e"),
-        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "f645f1af8309061b760ff8596f7a1f73894967eb"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "f666d9b6bf334163d5f0b038078af7e76f500ef3"),
         .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "17278fb7340e98a7af5a960766083c0e0c39f69b"),
     ],
     targets: [
