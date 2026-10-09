@@ -3,22 +3,22 @@ import PackageDescription
 
 let circuiteFoundationDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/CircuiteFoundation.git",
-    exact: "26.812.0"
+    revision: "ae88104c556f5802819713ed741f5b2fffffc2d9"
 )
 
 let logicDesignDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/LogicDesign.git",
-    exact: "26.812.0"
+    revision: "d13cebf1454e124a352f87186a22a70ef47d99a5"
 )
 
 let pdkKitDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/PDKKit.git",
-    revision: "06212417a47d8dec4a3c541a0612a1ac08e66b45"
+    revision: "14f7b508dd8961ed4bfa6d6e29600fdc5c6ae9f5"
 )
 
 let swiftMaskDataDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/swift-mask-data.git",
-    revision: "75df136f942220379f6eeec5406c5270ffdbb31b"
+    revision: "b505ffd739b8fd4b8df9695423e9cdd4469b4f92"
 )
 
 let package = Package(
@@ -41,10 +41,10 @@ let package = Package(
         logicDesignDependency,
         pdkKitDependency,
         swiftMaskDataDependency,
-        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "305d0933018f8a987c73c5186f53740ca315a516"),
-        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "65fb74aa49c05706c19d4c6cb2eea039f128a4bd"),
-        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "087143be22e5c54283bfabc590067aa23203ee6a"),
-        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "3782d80a8038118ec0e4d18d550391d4e6587da1"),
+        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "fce8ca02194eabc63b4455f80070c1b8847a3377"),
+        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "6fdd2e1a6a8183e5e1196455bc8741063111206e"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "2c0e6df5ac88a2e331fbb41403e4d8265db64314"),
+        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "17278fb7340e98a7af5a960766083c0e0c39f69b"),
     ],
     targets: [
         .target(
