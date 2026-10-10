@@ -182,6 +182,8 @@ remain pending, and production capability remains independently blocked.
 
 ## Verification and Change Impact
 
+The package manifest consumes the [CoreSpice host deployment contract](../CoreSpice/DESIGN.md#responsibilities-and-boundaries) through its exact dependency closure. Changes to that contract require resolution and affected host-product verification.
+
 [NativeExecutionTests](Tests/PhysicalDesignEngineTests/NativeExecutionTests.swift)
 owns behavioral routing verification: reject same-layer vertical overlap, accept
 different-layer crossing, preserve vias from global through detailed routing, and

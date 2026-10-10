@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 import PackageDescription
 
 let circuiteFoundationDependency: Package.Dependency = .package(
@@ -12,7 +12,7 @@ let logicDesignDependency: Package.Dependency = .package(
 )
 
 let pdkKitDependency: Package.Dependency = .package(url: "https://github.com/1amageek/PDKKit.git",
-    revision: "c3491863601c16357e40e57dd2f6a7b648535c6a"
+    revision: "58fa393275080e0a88dc8ac9f8a95fc0c054b019"
 )
 
 let swiftMaskDataDependency: Package.Dependency = .package(
@@ -22,7 +22,7 @@ let swiftMaskDataDependency: Package.Dependency = .package(
 
 let package = Package(
     name: "PhysicalDesignEngine",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS("27.0")],
     products: [
         .library(name: "PhysicalDesignCore", targets: ["PhysicalDesignCore"]),
         .library(name: "FloorplanEngine", targets: ["FloorplanEngine"]),
@@ -40,9 +40,9 @@ let package = Package(
         logicDesignDependency,
         pdkKitDependency,
         swiftMaskDataDependency,
-        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "d2eefa69cd1980087fcb29787aa1f71ccc276b0f"),
+        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "60543b6fca295827d568a5d73a3e8134e6419997"),
         .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "6fdd2e1a6a8183e5e1196455bc8741063111206e"),
-        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "b419a09995174289545132048451ac9d2acc372b"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "bcaaa735207fa77a0b76ad8105d59100612f6c0d"),
         .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "17278fb7340e98a7af5a960766083c0e0c39f69b"),
     ],
     targets: [
