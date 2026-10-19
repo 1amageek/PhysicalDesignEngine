@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import CircuiteFoundation
 import LogicIR
+import LogicDesignSerialization
 import PDKCore
 import LEF
 import PhysicalDesignCLISupport
@@ -822,7 +823,7 @@ struct NativeExecutionTests {
             PhysicalDesignFixtureFactory.request(stage: .antennaRepair, snapshot: PhysicalDesignFixtureFactory.snapshot(), configuration: antennaConfiguration)
         )
         #expect(antennaResult.status == .blocked && antennaResult.artifactBindings.isEmpty)
-        #expect(antennaResult.diagnostics.contains { $0.code.rawValue == "antenna_protection_feedback_unimplemented" })
+        #expect(antennaResult.diagnostics.contains { $0.code.rawValue == "repair_measurement_profile_required" })
     }
 
     @Test("fill, redundant-via and hotspot repairs are constrained and proven")
@@ -842,18 +843,14 @@ struct NativeExecutionTests {
         let viaResult = try await PhysicalDesignEngine(artifactStore: store).execute(
             PhysicalDesignFixtureFactory.request(stage: .redundantViaInsertion, snapshot: PhysicalDesignFixtureFactory.snapshot())
         )
-        #expect(viaResult.status == .completed)
-        let viaOutput = try await decodedSnapshot(from: viaResult, store: store)
-        #expect(viaOutput.vias.count > 1)
-        #expect(viaOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.redundantViaInsertion.rawValue && $0.verified } == true)
+        #expect(viaResult.status == .blocked && viaResult.artifactBindings.isEmpty)
+        #expect(viaResult.diagnostics.contains { $0.code.rawValue == "redundant_via_sources_required" })
 
         let hotspotResult = try await PhysicalDesignEngine(artifactStore: store).execute(
             PhysicalDesignFixtureFactory.request(stage: .hotspotRepair, snapshot: PhysicalDesignFixtureFactory.snapshot())
         )
-        #expect(hotspotResult.status == .completed)
-        let hotspotOutput = try await decodedSnapshot(from: hotspotResult, store: store)
-        #expect(hotspotOutput.hotspots.allSatisfy { $0.resolved })
-        #expect(hotspotOutput.implementationState?.repairProofs.contains { $0.stage == PhysicalDesignStage.hotspotRepair.rawValue && $0.verified } == true)
+        #expect(hotspotResult.status == .blocked && hotspotResult.artifactBindings.isEmpty)
+        #expect(hotspotResult.diagnostics.contains { $0.code.rawValue == "repair_measurement_profile_required" })
     }
 
     @Test("missing canonical state is blocked with a structured diagnostic")
@@ -1005,6 +1002,16 @@ struct NativeExecutionTests {
                     configuration: configuration
                 )
             )
+            if stage == .antennaRepair || stage == .hotspotRepair {
+                #expect(result.status == .blocked && result.artifactBindings.isEmpty)
+                #expect(result.diagnostics.contains { $0.code.rawValue == "repair_measurement_profile_required" })
+                continue
+            }
+            if stage == .redundantViaInsertion {
+                #expect(result.status == .blocked && result.artifactBindings.isEmpty)
+                #expect(result.diagnostics.contains { $0.code.rawValue == "redundant_via_sources_required" })
+                continue
+            }
             #expect(result.status == .completed, "stage \(stage.rawValue) should complete")
             #expect(result.payload.physicalDesign != nil)
         }

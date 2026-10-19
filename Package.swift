@@ -3,27 +3,28 @@ import PackageDescription
 
 let circuiteFoundationDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/CircuiteFoundation.git",
-    revision: "ae88104c556f5802819713ed741f5b2fffffc2d9"
+    revision: "5f132c58209123433e0e479e1ea61096e46061ba"
 )
 
 let logicDesignDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/LogicDesign.git",
-    revision: "d13cebf1454e124a352f87186a22a70ef47d99a5"
+    revision: "5e1d3eec838a0add91c617413682d186a5182335"
 )
 
 let pdkKitDependency: Package.Dependency = .package(url: "https://github.com/1amageek/PDKKit.git",
-    revision: "4bd00d6c7cecc5ef1d5854d60f310fb94a3045b9"
+    revision: "f59dfd1dbdd20545ddf97e6a0ab9a956ad7ca809"
 )
 
 let swiftMaskDataDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/swift-mask-data.git",
-    revision: "b505ffd739b8fd4b8df9695423e9cdd4469b4f92"
+    revision: "67410f834bdfa8a098c2ec0bfe3675210f658277"
 )
 
 let package = Package(
     name: "PhysicalDesignEngine",
     platforms: [.macOS("27.0")],
     products: [
+        .library(name: "PhysicalDesignLogicHandoff", targets: ["PhysicalDesignLogicHandoff"]),
         .library(name: "PhysicalDesignCore", targets: ["PhysicalDesignCore"]),
         .library(name: "FloorplanEngine", targets: ["FloorplanEngine"]),
         .library(name: "PlacementEngine", targets: ["PlacementEngine"]),
@@ -36,22 +37,54 @@ let package = Package(
         .executable(name: "physical-design", targets: ["PhysicalDesignCLI"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/1amageek/LogicEngine.git", revision: "a6dead5545439c8b5fb2dd9860bf498d8f62be56"),
         circuiteFoundationDependency,
         logicDesignDependency,
         pdkKitDependency,
         swiftMaskDataDependency,
-        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "f2bd5861610cfc10aae2395d287b0c6a5789c6ed"),
-        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "6fdd2e1a6a8183e5e1196455bc8741063111206e"),
-        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "1e16c86c6e6240922f7e38315b5cd2fadf2643f8"),
-        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "17278fb7340e98a7af5a960766083c0e0c39f69b"),
+        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "cfcadac5aeff5d95681d2d91c0bf3e75bd35f169"),
+        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "8b8ead61d08ba9a6f43c191b1897f7bac09c530c"),
+        .package(url: "https://github.com/1amageek/DRCEngine.git", revision: "05724746320b56c41fc40c1bfe3366015ad54d65"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "be979a9e3095e811f5d7cc4d5f74668142d9c052"),
+        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "8c66b7bd6b44cab884b75ded9788a4ec548a1919"),
     ],
     targets: [
+        .target(name: "PhysicalDesignLogicHandoff", dependencies: ["PhysicalDesignCore",
+            .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
+            .product(name: "TimingCore", package: "TimingEngine"),
+            .product(name: "STAEngine", package: "TimingEngine"),
+            .product(name: "LogicProof", package: "LogicEngine"),
+            .product(name: "LogicSimulation", package: "LogicEngine"),
+            .product(name: "LogicEngineRuntime", package: "LogicEngine"),
+            .product(name: "LogicIR", package: "LogicDesign"),
+            .product(name: "LogicKernelCore", package: "LogicDesign"),
+                .product(name: "LogicDesignSerialization", package: "LogicDesign"),
+            .product(name: "CircuiteFoundation", package: "CircuiteFoundation")], exclude: ["DESIGN.md", "CheckedCandidatePersistence/DESIGN.md"]),
+        .testTarget(name: "PhysicalLogicHandoffTests", dependencies: ["PhysicalDesignLogicHandoff", "PhysicalDesignCore",
+            .product(name: "PEXNative", package: "PEXEngine"),
+            .product(name: "PEXParsers", package: "PEXEngine"),
+            .product(name: "TimingCore", package: "TimingEngine"),
+            .product(name: "STAEngine", package: "TimingEngine"),
+            .product(name: "DEF", package: "swift-mask-data"),
+            .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
+            .product(name: "PDKCore", package: "PDKKit"),
+            .product(name: "PEXCore", package: "PEXEngine"),
+            .product(name: "LogicProof", package: "LogicEngine"),
+            .product(name: "LogicSimulation", package: "LogicEngine"),
+            .product(name: "LogicEngineCore", package: "LogicEngine"),
+            .product(name: "LogicEngineRuntime", package: "LogicEngine"),
+            .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
+            .product(name: "LogicIR", package: "LogicDesign")], resources: [.copy("Fixtures")]),
         .target(
             name: "PhysicalDesignCore",
             dependencies: [
                 .product(name: "TimingCore", package: "TimingEngine"),
+                .product(name: "STAEngine", package: "TimingEngine"),
                 .product(name: "PEXNative", package: "PEXEngine"),
                 .product(name: "PEXCore", package: "PEXEngine"),
+                .product(name: "PEXParsers", package: "PEXEngine"),
+                .product(name: "DRCNative", package: "DRCEngine"),
+                .product(name: "DRCCore", package: "DRCEngine"),
                 .product(name: "CoreSpice", package: "CoreSpice"),
                 .product(name: "LayoutCore", package: "semiconductor-layout"),
                 .product(name: "LayoutTech", package: "semiconductor-layout"),
@@ -59,13 +92,15 @@ let package = Package(
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFileSystem", package: "CircuiteFoundation"),
                 .product(name: "LogicIR", package: "LogicDesign"),
+                .product(name: "LogicDesignSerialization", package: "LogicDesign"),
                 .product(name: "PDKCore", package: "PDKKit"),
                 .product(name: "LEF", package: "swift-mask-data"),
                 .product(name: "DEF", package: "swift-mask-data"),
                 .product(name: "MaskGeometry", package: "swift-mask-data")
             ],
-            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md", "ProcessGeometry/DESIGN.md", "LegalPlacement/DESIGN.md", "RoutingGeometry/DESIGN.md", "ClockTreeSynthesis/DESIGN.md", "StandardLayoutExport/DESIGN.md"]
+            exclude: ["DESIGN.md", "TechnologyConstraints/DESIGN.md", "ProcessInputs/DESIGN.md", "MasterGeometry/DESIGN.md", "ProcessGeometry/DESIGN.md", "LegalPlacement/DESIGN.md", "RoutingGeometry/DESIGN.md", "RoutingSourceAdoption/DESIGN.md", "ClockTreeSynthesis/DESIGN.md", "StandardLayoutExport/DESIGN.md", "RepairMeasurement/DESIGN.md", "DEFImport/DESIGN.md"]
         ),
         .target(
             name: "FloorplanEngine",

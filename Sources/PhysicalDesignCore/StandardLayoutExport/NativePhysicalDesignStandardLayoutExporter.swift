@@ -11,7 +11,7 @@ public struct NativePhysicalDesignStandardLayoutExporter: PhysicalDesignStandard
     ) async throws -> Data {
         do {
             try Task.checkCancellation()
-            guard request.schemaVersion == PhysicalDesignRequest.currentSchemaVersion,
+            guard request.supportsExecutionSchema,
                   snapshot.processManifest == request.pdk.manifest,
                   !request.processAssets.isEmpty,
                   snapshot.processAssets == request.processAssets.mapValues(\.reference),

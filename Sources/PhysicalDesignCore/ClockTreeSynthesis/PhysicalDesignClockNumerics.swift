@@ -19,6 +19,8 @@ public struct PhysicalDesignClockNumerics: Sendable, Codable {
     public var maximumInputBytes: Int
     public var maximumProjectionRecords: Int
     public var maximumGeometryProbes: Int
+    /// Nil preserves the legacy mapping from projection records and geometry probes.
+    public var captureLimits: PhysicalDesignClockCaptureLimits?
     public var extraction: NativePEXCalculationLimits
     public var electrodes: NativePEXElectrodeLimits
     public var transient: TransientExecutionLimits
@@ -27,13 +29,15 @@ public struct PhysicalDesignClockNumerics: Sendable, Codable {
                 maximumNewtonIterationsPerSolve: Int, maximumStepReductions: Int, maximumRefinements: Int,
                 crossingAgreementSeconds: Double, maximumCellSpanDBU: Int32, maximumInputBytes: Int,
                 maximumProjectionRecords: Int, maximumGeometryProbes: Int, extraction: NativePEXCalculationLimits,
-                electrodes: NativePEXElectrodeLimits, transient: TransientExecutionLimits) {
+                electrodes: NativePEXElectrodeLimits, transient: TransientExecutionLimits,
+                captureLimits: PhysicalDesignClockCaptureLimits? = nil) {
         self.stopTimeSeconds = stopTimeSeconds; self.maximumTimeStepSeconds = maximumTimeStepSeconds; self.minimumTimeStepSeconds = minimumTimeStepSeconds
         self.relativeTolerance = relativeTolerance; self.voltageTolerance = voltageTolerance; self.currentTolerance = currentTolerance; self.lteTolerance = lteTolerance
         self.maximumNewtonIterationsPerSolve = maximumNewtonIterationsPerSolve; self.maximumStepReductions = maximumStepReductions; self.maximumRefinements = maximumRefinements
         self.crossingAgreementSeconds = crossingAgreementSeconds; self.maximumCellSpanDBU = maximumCellSpanDBU; self.maximumInputBytes = maximumInputBytes
         self.maximumProjectionRecords = maximumProjectionRecords; self.maximumGeometryProbes = maximumGeometryProbes
         self.extraction = extraction; self.electrodes = electrodes; self.transient = transient
+        self.captureLimits = captureLimits
     }
     public func validate() throws {
         guard [stopTimeSeconds, maximumTimeStepSeconds, minimumTimeStepSeconds, relativeTolerance, voltageTolerance,
@@ -44,5 +48,6 @@ public struct PhysicalDesignClockNumerics: Sendable, Codable {
             throw PhysicalDesignClockTimingModelError.invalidModel("numerical limits")
         }
         try transient.validate()
+        try captureLimits?.validate()
     }
 }

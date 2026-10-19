@@ -6,6 +6,8 @@ import Foundation
 public struct PhysicalDesignResult: Sendable, Hashable, Codable,
     ArtifactProducing, DiagnosticReporting, EvidenceProviding
 {
+    public static let currentSchemaVersion = 7
+
     public let schemaVersion: Int
     public let runID: String
     public let status: PhysicalDesignExecutionStatus

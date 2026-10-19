@@ -4,17 +4,16 @@ Protocol-first floorplan, placement, clock-tree, routing, ECO, antenna-repair, a
 
 ## Status
 
-The package contains a deterministic native geometry backend and a directly conforming OpenROAD process backend. The OpenROAD backend executes a retained stage script against exact Verilog, SDC, LEF, Liberty, RC setup, PDK, and executable identities. It never promotes its own output to production eligibility.
+The package provides native geometry and source-bound characterized placement/CTS contracts. Native production implementation remains explicitly unsupported. External OpenROAD compatibility belongs to EDAInteroperability, not a callable backend or product in this package. The finite public-source prerequisite and exact dependency floor are defined in [DESIGN.md](DESIGN.md#public-source-prerequisite-and-dependency-alignment).
 
 ```mermaid
 flowchart LR
   Request["PhysicalDesignRequest"] --> Native["Native geometry backend"]
   Native --> Revision["JSON / DEF / diff / manifest"]
   Native --> Claims["Geometry verified\nTiming blocked or characterized\nProduction blocked"]
-  Production["OpenROAD process backend"] --> Evidence["DEF / logs / process evidence"]
+  Evidence["Independent compatibility / oracle evidence"] --> TQ
   TQ["ToolQualification process evidence"] --> Qualified["Qualified flow decision"]
   Oracle["Independent raw oracle result"] --> Qualified
-  Evidence --> TQ
 ```
 
 ## Products
@@ -28,8 +27,7 @@ flowchart LR
 | `RoutingEngine` | Global and detailed routing protocol |
 | `PhysicalECO` | Physical ECO protocol |
 | `PhysicalDFM` | DFM mutation protocol |
-| `OpenROADPhysicalDesign` | Exact-input external OpenROAD process execution |
-| `PhysicalDesignEngine` | Intent-based native/OpenROAD stage dispatcher |
+| `PhysicalDesignEngine` | Native physical stage composition |
 | `PhysicalDesignCLISupport` / `physical-design` | Structured JSON CLI |
 
 ## Execution contract
@@ -41,8 +39,8 @@ Every stage executor conforms directly to the `CircuiteFoundation.Engine` contra
 | Intent | Native support | Meaning |
 |---|---:|---|
 | `geometrySmoke` | Yes | Deterministic geometry construction and native invariant checks |
-| `characterizedTiming` | CTS only | Clock timing derived from a retained PDK/RC/Liberty/corner model |
-| `productionImplementation` | OpenROAD only | Executes the configured tool; production claim remains blocked pending independent qualification |
+| `characterizedTiming` | Placement / CTS profiles | Characterization bound to retained process/library and applicable electrical model inputs |
+| `productionImplementation` | Unsupported | Structured refusal; native production eligibility is not established |
 
 Geometry remains in database units. `shortestPathLengthDBU`, `longestPathLengthDBU`, route constraints, and placement wirelength objectives never contain picoseconds. Clock latency and skew are emitted only as `PhysicalDesignClockTimingEstimate` after exact model, PDK, RC, cell-library, and corner artifacts have been re-read and verified. Missing characterization still permits geometry smoke output, but timing and production claims remain blocked.
 
@@ -74,13 +72,11 @@ ToolQualification and release policy.
 
 The native backend does not claim foundry-rule correctness, signoff timing, DRC, LVS, PEX, EM/IR, or tapeout stream-out readiness. Native placement, routing, ECO, antenna, and DFM checks are deterministic construction checks and review candidates. Independent engines remain authoritative.
 
-## OpenROAD process backend
+## External compatibility
 
-`PhysicalDesignProductionConfiguration` binds the executable path, expected executable SHA-256 and byte count, version probe, technology and cell LEFs, Liberty libraries, synthesized Verilog, SDC, RC setup script, stage script, PDK identity, corner, and timeout. Every artifact is re-read through `PhysicalDesignArtifactStore`; the executable is verified before and after execution.
-
-The backend runs in an isolated directory with a deterministic non-secret environment. Timeout and cancellation terminate the complete process group through `SignoffToolSupport`. Generated Tcl, stdout, and stderr are persisted before exit status and output DEF are interpreted. A successful process emits canonical DEF/JSON, design diff, stage-completion evidence, process evidence, and a run manifest. Those five completion artifacts are committed as one artifact-store batch: a failed batch leaves none of their paths visible. Exact-byte retries reuse already retained process streams and output DEF without overwriting them, so a corrected persistence failure can retry the same run ID. A missing executable or invalid input view is blocked; non-zero exit, timeout, and missing DEF are typed failures that retain process streams. Artifact-store persistence failure is blocked and returns only references whose bytes were committed and verified.
-
-OpenROAD is not installed by this package. Availability of an executable and PDK views makes the backend callable, not qualified. ToolQualification, an independent physical oracle, flow policy, and human approval remain required.
+OpenROAD execution is owned by EDAInteroperability. Its observations do not bypass
+this package's unsupported native-production boundary. Retained production
+configuration data is not a backend selector.
 
 ## CLI
 
@@ -89,36 +85,24 @@ From the repository root:
 ```bash
 swift run physical-design --request Fixtures/positive-floorplan-request.json --project-root .
 swift run physical-design --request Fixtures/negative-missing-snapshot-request.json --project-root .
-swift run physical-design --request Fixtures/negative-openroad-unavailable-request.json --project-root .
+swift run physical-design --request Fixtures/negative-native-production-request.json --project-root .
 ```
 
 The CLI emits one structured `PhysicalDesignResult` JSON value.
 
 ## Build and test
 
-`Package.swift` selects each dependency independently. A sibling checkout is
-used when its `Package.swift` exists; otherwise SwiftPM resolves the pinned
-GitHub revision. This repository does not require an umbrella checkout.
+`Package.swift` uses exact canonical HTTPS revisions. The complete direct source
+floor and finite consuming qualification are owned by
+[DESIGN.md](DESIGN.md#public-source-prerequisite-and-dependency-alignment).
+A sibling checkout, edited dependency or mirror is not part of that public graph.
 
-| Dependency | Local sibling | Remote fallback revision |
-|---|---|---|
-| CircuiteFoundation | `../CircuiteFoundation` | `7abcac83517935c9b9f7553d7016d62cffde259d` |
-| LogicDesign | `../LogicDesign` | `b9aa25b0b78e6168befa25df3bfe8309bd020a6d` |
-| PDKKit | `../PDKKit` | `b62c5ad7e5819a24977038c2133856caed52f481` |
-| SignoffToolSupport | `../SignoffToolSupport` | `6bf675eecb27e3bd3440c5ce8a85c85c510fc3cb` |
-
-```bash
-perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
-  -scheme PhysicalDesignEngine-Package \
-  -destination 'platform=macOS' \
-  build CODE_SIGNING_ALLOWED=NO
-
-perl -e 'alarm shift; exec @ARGV' 30 xcodebuild \
-  -scheme PhysicalDesignEngine-Package \
-  -destination 'platform=macOS' \
-  test CODE_SIGNING_ALLOWED=NO
-```
-
-The regression suite covers all native stages, dimensional CTS behavior, characterized timing, native production blocking, the OpenROAD process contract, executable integrity, typed unavailable-tool behavior, raw process evidence, ToolQualification evidence consumption, independent oracle correlation, immutable artifact verification, symlink escape rejection, review packet artifact integrity, DEF interchange, and CLI errors.
+Use fixed Swift 6.4.0 / macOS 27 SDK and timeout-bounded SwiftPM tests. Build the
+`PhysicalLogicHandoffTests` and `PhysicalDesignEngineTests` test products separately
+with jobs 2. The affected prerequisite profile selects
+`NormalPowerSTABindingTests|CheckedCandidatePersistenceTests` and
+`CharacterizedNativeCTSTests.actualDirectCTS`; it does not claim a full package,
+foundry, all-history, or release qualification. Existing geometry and other test
+receipts retain their original unchanged source/graph scope.
 
 See `DESIGN.md`, `INTERFACES.md`, `CAPABILITY.md`, and `GOAL_STATUS.md` for exact responsibility and maturity boundaries.

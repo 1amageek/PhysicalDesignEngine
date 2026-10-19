@@ -42,7 +42,7 @@ public struct PhysicalDesignClockTimingModel: Sendable, Codable {
             self.maximumSlewSeconds = maximumSlewSeconds; self.maximumLoadFarads = maximumLoadFarads
         }
     }
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
     public var schemaVersion: Int
     public var processID: String
     public var pdkVersion: String
@@ -58,18 +58,25 @@ public struct PhysicalDesignClockTimingModel: Sendable, Codable {
     public var quietBoundary: QuietBoundary
     public var clocks: [Clock]
     public var electrodes: [Electrode]
+    /// Nil preserves the absence of this table in legacy cell-root-only schema 2.
+    public var topPortElectrodes: [PhysicalDesignClockTopPortElectrode]?
     public var constraints: Constraints
     public var numerics: PhysicalDesignClockNumerics
     public init(processID: String, pdkVersion: String, cornerID: String, rcCornerID: String, libertyAssetID: String, rcAssetID: String, rcParameters: [String: String],
                 pdkManifestDigest: String, rcModelDigest: String, cellLibraryDigest: String, method: Method,
-                quietBoundary: QuietBoundary, clocks: [Clock], electrodes: [Electrode], constraints: Constraints, numerics: PhysicalDesignClockNumerics) {
+                quietBoundary: QuietBoundary, clocks: [Clock], electrodes: [Electrode], constraints: Constraints, numerics: PhysicalDesignClockNumerics, topPortElectrodes: [PhysicalDesignClockTopPortElectrode] = []) {
         self.schemaVersion = Self.currentSchemaVersion; self.processID = processID; self.pdkVersion = pdkVersion; self.cornerID = cornerID; self.rcCornerID = rcCornerID
         self.libertyAssetID = libertyAssetID; self.rcAssetID = rcAssetID; self.rcParameters = rcParameters; self.pdkManifestDigest = pdkManifestDigest
         self.rcModelDigest = rcModelDigest; self.cellLibraryDigest = cellLibraryDigest; self.method = method; self.quietBoundary = quietBoundary
-        self.clocks = clocks; self.electrodes = electrodes; self.constraints = constraints; self.numerics = numerics
+        self.clocks = clocks; self.electrodes = electrodes; self.topPortElectrodes = topPortElectrodes; self.constraints = constraints; self.numerics = numerics
     }
     public func validate(against reference: PhysicalDesignClockTimingModelReference) throws {
-        guard schemaVersion == Self.currentSchemaVersion, processID == reference.processID,
+        guard (schemaVersion == Self.currentSchemaVersion && topPortElectrodes != nil)
+                || (schemaVersion == 2 && numerics.captureLimits == nil
+                    && (topPortElectrodes == nil || topPortElectrodes?.isEmpty == true)) else {
+            throw PhysicalDesignClockTimingModelError.invalidModel("clock schema or legacy top-port electrode data")
+        }
+        guard processID == reference.processID,
               pdkVersion == reference.pdkVersion, cornerID == reference.cornerID else { throw PhysicalDesignClockTimingModelError.invalidModel("schema/process/version/corner") }
         for (digest, binding) in [(pdkManifestDigest, reference.pdkManifestArtifact), (rcModelDigest, reference.rcModelArtifact), (cellLibraryDigest, reference.cellLibraryArtifact)] {
             guard digest.lowercased() == binding.reference.digest.hexadecimalValue, binding.reference.digest.algorithm == .sha256 else {
@@ -90,6 +97,7 @@ public struct PhysicalDesignClockTimingModel: Sendable, Codable {
         }
         var sourceRecords = 0
         func charge(_ count: Int) throws {
+            try Task.checkCancellation()
             let sum = sourceRecords.addingReportingOverflow(count)
             guard count >= 0, !sum.overflow, sum.partialValue <= numerics.maximumProjectionRecords else {
                 throw PhysicalDesignClockTimingModelError.invalidModel("source record budget")
@@ -97,6 +105,14 @@ public struct PhysicalDesignClockTimingModel: Sendable, Codable {
             sourceRecords = sum.partialValue
         }
         for electrode in electrodes { try charge(1); try charge(electrode.faces.count) }
+        var topPinIDs = Set<String>()
+        for electrode in topPortElectrodes ?? [] {
+            try charge(1); try charge(electrode.faces.count)
+            guard !electrode.pinID.isEmpty, !electrode.faces.isEmpty,
+                  topPinIDs.insert(electrode.pinID).inserted else {
+                throw PhysicalDesignClockTimingModelError.invalidModel("top-port electrode identity or faces")
+            }
+        }
         for clock in clocks {
             try charge(1); try charge(clock.sinkPinIDs.count)
             for count in [clock.rise.count, clock.fall.count, clock.bufferRiseShape.count, clock.bufferFallShape.count] { try charge(count) }

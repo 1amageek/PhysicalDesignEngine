@@ -4,7 +4,7 @@
 
 PhysicalDesignEngine owns canonical physical state, native stage execution, and
 immutable raw observations. Its current scope is deterministic geometry smoke and
-characterized CTS, not production physical closure. The system ownership contract
+characterized pre-route placement and CTS, not production physical closure. The system ownership contract
 is [LSI AGENTS.md](../AGENTS.md). Products and modules follow [Package.swift](Package.swift).
 
 ## Responsibilities and Boundaries
@@ -26,8 +26,9 @@ layout integration.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
+| [PhysicalDesignLogicHandoff](Sources/PhysicalDesignLogicHandoff/DESIGN.md) | child | Checked actual-cell logical connectivity | Exact cell/pin/net handoff | Geometry, view binding and qualification remain separate |
 | [PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md) | child | Exact state admission and native mutation | Component-owned bounded placement | Geometry success is separate from timing and production |
-| [TimingEngine](../TimingEngine/DESIGN.md) | depends on for CTS | Strict selected-source Liberty characterization | Checked pin/cell/threshold semantics | Dependency adoption follows verified immutable lower contracts |
+| [TimingEngine](../TimingEngine/DESIGN.md) | depends on for placement/CTS | Strict selected-source Liberty characterization and setup analysis | Checked pin/cell/threshold semantics | Dependency adoption follows verified immutable lower contracts |
 | [PEXEngine](../PEXEngine/DESIGN.md) | depends on for CTS | Existing passive RC material, mesh and electrodes | Physical electrical model authority | RC coefficients and calibration qualification remain separate |
 | [CoreSpice](../CoreSpice/DESIGN.md) | depends on for CTS | Bounded public passive CPU transient | Existing numerical solver | No nonlinear, Metal or signoff qualification is inferred |
 | [LSI architecture](../docs/platform-architecture.md) | parent system architecture | Native-primary platform ownership | Independent domain engines compose through Xcircuite | Smoke completion does not prove platform completion |
@@ -56,12 +57,20 @@ identities. Source-bound geometry admission surrounds mutation; canonical JSON i
 resume reference. Standard DEF export is independently bounded and cannot replace
 process identity, orientation or other canonical state during same-run continuation.
 
-Request schema 7 rejects legacy schema values. Exactly one initial snapshot or
+Request schema 8 and the explicitly admitted schema-7 subset follow the
+[PhysicalDesignCore request contract](Sources/PhysicalDesignCore/DESIGN.md). Exactly one initial snapshot or
 retained layout supplies the physical state. A completed mutation must pass snapshot
 validation; blocked mutations publish no successful revision. Geometry, timing and
 production claims remain distinct. `productionImplementation` fails with
 `native_production_implementation_unsupported` until native production behavior is
 implemented and verified; no caller flag or external backend may bypass this gate.
+
+Stage III mutation publication prepares store-owned bindings without writing,
+encodes JSON/DEF/diff/manifest against those exact bindings, and commits one
+all-or-none artifact batch. Failure does not publish an orphan revision. The
+actual-cell handoff requires the retained Logic physicalCells realization policy;
+Logic owns inputless actual tie instances before proof/receipt, while Physical
+owns their exact physical interface and source geometry.
 
 Geometry uses DBU. Source-bound CTS model selection, characterized timing units,
 waveforms, failure/resource contracts and typed model observations are owned by
@@ -175,10 +184,20 @@ contract are owned by PhysicalDesignCore through its LegalPlacement component. E
 and PORTs after matching the complete physical interface; source-free resize fails.
 CTS/ECO insertion consumes exact selected buffer masters, ports and compatible sites;
 source-free buffering fails. ECO split-net geometry and subsequent routing are
-separate mutations. Antenna protection remains explicitly blocked until derived
-post-repair feedback is implemented. Unsupported masters and unnamed vias fail output admission.
+separate mutations. Source-bound antenna/hotspot repair requires the additive exact measurement
+profile owned by PhysicalDesignCore through RepairMeasurement. NativeDRC rule
+verdicts retain unknown clean ratios rather than fabricated numerical reductions. Unsupported masters and unnamed vias fail output admission.
 Native routing/access/CTS/ECO closure and full standard interchange
 remain pending, and production capability remains independently blocked.
+
+The exact DRC adoption pins `c594654`, preserving external execution failures and
+their raw-output/pending cleanup owner in DRCEngine. Physical repair measurement
+calls `NativeDRCBackend` directly; it does not normalize external process failures.
+The existing `NativeRepairMeasurementTests.existingLaws` checks cut-stage,
+cumulative and sidewall evidence through Physical execution and before/after DRC
+replay. [Exact consuming evidence](../.verification/runs/s3-stageIII-20261013-2e1f3af7/drcr-physical-consumption/proof.json)
+owns this Native scope. Existing grammar 3.1 and repair proofs remain valid with
+unchanged Physical sources/tests; external process qualification stays DRC-owned.
 
 ## Verification and Change Impact
 
@@ -213,3 +232,71 @@ separate evidence; package tests cannot establish them.
 
 Public source-bound deterministic DEF pairing is owned by
 [StandardLayoutExport](Sources/PhysicalDesignCore/StandardLayoutExport/DESIGN.md).
+
+## Same-Candidate Conditional Timing Admission
+
+[PhysicalDesignLogicHandoff](Sources/PhysicalDesignLogicHandoff/DESIGN.md) owns the
+additive join of conditional actual-cell functional evidence with exact candidate
+identity and prepared, source-validated STA evidence. It consumes the normal-power
+source contract through Logic Runtime and TimingEngine; it does not qualify supply
+metal connectivity, electrical behavior, process rules or release eligibility.
+
+
+## Public Source Prerequisite and Dependency Alignment
+
+This finite source publication exports selected tracked `0b17a1` source plus the
+three already reviewed normal-power prepared-STA followups onto the sole public
+parent `45859bc097100eb9a64bfea1d91b7efb10a09d66`. It does not publish private Git
+ancestry. All selected production/resource bytes and file modes remain unchanged. One
+focused test corrects its original zero-total-storage expectation by independently
+comparing lower-only qualification charges; the refund/admission boundary is owned
+by [PhysicalDesignLogicHandoff](Sources/PhysicalDesignLogicHandoff/DESIGN.md). Root
+documentation, that component design/test correction, exact public dependency
+selectors and the freshly resolved lock are the adoption changes. Owned code uses the retained MIT
+license; the twelve retained Sky130 fixture/provenance files keep their existing
+Apache-2.0 notices. Dependency licenses remain with their respective sources.
+
+| Direct dependency | Exact public source revision |
+|---|---|
+| CircuiteFoundation | `5f132c58209123433e0e479e1ea61096e46061ba` |
+| LogicDesign | `5e1d3eec838a0add91c617413682d186a5182335` |
+| PDKKit | `f59dfd1dbdd20545ddf97e6a0ab9a956ad7ca809` |
+| swift-mask-data | `67410f834bdfa8a098c2ec0bfe3675210f658277` |
+| CoreSpice | `cfcadac5aeff5d95681d2d91c0bf3e75bd35f169` |
+| PEXEngine | `8b8ead61d08ba9a6f43c191b1897f7bac09c530c` |
+| DRCEngine | `05724746320b56c41fc40c1bfe3366015ad54d65` |
+| TimingEngine | `be979a9e3095e811f5d7cc4d5f74668142d9c052` |
+| semiconductor-layout | `8c66b7bd6b44cab884b75ded9788a4ec548a1919` |
+| LogicEngine | `a6dead5545439c8b5fb2dd9860bf498d8f62be56` |
+
+Resolution must use canonical public HTTPS sources with no path dependency,
+mirror, edit or private source substitution. LogicDesign and Logic Runtime own the
+mapped/library/realization/proof and process-condition contracts; Timing owns its
+public prepared STA, source evidence, source-context and artifact contracts. This
+composition consumes public STA behavior and does not import or claim equivalence
+to a private later signal-integrity schema. PDK/mask/layout retain their full
+source-admission fields and unsupported-technology refusals rather than reducing
+them to an older API. CoreSpice and PEX remain the numerical and passive-extraction
+owners. No physics, source-family, or solver implementation is duplicated here.
+
+The affected Native consuming profile runs the five original
+`NormalPowerSTABindingTests`, three `CheckedCandidatePersistenceTests`, and
+`CharacterizedNativeCTSTests.actualDirectCTS` through their real owner paths.
+The first profile checks actual source synthesis/proof, added-cell condition
+expansion, exact process/library/corner/PG/connectivity before a response, actual
+STA, typed JSON decode and strict source-evidence replay. The persistence profile
+checks saved exact candidate/source/RUP reconstruction, tamper/stale-source and
+byte/cancellation/atomic-publication refusals. This is fresh in-process artifact
+reconstruction, not a separate-process Physical cold-start claim. Timing's
+separate public-consumer cold API/CLI evidence retains its own lower scope.
+Direct CTS must execute actual source conductor capture, passive extraction,
+CoreSpice rise/fall transient/refinement and saved JSON/DEF readback; struct
+construction or simulated status is insufficient.
+
+Use fixed Swift 6.4.0 and macOS 27 SDK, jobs 2, a fresh public dependency graph,
+600-second product-build and 120-second focused-runtime guards. Caller work,
+storage, cancellation and artifact authority remain the original contracts.
+Historical evidence is retained with its original source and graph premises.
+This is a finite source/API prerequisite qualification, not complete physical
+implementation, all-phase/history continuation, foundry accuracy, signoff or
+release eligibility. Native production intent remains explicitly unsupported.

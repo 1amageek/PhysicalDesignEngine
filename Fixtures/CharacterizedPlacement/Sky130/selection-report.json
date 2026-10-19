@@ -1,0 +1,471 @@
+{
+  "schemaVersion": 1,
+  "scope": "Selected combinational placement geometry and pre-route ground-capacitance cost only. No routed metal, antenna, EM, density, DRC, production or full-original-source acceptance.",
+  "sources": [
+    {
+      "origin": "/Users/1amageek/.volare/sky130A/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef",
+      "originSHA256": "3a3ea4e9d0973402702764d897659e52fe3d413eb48c306cd811de40a75264fa",
+      "originByteCount": 1415362,
+      "selectedFile": "cells.lef",
+      "selectedSHA256": "e8853c0a2e5757a7e8b63a8b01f0852b11bc4107d217b36b6870085eec687573",
+      "selectedByteCount": 1506,
+      "ranges": [
+        {
+          "startByte": 0,
+          "endByteExclusive": 14,
+          "startLine": 1,
+          "endLine": 1
+        },
+        {
+          "startByte": 42,
+          "endByteExclusive": 83,
+          "startLine": 3,
+          "endLine": 4
+        },
+        {
+          "startByte": 639768,
+          "endByteExclusive": 641207,
+          "startLine": 25562,
+          "endLine": 25632
+        },
+        {
+          "startByte": 1415350,
+          "endByteExclusive": 1415362,
+          "startLine": 56536,
+          "endLine": 56536
+        }
+      ],
+      "excluded": [
+        {
+          "facts": "NOWIREEXTENSIONATPIN ON: global routed-pin extension policy unsupported; no wires generated.",
+          "raw": "  NOWIREEXTENSIONATPIN ON ;",
+          "startByte": 14,
+          "endByteExclusive": 42
+        },
+        {
+          "facts": "All macros except exact selected inv_1 block; no other master admitted."
+        }
+      ]
+    },
+    {
+      "origin": "/Users/1amageek/.volare/sky130A/libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__nom.tlef",
+      "originSHA256": "5de46c6f7c2cf82599b93d30a6459465f770f63c85b36182c672782219938519",
+      "originByteCount": 18167,
+      "selectedFile": "technology.lef",
+      "selectedSHA256": "78b42d9ff6dfbbe5d56f807723ee0e7fa7e56b271f36e2c780cf26ba904e89d2",
+      "selectedByteCount": 2119,
+      "ranges": [
+        {
+          "startByte": 0,
+          "endByteExclusive": 1030,
+          "startLine": 1,
+          "endLine": 42
+        },
+        {
+          "startByte": 1142,
+          "endByteExclusive": 1154,
+          "startLine": 50,
+          "endLine": 50
+        },
+        {
+          "startByte": 1154,
+          "endByteExclusive": 1175,
+          "startLine": 51,
+          "endLine": 51
+        },
+        {
+          "startByte": 1175,
+          "endByteExclusive": 1214,
+          "startLine": 52,
+          "endLine": 52
+        },
+        {
+          "startByte": 1214,
+          "endByteExclusive": 1224,
+          "startLine": 53,
+          "endLine": 53
+        },
+        {
+          "startByte": 1225,
+          "endByteExclusive": 1237,
+          "startLine": 55,
+          "endLine": 55
+        },
+        {
+          "startByte": 1237,
+          "endByteExclusive": 1258,
+          "startLine": 56,
+          "endLine": 56
+        },
+        {
+          "startByte": 1258,
+          "endByteExclusive": 1297,
+          "startLine": 57,
+          "endLine": 57
+        },
+        {
+          "startByte": 1297,
+          "endByteExclusive": 1307,
+          "startLine": 58,
+          "endLine": 58
+        },
+        {
+          "startByte": 1344,
+          "endByteExclusive": 1354,
+          "startLine": 64,
+          "endLine": 64
+        },
+        {
+          "startByte": 1354,
+          "endByteExclusive": 1371,
+          "startLine": 65,
+          "endLine": 65
+        },
+        {
+          "startByte": 1371,
+          "endByteExclusive": 1394,
+          "startLine": 66,
+          "endLine": 66
+        },
+        {
+          "startByte": 1394,
+          "endByteExclusive": 1395,
+          "startLine": 67,
+          "endLine": 67
+        },
+        {
+          "startByte": 1395,
+          "endByteExclusive": 1415,
+          "startLine": 68,
+          "endLine": 68
+        },
+        {
+          "startByte": 1415,
+          "endByteExclusive": 1436,
+          "startLine": 69,
+          "endLine": 69
+        },
+        {
+          "startByte": 1436,
+          "endByteExclusive": 1437,
+          "startLine": 70,
+          "endLine": 70
+        },
+        {
+          "startByte": 1437,
+          "endByteExclusive": 1468,
+          "startLine": 71,
+          "endLine": 71
+        },
+        {
+          "startByte": 1468,
+          "endByteExclusive": 1499,
+          "startLine": 72,
+          "endLine": 72
+        },
+        {
+          "startByte": 1499,
+          "endByteExclusive": 1514,
+          "startLine": 73,
+          "endLine": 73
+        },
+        {
+          "startByte": 1514,
+          "endByteExclusive": 1539,
+          "startLine": 74,
+          "endLine": 74
+        },
+        {
+          "startByte": 1539,
+          "endByteExclusive": 1559,
+          "startLine": 75,
+          "endLine": 75
+        },
+        {
+          "startByte": 1559,
+          "endByteExclusive": 1590,
+          "startLine": 76,
+          "endLine": 76
+        },
+        {
+          "startByte": 1590,
+          "endByteExclusive": 1608,
+          "startLine": 77,
+          "endLine": 77
+        },
+        {
+          "startByte": 1608,
+          "endByteExclusive": 1638,
+          "startLine": 78,
+          "endLine": 78
+        },
+        {
+          "startByte": 1638,
+          "endByteExclusive": 1676,
+          "startLine": 79,
+          "endLine": 79
+        },
+        {
+          "startByte": 1676,
+          "endByteExclusive": 1703,
+          "startLine": 80,
+          "endLine": 80
+        },
+        {
+          "startByte": 1703,
+          "endByteExclusive": 1704,
+          "startLine": 81,
+          "endLine": 81
+        },
+        {
+          "startByte": 1821,
+          "endByteExclusive": 1829,
+          "startLine": 84,
+          "endLine": 84
+        },
+        {
+          "startByte": 2205,
+          "endByteExclusive": 2216,
+          "startLine": 100,
+          "endLine": 100
+        },
+        {
+          "startByte": 2216,
+          "endByteExclusive": 2233,
+          "startLine": 101,
+          "endLine": 101
+        },
+        {
+          "startByte": 2233,
+          "endByteExclusive": 2258,
+          "startLine": 102,
+          "endLine": 102
+        },
+        {
+          "startByte": 2258,
+          "endByteExclusive": 2259,
+          "startLine": 103,
+          "endLine": 103
+        },
+        {
+          "startByte": 2259,
+          "endByteExclusive": 2274,
+          "startLine": 104,
+          "endLine": 104
+        },
+        {
+          "startByte": 2274,
+          "endByteExclusive": 2290,
+          "startLine": 105,
+          "endLine": 105
+        },
+        {
+          "startByte": 2290,
+          "endByteExclusive": 2291,
+          "startLine": 106,
+          "endLine": 106
+        },
+        {
+          "startByte": 2291,
+          "endByteExclusive": 2335,
+          "startLine": 107,
+          "endLine": 107
+        },
+        {
+          "startByte": 2335,
+          "endByteExclusive": 2379,
+          "startLine": 108,
+          "endLine": 108
+        },
+        {
+          "startByte": 2379,
+          "endByteExclusive": 2424,
+          "startLine": 109,
+          "endLine": 109
+        },
+        {
+          "startByte": 2424,
+          "endByteExclusive": 2439,
+          "startLine": 110,
+          "endLine": 110
+        },
+        {
+          "startByte": 2439,
+          "endByteExclusive": 2464,
+          "startLine": 111,
+          "endLine": 111
+        },
+        {
+          "startByte": 2464,
+          "endByteExclusive": 2482,
+          "startLine": 112,
+          "endLine": 112
+        },
+        {
+          "startByte": 2482,
+          "endByteExclusive": 2502,
+          "startLine": 113,
+          "endLine": 113
+        },
+        {
+          "startByte": 2502,
+          "endByteExclusive": 2546,
+          "startLine": 114,
+          "endLine": 114
+        },
+        {
+          "startByte": 2546,
+          "endByteExclusive": 2565,
+          "startLine": 115,
+          "endLine": 115
+        },
+        {
+          "startByte": 2590,
+          "endByteExclusive": 2591,
+          "startLine": 117,
+          "endLine": 117
+        },
+        {
+          "startByte": 2708,
+          "endByteExclusive": 2709,
+          "startLine": 120,
+          "endLine": 120
+        },
+        {
+          "startByte": 2709,
+          "endByteExclusive": 2739,
+          "startLine": 121,
+          "endLine": 121
+        },
+        {
+          "startByte": 2739,
+          "endByteExclusive": 2777,
+          "startLine": 122,
+          "endLine": 122
+        },
+        {
+          "startByte": 2899,
+          "endByteExclusive": 2921,
+          "startLine": 125,
+          "endLine": 125
+        },
+        {
+          "startByte": 2921,
+          "endByteExclusive": 2952,
+          "startLine": 126,
+          "endLine": 126
+        },
+        {
+          "startByte": 2952,
+          "endByteExclusive": 2976,
+          "startLine": 127,
+          "endLine": 127
+        },
+        {
+          "startByte": 2976,
+          "endByteExclusive": 2977,
+          "startLine": 128,
+          "endLine": 128
+        },
+        {
+          "startByte": 2977,
+          "endByteExclusive": 3005,
+          "startLine": 129,
+          "endLine": 129
+        },
+        {
+          "startByte": 3005,
+          "endByteExclusive": 3014,
+          "startLine": 130,
+          "endLine": 130
+        },
+        {
+          "startByte": 18155,
+          "endByteExclusive": 18167,
+          "startLine": 801,
+          "endLine": 801
+        }
+      ],
+      "excluded": [
+        {
+          "startByte": 1704,
+          "endByteExclusive": 1728,
+          "raw": "  ANTENNAMODEL OXIDE1 ;",
+          "facts": "Conductor rule omitted from placement-only view; retained original technology raw source. Must refuse original rule-bearing source until native law evaluation exists."
+        },
+        {
+          "startByte": 1728,
+          "endByteExclusive": 1821,
+          "raw": "  ANTENNADIFFSIDEAREARATIO PWL ( ( 0 75 ) ( 0.0125 75 ) ( 0.0225 85.125 ) ( 22.5 10200 ) ) ;",
+          "facts": "Conductor rule omitted from placement-only view; retained original technology raw source. Must refuse original rule-bearing source until native law evaluation exists."
+        },
+        {
+          "startByte": 2565,
+          "endByteExclusive": 2590,
+          "raw": "  MINENCLOSEDAREA 0.14 ;",
+          "facts": "Conductor rule omitted from placement-only view; retained original technology raw source. Must refuse original rule-bearing source until native law evaluation exists."
+        },
+        {
+          "startByte": 2591,
+          "endByteExclusive": 2615,
+          "raw": "  ANTENNAMODEL OXIDE1 ;",
+          "facts": "Conductor rule omitted from placement-only view; retained original technology raw source. Must refuse original rule-bearing source until native law evaluation exists."
+        },
+        {
+          "startByte": 2615,
+          "endByteExclusive": 2708,
+          "raw": "  ANTENNADIFFSIDEAREARATIO PWL ( ( 0 400 ) ( 0.0125 400 ) ( 0.0225 2609 ) ( 22.5 11600 ) ) ;",
+          "facts": "Conductor rule omitted from placement-only view; retained original technology raw source. Must refuse original rule-bearing source until native law evaluation exists."
+        },
+        {
+          "startByte": 2777,
+          "endByteExclusive": 2840,
+          "raw": "  DCCURRENTDENSITY AVERAGE 2.8 ; # mA/um Iavg_max at Tj = 90oC",
+          "facts": "Conductor rule omitted from placement-only view; retained original technology raw source. Must refuse original rule-bearing source until native law evaluation exists."
+        },
+        {
+          "startByte": 2840,
+          "endByteExclusive": 2899,
+          "raw": "  ACCURRENTDENSITY RMS 6.1 ; # mA/um Irms_max at Tj = 90oC",
+          "facts": "Conductor rule omitted from placement-only view; retained original technology raw source. Must refuse original rule-bearing source until native law evaluation exists."
+        },
+        {
+          "facts": "All unselected cut/routing layers, fixed/generated vias and double-height site excluded; no vias or routed metal generated."
+        }
+      ]
+    },
+    {
+      "origin": "/Users/1amageek/.volare/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib",
+      "originSHA256": "8e78e14442062dba34d414fca6490b2f6b96038d4510d1438ca44fee31487135",
+      "originByteCount": 12841637,
+      "selectedFile": "timing.lib",
+      "selectedSHA256": "46899314c8b2f826a471118bed06c56776fb29d0c10336e450c40ff3317a92d2",
+      "selectedByteCount": 14965,
+      "ranges": [
+        {
+          "startByte": 0,
+          "endByteExclusive": 5737,
+          "startLine": 1,
+          "endLine": 162
+        },
+        {
+          "startByte": 5832083,
+          "endByteExclusive": 5841309,
+          "startLine": 76927,
+          "endLine": 77053
+        },
+        {
+          "startByte": 12841635,
+          "endByteExclusive": 12841637,
+          "startLine": 173157,
+          "endLine": 173157
+        }
+      ],
+      "excluded": [
+        {
+          "facts": "Other cells excluded; original library-level units, operating conditions, templates and full selected inv_1 block retained unchanged."
+        }
+      ]
+    }
+  ]
+}

@@ -48,9 +48,13 @@ Offset is required rather than inferred. Non-finite, negative, missing or
 non-representable values fail. Micron values are scaled by snapshot units; nearest
 integer DBU is admitted only within one floating-point ULP and below 2^53, retaining
 integer precision. Width must satisfy MINWIDTH/default WIDTH and optional MAXWIDTH;
-configured spacing must satisfy base SPACING outside source-bound global/detailed routing and selected-net ECO rerouting. Those routing paths retain the source value and let RoutingGeometry select the greater of source SPACING and caller clearance. Qualified SPACING is rejected by
-the common codec; SPACINGTABLE is retained by the codec but unsupported by this
-native routing profile and explicitly fails before mutation.
+configured spacing must satisfy base SPACING outside source-bound global/detailed routing, selected-net ECO rerouting and CTS with an explicit clock timing model. One shared source-routing predicate controls both PRL admission and the final spacing preparation guard. Those routing paths retain the source value and let RoutingGeometry select the greater of source SPACING and caller clearance. CTS without the source characterization remains outside this profile. Qualified SPACING is rejected by
+the common codec; PARALLELRUNLENGTH SPACINGTABLE is compiled by ProcessGeometry and consumed by
+RoutingGeometry. Floorplan/placement can prepare its grid; signal/detail/ECO reroute
+and source-characterized CTS use the actual checker. Other mutations refuse table
+intake until they own the same spacing semantics. Missing unqualified SPACING uses
+the table minimum only for grid admission; actual routing always evaluates geometry.
+Nonrectangular table geometry remains incomplete, not approximated.
 
 Generated track positions use the LEF offset's global grid, begin at the first
 grid point inside the core and stop before its upper bound. Explicit tracks are
@@ -58,6 +62,41 @@ preserved only if selected layers have matching direction, pitch and global-grid
 phase, with non-overflowing last coordinates. Missing selected coverage fails.
 Track origin/count differences are allowed because imported DEF tracks can cover
 the die rather than only the core.
+
+`prepareRoutingSourceExtension` is reserved for the checked
+[RoutingSourceAdoption](../RoutingSourceAdoption/DESIGN.md) operation. It generates
+the extended profile through the same source-grid preparation, then restores every
+old track and adds generated tracks only for previously absent layers. A final
+normal prepare validates the complete track inventory under the new source.
+The source transition and metadata replacement are explicit in that checked new
+revision; ordinary prepare retains its changed-source identity refusal.
+
+### Source routing width policy
+
+The optional public `PhysicalDesignImplementationConstraints.sourceRoutingWidthPolicy`
+selects `.uniform` or `.sourceDefault`. Absence and `.uniform` preserve the exact
+nonoptional `routeWidth` value and its existing structural validation. They do not
+infer per-layer widths. `.sourceDefault` requires actual selected source geometry;
+[ProcessGeometry](../ProcessGeometry/DESIGN.md) alone derives each routing layer's
+positive, even, exactly representable LEF WIDTH and validates MINWIDTH/MAXWIDTH and
+source spacing. Technology preparation and ordinary source routing consume that
+same helper. There is no numeric or source-free fallback. Selected SPECIALNET
+mutation with `.sourceDefault` is unsupported; retained SPECIALNETS may coexist
+with ordinary routed nets without their width semantics being changed.
+
+Request schema 8 carries explicit width policies. A schema-7 request is accepted
+only with a nil policy and retains its decoded schema value on re-encoding. An
+explicit `.uniform` is also a new policy and requires schema 8. Unknown enum values
+fail decoding. Direct API entrypoints use the same schema admission. Legacy
+constraints JSON without the optional field decodes to nil. Result, run-manifest
+and snapshot schema versions remain unchanged; provenance records the actual
+per-layer generated conductor widths and full request configuration.
+
+[SourceRoutingWidthPolicyTests](../../../Tests/PhysicalDesignEngineTests/SourceRoutingWidthPolicyTests.swift)
+owns legacy constraints/request round trips, malformed/unknown policy refusal,
+source-free atomic refusal and exact source width selection. RoutingGeometry owns
+actual per-layer route construction; ClockTreeSynthesis owns the retained original
+multi-layer CTS positive fixture and API/CLI saved/reloaded conductor observations.
 
 ## Runtime Flows
 

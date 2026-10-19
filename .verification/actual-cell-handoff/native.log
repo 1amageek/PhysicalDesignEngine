@@ -1,0 +1,642 @@
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version-7EE3F01B468E1A0A.txt
+[4/6] Compiling PhysicalDesignLogicHandoff NativePhysicalLogicConnectivityChecker.swift
+[5/6] Emitting module PhysicalDesignLogicHandoff
+[6/8] Compiling PhysicalLogicHandoffTests PhysicalLogicHandoffTests.swift
+[7/8] Emitting module PhysicalLogicHandoffTests
+[7/9] Write Objects.LinkFileList
+[8/9] Linking PhysicalDesignEnginePackageTests
+Build complete! (3.12s)
+Test Suite 'All tests' started at 2026-10-13 11:02:23.082.
+Test Suite 'All tests' passed at 2026-10-13 11:02:23.083.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+􀟈  Test run started.
+􀄵  Testing Library Version: 6.4 (efd8d65801f569d)
+􀄵  Target Platform: arm64-apple-macosx
+􀟈  Suite "Bounded legal placement" started.
+􀟈  Suite "PhysicalDesignEngine CircuiteFoundation boundary" started.
+􀟈  Suite "Exact native top-port interchange" started.
+􀟈  Suite PhysicalLogicHandoffTests started.
+􀟈  Suite "PhysicalDesignEngine native execution" started.
+􀟈  Suite "Physical-design authority boundary" started.
+􀟈  Suite "Canonical master dimensions" started.
+􀟈  Suite "Physical design CLI process" started.
+􀟈  Suite "Source-bound standard layout export" started.
+􀟈  Suite "Source-bound routing geometry" started.
+􀟈  Suite "Native technology constraints" started.
+􀟈  Suite "Native ECO geometry admission" started.
+􀟈  Test "actual native source-bound placement finds legal occupied-boundary and orientation candidates" started.
+􀟈  Test "legal geometry does not admit timing-driven or production placement" started.
+􀟈  Test "filesystem artifact store refuses a path replacement" started.
+􀟈  Suite "Source-bound passive RC native CTS" started.
+􀟈  Test "bounded placement rejects capacity, caller ceiling, overflow and invalid fixed occupancy without artifacts" started.
+􀟈  Test "actual CLI retains exact source-bound legal placement or explicit caller-budget failure" started.
+􀟈  Suite "Source-qualified finite special-net repair" started.
+􀟈  Test "cancelled native placement publishes no artifacts" started.
+􀟈  Test "producer logical IDs are independent of content identity and storage location" started.
+􀟈  Suite "Exact retained route endpoint geometry" started.
+􀟈  Test "candidate work follows occupied boundaries instead of site count" started.
+􀟈  Test "legacy run manifests are not decoded through compatibility defaults" started.
+􀟈  Test "filesystem artifact batches remove prepared files after a later conflict" started.
+􀟈  Test "artifact stores refuse to overwrite an immutable path" started.
+􀟈  Test "in-memory artifact batches do not expose an earlier write after a later conflict" started.
+􀟈  Test "missing geometry and obstructed exact TOP access do not publish candidates" started.
+􀟈  Test "physical requests expose a stable top-cell identity" started.
+􀟈  Suite "Exact native process geometry projection" started.
+􀟈  Test "native execution conforms directly to the Foundation engine boundary" started.
+􀟈  Test "real source TOP-to-cell routing retains port authority" started.
+􀟈  Test "filesystem artifact store rejects a symlink escape" started.
+􀟈  Test "legacy request schemas are rejected at the native execution boundary" started.
+􀟈  Test "native producer and public exporter retain four real top ports" started.
+􀟈  Test "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test checkedSourceNetlistAdmitsExactPhysicalConnectivityAndRejectsMutations() started.
+􀟈  Test constantNetCannotBecomePhysicalConnectivityWithoutTieInsertion() started.
+􀟈  Test case passing 1 argument scenario → "blockage" to "actual native source-bound placement finds legal occupied-boundary and orientation candidates" started.
+􀟈  Test "opaque GDSII input is blocked until a dedicated decoder is available" started.
+􀟈  Test case passing 1 argument scenario → "orientation" to "actual native source-bound placement finds legal occupied-boundary and orientation candidates" started.
+􀟈  Test case passing 1 argument failure → "capacity" to "bounded placement rejects capacity, caller ceiling, overflow and invalid fixed occupancy without artifacts" started.
+􀟈  Test case passing 1 argument failure → "locked-overlap" to "bounded placement rejects capacity, caller ceiling, overflow and invalid fixed occupancy without artifacts" started.
+􀟈  Test case passing 1 argument failure → "budget" to "bounded placement rejects capacity, caller ceiling, overflow and invalid fixed occupancy without artifacts" started.
+􀟈  Test case passing 1 argument failure → "overflow" to "bounded placement rejects capacity, caller ceiling, overflow and invalid fixed occupancy without artifacts" started.
+􀟈  Test case passing 1 argument scenario → "locked" to "actual native source-bound placement finds legal occupied-boundary and orientation candidates" started.
+􀟈  Test "global to detailed routing preserves layer connections" started.
+􀟈  Test "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test "floorplan emits immutable JSON, DEF and design diff artifacts" started.
+􀟈  Test "snapshot validation reports overflowing row geometry" started.
+􀟈  Test case passing 1 argument failure → "locked-unplaced" to "bounded placement rejects capacity, caller ceiling, overflow and invalid fixed occupancy without artifacts" started.
+􀟈  Test case passing 1 argument intent → .productionImplementation to "legal geometry does not admit timing-driven or production placement" started.
+􀟈  Test "routing fails closed on blockage conflicts" started.
+􀟈  Test "execution intent does not encode flow authority" started.
+􀟈  Test case passing 1 argument exhaustedBudget → true to "actual CLI retains exact source-bound legal placement or explicit caller-budget failure" started.
+􀟈  Test case passing 1 argument intent → .characterizedTiming to "legal geometry does not admit timing-driven or production placement" started.
+􀟈  Test "rejects a design handoff with mismatched provenance input" started.
+􀟈  Test case passing 1 argument exhaustedBudget → false to "actual CLI retains exact source-bound legal placement or explicit caller-budget failure" started.
+􀟈  Test "legacy arbitrary-byte constant clock models are rejected" started.
+􀟈  Test "execution intent only selects physical analysis fidelity" started.
+􀟈  Test "production implementation remains a typed unsupported capability" started.
+􀟈  Test "CTS re-execution replaces family routes, vias and selected layer constraints" started.
+􀟈  Test "CLI reports a blocked engine result with a nonzero exit code" started.
+􀟈  Test "input artifact integrity failure is blocked before mutation" started.
+􀟈  Test "request schema contains execution inputs but no authorization record" started.
+􀟈  Test "fill, redundant-via and hotspot repairs are constrained and proven" started.
+􀟈  Test "retained requests execute through the CLI" started.
+􀟈  Test "invalid invocation exits nonzero" started.
+􀟈  Test "LEF master dimensions are authoritative and exact" started.
+􀟈  Test "DEF parser reports line and section diagnostics" started.
+􀟈  Test "missing and partial DEF dimensions never become fabricated cells" started.
+􀟈  Test "review packet rejects altered embedded manifests" started.
+􀟈  Test "placement emits legal placement proof and avoids blockages" started.
+􀟈  Test "cell relocation invalidates retained route and clock evidence and rejects pin overflow" started.
+􀟈  Test "request and snapshot round trip through deterministic JSON" started.
+􀟈  Test "untrusted store bytes must match actual size and digest" started.
+􀟈  Test "CLI returns a deterministic structured error for invalid options" started.
+􀟈  Test "successful native execution emits observations without release authorization" started.
+􀟈  Test "floorplan persists implementation state for IO, power and routing constraints" started.
+􀟈  Test "all three caller budgets reject atomically" started.
+􀟈  Test "boundary-only source PORT points cannot qualify a width-aware native conductor" started.
+􀟈  Test "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "source substitutions fail before any reads or writes" started.
+􀟈  Test "actual CLI completes exact routed JSON and DEF or exits blocked with no artifacts" started.
+􀟈  Test "review preparation rejects tampered immutable artifacts" started.
+􀟈  Test "DEF input execution records source parser provenance" started.
+􀟈  Test "source vertices are charged for each instance before projection" started.
+􀟈  Test "public export pairs the actual native producer bytes" started.
+􀟈  Test "source geometry and unsupported interchange fail without changing proof state" started.
+􀟈  Test "illegal ECO movement is blocked without an artifact" started.
+􀟈  Test "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "missing" to "missing geometry and obstructed exact TOP access do not publish candidates" started.
+􀟈  Test "retained DEF interchange fixture parses" started.
+􀟈  Test "read failure and cancellation remain typed" started.
+􀟈  Test "non-square floorplans retain tracks on the correct coordinate axis" started.
+􀟈  Test "artifact validation rejects tampered current bytes" started.
+􀟈  Test "ECO preserves qualified unselected geometry and source clearance dominates a lower caller value" started.
+􀟈  Test case passing 1 argument scenario → "obstructed" to "missing geometry and obstructed exact TOP access do not publish candidates" started.
+􀟈  Test "track count does not expand event work and overflow/cancellation stay explicit" started.
+􀟈  Test "artifact validation rejects a stale packet" started.
+􀟈  Test "actual API routes source PORT areas around blockages and OBS with lossless standard geometry" started.
+􀟈  Test "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test "supported DEF round trip preserves interchange structures" started.
+􀟈  Test "stage-specific native wrappers reject incompatible requests" started.
+􀟈  Test "vertical routing checks spacing on its actual layer" started.
+􀟈  Test "repair strategies persist verified proof evidence" started.
+􀟈  Test "master replacement cannot fabricate source-free geometry" started.
+􀟈  Test "review packet round trip validates current artifacts" started.
+􀟈  Test "power planning materializes connected power nets and vias" started.
+􀟈  Test "routing records layer, spacing and antenna evidence" started.
+􀟈  Test "missing canonical state is blocked with a structured diagnostic" started.
+􀟈  Test "flush retained endpoints do not acquire fabricated half-width caps" started.
+􀟈  Test "source-free CTS cannot fabricate buffer dimensions or pins" started.
+􀟈  Test "crossing a retained conductor rejects the same-design candidate without artifacts" started.
+􀟈  Test "all declared native stages execute with their typed prerequisites" started.
+􀟈  Test "retained multilayer DEF keeps each route clause on its own layer" started.
+􀟈  Test "request validation rejects ambiguous timing modes and non-SDC constraints" started.
+􀟈  Test "source-free ECO cannot fabricate a buffer master or pin geometry" started.
+􀟈  Test "cancelled actual API invocation preserves its accepted source snapshot" started.
+􀟈  Test "disjoint constraint changes retain geometry and tree topology while invalidating dependent proof" started.
+􀟈  Test "actual caps and exact contact metal respect shared native layer applicability" started.
+􀟈  Test "missing facts and explicit work ceilings cannot publish an ECO success" started.
+􀟈  Test "changed routing invalidates old repair evidence, stable geometry retains it" started.
+􀟈  Test "actual buffer cell characterization composes explicit PWL with distributed RC" started.
+􀟈  Test "actual API routes and measures both clock edges without asserting physical signoff" started.
+􀟈  Test "source DBU mesh span preserves physical resolution after conductive pin capture" started.
+􀟈  Test "unequal physical sink paths produce measured nonzero rise and fall skew" started.
+􀟈  Test "source-declared distinct thresholds retain signed crossing latency" started.
+􀟈  Test "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test "pre-cancelled native CTS never publishes artifacts" started.
+􀟈  Test case passing 1 argument orientation → .n to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test case passing 1 argument orientation → .s to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test "placement cannot discard fixed special wires and buffer insertion cannot split original identity" started.
+􀟈  Test case passing 1 argument orientation → .e to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test "cancelled special routing publishes no candidate" started.
+􀟈  Test case passing 1 argument orientation → .w to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test "four original SPECIALNETS survive cell movement and explicit-width native rerouting" started.
+􀟈  Test "actual CLI emits four SPECIALNETS or refuses the finite caller budget" started.
+􀟈  Test case passing 1 argument orientation → .fn to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test case passing 1 argument orientation → .fs to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test case passing 1 argument orientation → .fe to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test case passing 1 argument orientation → .fw to "all source poses and odd DBU rectangles remain exact" started.
+􀟈  Test case passing 1 argument scenario → "missing-use" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test "ordered signed extensions define exact horizontal and vertical footprints" started.
+􀟈  Test case passing 1 argument scenario → "missing-direction" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test case passing 1 argument scenario → "missing-layer" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test case passing 1 argument scenario → "duplicate-layer" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test case passing 1 argument scenario → "mask" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test "public native producer retains special flush routes and declared status/use/shape" started.
+􀟈  Test case passing 1 argument scenario → "polygon" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test "unsupported route meaning and negative DEF caps cannot publish" started.
+􀟈  Test "public source-bound export refuses width-only unqualified caps" started.
+􀟈  Test case passing 1 argument scenario → "zero" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test case passing 1 argument scenario → "overflow" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test case passing 1 argument scenario → "net" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test case passing 1 argument scenario → "unplaced" to "unsupported source geometry and contradictory port semantics reject atomically" started.
+􀟈  Test case passing 1 argument name → "positive-floorplan-request" to "retained requests execute through the CLI" started.
+􀟈  Test case passing 1 argument name → "positive-technology-floorplan-request" to "retained requests execute through the CLI" started.
+􀟈  Test case passing 1 argument scenario → "valid" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument name → "negative-missing-snapshot-request" to "retained requests execute through the CLI" started.
+􀟈  Test case passing 1 argument scenario → "missing-master" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument name → "negative-native-production-request" to "retained requests execute through the CLI" started.
+􀟈  Test case passing 1 argument extensionText → "" to "missing and partial DEF dimensions never become fabricated cells" started.
+􀟈  Test case passing 1 argument scenario → "duplicate" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument extensionText → "+ PROPERTY XCI_CELL_WIDTH 2000" to "missing and partial DEF dimensions never become fabricated cells" started.
+􀟈  Test case passing 1 argument scenario → "missing-size" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "eco" to "cell relocation invalidates retained route and clock evidence and rejects pin overflow" started.
+􀟈  Test case passing 1 argument scenario → "off-grid" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "placement" to "cell relocation invalidates retained route and clock evidence and rejects pin overflow" started.
+􀟈  Test case passing 1 argument scenario → "nonfinite" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "unchanged" to "cell relocation invalidates retained route and clock evidence and rejects pin overflow" started.
+􀟈  Test case passing 1 argument scenario → "negative" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "overflow" to "cell relocation invalidates retained route and clock evidence and rejects pin overflow" started.
+􀟈  Test case passing 1 argument scenario → "mismatch" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "duplicate-dimension" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "missing-units" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "explicit-smoke" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument scenario → "valid" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "source-bound DEF resolves named layers and declared clock use without name inference" started.
+􀟈  Test case passing 1 argument scenario → "cell-view" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "unsupported-orientation" to "LEF master dimensions are authoritative and exact" started.
+􀟈  Test case passing 1 argument exhausted → false to "actual CLI completes exact routed JSON and DEF or exits blocked with no artifacts" started.
+􀟈  Test case passing 1 argument scenario → "wrong-role" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "fixed via export preserves declared geometry and rejects unqualified conductor widths" started.
+􀟈  Test case passing 1 argument exhausted → true to "actual CLI completes exact routed JSON and DEF or exits blocked with no artifacts" started.
+􀟈  Test case passing 1 argument scenario → "explicit-identical-assets" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "missing-pitch" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "missing-offset" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "wrong-process" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "wrong-asset-digest" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "source-bound geometry preserves origin and all standard orientations" started.
+􀟈  Test case passing 1 argument scenario → "unmapped" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "ambiguous-layer" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "off-dbu" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "double-pitch" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "double-offset" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "vertical-grid" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "wrong-asset-id" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "budget" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "undeclared-source" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "width" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test "PORT VIA expands the exact fixed stack" started.
+􀟈  Test case passing 1 argument scenario → "qualified-spacing" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "retained-width" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "spacing-table" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "retained-offcore" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "insufficient-width" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "insufficient-spacing" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "conflicting-tracks" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "retained-direction" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "no-path" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "invalid-encoding" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument tall → true to "non-square floorplans retain tracks on the correct coordinate axis" started.
+􀟈  Test case passing 1 argument scenario → "no-default-via" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "wrong-version" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument tall → false to "non-square floorplans retain tracks on the correct coordinate axis" started.
+􀟈  Test case passing 1 argument scenario → "ambiguous-default-via" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "wrong-manifest-digest" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "offset-via" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "wrong-asset-size" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "cut-obs" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "empty-lef" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "port-cut-spacing" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "nonfinite" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "power-net" to "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" started.
+􀟈  Test case passing 1 argument scenario → "missing-direction" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "malformed-lef" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "tiny-core" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "aligned-explicit" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "shared-layer" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 1 argument scenario → "missing-provenance" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument scenario → "invalid-default-width" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "aligned" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "reversed-parity" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 1 argument scenario → "unit-precision" to "technology LEF is bound to the PDK and drives retained tracks" started.
+􀟈  Test "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "last-track" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "even-layers" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "missing-vertical" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "excluded-horizontal" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "above-maximum" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 1 argument sameLayer → true to "vertical routing checks spacing on its actual layer" started.
+􀟈  Test "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument sameLayer → false to "vertical routing checks spacing on its actual layer" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "reversed-parity" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "off-phase" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "even-layers" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "missing-vertical" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test "source routing layer admission rejects cut and unknown layers" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "excluded-horizontal" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test "inserted buffers use exact source dimensions ports and sites" started.
+􀟈  Test "site equivalence and macro candidates enforce the standard flipped-row combinations" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "above-maximum" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "reversed-parity" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "even-layers" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "before-origin" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "missing-vertical" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test "native DEF intake resolves standard site and reflected master geometry" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "excluded-horizontal" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "past-count" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .globalRouting, scenario → "overflow-offset" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "above-maximum" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "reversed-parity" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "aligned" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test "named non-default vias retain identity and footprint bounds govern redundant candidates" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "last-track" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "even-layers" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test "native floorplan placement and resume retain exact cell and pin sources" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "off-phase" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "missing-vertical" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "before-origin" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "excluded-horizontal" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test "via spacing uses cut edges and antenna cannot invent source feedback" started.
+􀟈  Test case passing 1 argument scenario → "width" to "missing facts and explicit work ceilings cannot publish an ECO success" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "past-count" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument scenario → "budget" to "missing facts and explicit work ceilings cannot publish an ECO success" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "above-maximum" to "explicit tracks govern signal routing, ECO and CTS without parity fallback" started.
+􀟈  Test case passing 1 argument scenario → "core" to "missing facts and explicit work ceilings cannot publish an ECO success" started.
+􀟈  Test case passing 2 arguments stage → .detailedRouting, scenario → "overflow-offset" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument scenario → "via" to "missing facts and explicit work ceilings cannot publish an ECO success" started.
+􀟈  Test "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "retained-conflict" to "missing facts and explicit work ceilings cannot publish an ECO success" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "aligned" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "last-track" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "off-phase" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument span → 500 to "source DBU mesh span preserves physical resolution after conductive pin capture" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "before-origin" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument span → 1073741823 to "source DBU mesh span preserves physical resolution after conductive pin capture" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "past-count" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .timingECO, scenario → "overflow-offset" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "aligned" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "last-track" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "off-phase" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument reason → "corner" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "before-origin" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument reason → "waveform" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "past-count" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument reason → "clock" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 1 argument reason → "electrode" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 1 argument reason → "limits" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 2 arguments stage → .clockTreeSynthesis, scenario → "overflow-offset" to "declared grids bound signal, ECO and clock segment coordinates" started.
+􀟈  Test case passing 1 argument reason → "spanOverflow" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 1 argument reason → "constraints" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 1 argument reason → "missing" to "bad source, clock model, constraint and resource inputs publish no candidate" started.
+􀟈  Test case passing 1 argument scenario → "fixed" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "cover" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "shape" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "implicit-width" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "fixed" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "missing-width" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "cover" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "different-width" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "via" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "shape" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􁁛  Test "artifact stores refuse to overwrite an immutable path" passed after 0.065 seconds.
+􀟈  Test case passing 1 argument scenario → "different-layer" to "protected special routing facts cannot disappear through cell invalidation" started.
+􀟈  Test case passing 1 argument scenario → "implicit-width" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "missing-width" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "different-width" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "via" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "different-layer" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "no-path" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "budget" to "special routing rejects protected metadata unavailable paths and caller limits atomically" started.
+􀟈  Test case passing 1 argument scenario → "placement" to "placement cannot discard fixed special wires and buffer insertion cannot split original identity" started.
+􀟈  Test case passing 1 argument scenario → "split" to "placement cannot discard fixed special wires and buffer insertion cannot split original identity" started.
+􁁛  Test "in-memory artifact batches do not expose an earlier write after a later conflict" passed after 0.065 seconds.
+􁁛  Test "producer logical IDs are independent of content identity and storage location" passed after 0.065 seconds.
+􀟈  Test case passing 1 argument exhausted → false to "actual CLI emits four SPECIALNETS or refuses the finite caller budget" started.
+􁁛  Test "physical requests expose a stable top-cell identity" passed after 0.065 seconds.
+􀟈  Test case passing 1 argument exhausted → true to "actual CLI emits four SPECIALNETS or refuses the finite caller budget" started.
+􁁛  Test "filesystem artifact store rejects a symlink escape" passed after 0.065 seconds.
+􁁛  Test "opaque GDSII input is blocked until a dedicated decoder is available" passed after 0.067 seconds.
+􁁛  Test "legacy request schemas are rejected at the native execution boundary" passed after 0.067 seconds.
+􁁛  Test "filesystem artifact store refuses a path replacement" passed after 0.068 seconds.
+􁁛  Test "snapshot validation reports overflowing row geometry" passed after 0.067 seconds.
+􀟈  Test case passing 1 argument kind → "flush" to "ordered signed extensions define exact horizontal and vertical footprints" started.
+􀟈  Test case passing 1 argument kind → "half" to "ordered signed extensions define exact horizontal and vertical footprints" started.
+􀟈  Test case passing 1 argument kind → "custom" to "ordered signed extensions define exact horizontal and vertical footprints" started.
+􀟈  Test case passing 1 argument kind → "reverse" to "ordered signed extensions define exact horizontal and vertical footprints" started.
+􀟈  Test case passing 1 argument kind → "vertical" to "ordered signed extensions define exact horizontal and vertical footprints" started.
+􀟈  Test case passing 1 argument kind → "reverse-vertical" to "ordered signed extensions define exact horizontal and vertical footprints" started.
+􀟈  Test case passing 1 argument kind → "negative" to "ordered signed extensions define exact horizontal and vertical footprints" started.
+􁁛  Test "filesystem artifact batches remove prepared files after a later conflict" passed after 0.068 seconds.
+􁁛  Test "global to detailed routing preserves layer connections" passed after 0.069 seconds.
+􀟈  Test case passing 1 argument kind → "missing" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "width" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "odd" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "zero" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "diagonal" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "overflow" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "collapsed" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "begin-retraction" to "invalid footprint qualification rejects without arithmetic traps" started.
+􀟈  Test case passing 1 argument kind → "end-retraction" to "invalid footprint qualification rejects without arithmetic traps" started.
+􁁛  Test "execution intent does not encode flow authority" passed after 0.069 seconds.
+􁁛  Test "rejects a design handoff with mismatched provenance input" passed after 0.069 seconds.
+􀟈  Test case passing 1 argument status → .routed to "public native producer retains special flush routes and declared status/use/shape" started.
+􀟈  Test case passing 1 argument status → .fixed to "public native producer retains special flush routes and declared status/use/shape" started.
+􀟈  Test case passing 1 argument kind → "class" to "unsupported route meaning and negative DEF caps cannot publish" started.
+􀟈  Test case passing 1 argument status → .cover to "public native producer retains special flush routes and declared status/use/shape" started.
+􀟈  Test case passing 1 argument kind → "status" to "unsupported route meaning and negative DEF caps cannot publish" started.
+􀟈  Test case passing 1 argument kind → "new" to "unsupported route meaning and negative DEF caps cannot publish" started.
+􀟈  Test case passing 1 argument kind → "noshield" to "unsupported route meaning and negative DEF caps cannot publish" started.
+􀟈  Test case passing 1 argument kind → "shape" to "unsupported route meaning and negative DEF caps cannot publish" started.
+􀟈  Test case passing 1 argument kind → "negative" to "unsupported route meaning and negative DEF caps cannot publish" started.
+􁁛  Test "routing fails closed on blockage conflicts" passed after 0.070 seconds.
+􁁛  Test "production implementation remains a typed unsupported capability" passed after 0.071 seconds.
+􁁛  Test "execution intent only selects physical analysis fidelity" passed after 0.071 seconds.
+􁁛  Test "legacy arbitrary-byte constant clock models are rejected" passed after 0.071 seconds.
+􁁛  Test "input artifact integrity failure is blocked before mutation" passed after 0.071 seconds.
+􁁛  Test "native execution conforms directly to the Foundation engine boundary" passed after 0.072 seconds.
+􁁛  Test "request schema contains execution inputs but no authorization record" passed after 0.071 seconds.
+􁁛  Test "CLI reports a blocked engine result with a nonzero exit code" passed after 0.071 seconds.
+􁁛  Test "legacy run manifests are not decoded through compatibility defaults" passed after 0.072 seconds.
+􁁛  Test "DEF parser reports line and section diagnostics" passed after 0.071 seconds.
+􁁛  Test "LEF master dimensions are authoritative and exact" with 12 test cases passed after 0.071 seconds.
+􁁛  Test "missing and partial DEF dimensions never become fabricated cells" with 2 test cases passed after 0.071 seconds.
+􁁛  Test "cell relocation invalidates retained route and clock evidence and rejects pin overflow" with 4 test cases passed after 0.071 seconds.
+􁁛  Test "CLI returns a deterministic structured error for invalid options" passed after 0.071 seconds.
+􁁛  Test "floorplan emits immutable JSON, DEF and design diff artifacts" passed after 0.071 seconds.
+􁁛  Test "request and snapshot round trip through deterministic JSON" passed after 0.071 seconds.
+􁁛  Test "placement emits legal placement proof and avoids blockages" passed after 0.074 seconds.
+􁁛  Test "technology LEF is bound to the PDK and drives retained tracks" with 35 test cases passed after 0.074 seconds.
+􁁛  Test "CTS re-execution replaces family routes, vias and selected layer constraints" passed after 0.078 seconds.
+􁁛  Test "successful native execution emits observations without release authorization" passed after 0.078 seconds.
+􀟈  Test case passing 1 argument scenario → "cut-width" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "cut-spacing" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "cut-overlap" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "uncovered-cut" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "enclosure" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "isotropic-enclosure" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "asymmetric-enclosure" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "asymmetric-enclosure-rotated" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "concave-enclosure" to "fixed source contact rules reject invalid geometry" started.
+􀟈  Test case passing 1 argument scenario → "offgrid-cut-rule" to "fixed source contact rules reject invalid geometry" started.
+􁁛  Test "illegal ECO movement is blocked without an artifact" passed after 0.087 seconds.
+􁁛  Test "fill, redundant-via and hotspot repairs are constrained and proven" passed after 0.087 seconds.
+􁁛  Test "floorplan persists implementation state for IO, power and routing constraints" passed after 0.087 seconds.
+􁁛  Test "review packet rejects altered embedded manifests" passed after 0.087 seconds.
+􁁛  Test "DEF input execution records source parser provenance" passed after 0.087 seconds.
+􀟈  Test case passing 1 argument scenario → "missing-version" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "version-loss" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "missing-units" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "malformed-units" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "late-units" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "duplicate-design" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "die-overflow" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "missing-site" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "row-array" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "site-step" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "row-overflow" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "row-union-overflow" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "unknown-master" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "unknown-pin" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "bad-orientation" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "cover" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "component-attribute" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "unknown-header" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "net-power" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "duplicate-connection" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "route" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "top-ports" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "special-nets" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "routing-blockage" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "bad-track" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "multiple-track-layers" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "missing-end" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􀟈  Test case passing 1 argument scenario → "trailing-input" to "source-bound DEF rejects semantic loss and unresolved physical references" started.
+􁁛  Test "review preparation rejects tampered immutable artifacts" passed after 0.096 seconds.
+􁁛  Test "retained DEF interchange fixture parses" passed after 0.096 seconds.
+􀟈  Test case passing 1 argument scenario → "valid" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "same-master" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "ports" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "direction" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "use" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "height" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "symmetry" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "missing-name" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "unknown" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "locked" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument scenario → "collision" to "explicit replacement adopts exact source SIZE and reconstructs connected ports" started.
+􀟈  Test case passing 1 argument orientation → .n to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument orientation → .s to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument orientation → .e to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument orientation → .w to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument orientation → .fn to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument orientation → .fs to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument orientation → .fe to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􀟈  Test case passing 1 argument orientation → .fw to "DEF retains each oriented source size instead of unrotated master dimensions" started.
+􁁛  Test "non-square floorplans retain tracks on the correct coordinate axis" with 2 test cases passed after 0.212 seconds.
+􀟈  Test case passing 1 argument scenario → "routing" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "clock" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "eco" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "power" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "source-access" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "vertical-access" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "no-default-via" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "ambiguous-default-via" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "offset-via" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "clock-no-default" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􀟈  Test case passing 1 argument scenario → "clock-ambiguous" to "routing rejects narrow access and source CTS requires characterization before construction" started.
+􁁛  Test "declared grids bound signal, ECO and clock segment coordinates" with 24 test cases passed after 0.272 seconds.
+􁁛  Test "explicit tracks govern signal routing, ECO and CTS without parity fallback" with 20 test cases passed after 0.272 seconds.
+􁁛  Test "stage-specific native wrappers reject incompatible requests" passed after 0.272 seconds.
+􁁛  Test "artifact validation rejects tampered current bytes" passed after 0.272 seconds.
+􁁛  Test "supported DEF round trip preserves interchange structures" passed after 0.272 seconds.
+􁁛  Test "artifact validation rejects a stale packet" passed after 0.272 seconds.
+􀟈  Test case passing 1 argument scenario → "unmapped-master" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "unmapped-layer" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "ambiguous-layer" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "missing-site" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "duplicate-site" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "duplicate-master" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "duplicate-pin" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "missing-pin-port" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "sub-dbu" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "sub-dbu-origin" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "shape-range" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "zero-rectangle" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "diagonal-polygon" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "crossing-polygon" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "empty-via-layer" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "wrong-cut-layer" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "wrong-lef-cut-type" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "missing-port-via" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "generated-via" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "mask" to "invalid process geometry never becomes a projected catalogue" started.
+􀟈  Test case passing 1 argument scenario → "bad-resistance" to "invalid process geometry never becomes a projected catalogue" started.
+􁁛  Test "vertical routing checks spacing on its actual layer" with 2 test cases passed after 0.280 seconds.
+􁁛  Test "repair strategies persist verified proof evidence" passed after 0.280 seconds.
+􀟈  Test case passing 1 argument kind → "route" to "source routing layer admission rejects cut and unknown layers" started.
+􀟈  Test case passing 1 argument kind → "power" to "source routing layer admission rejects cut and unknown layers" started.
+􀟈  Test case passing 1 argument kind → "fill" to "source routing layer admission rejects cut and unknown layers" started.
+􀟈  Test case passing 1 argument kind → "track" to "source routing layer admission rejects cut and unknown layers" started.
+􀟈  Test case passing 1 argument kind → "clock-constraint" to "source routing layer admission rejects cut and unknown layers" started.
+􀟈  Test case passing 1 argument kind → "pin" to "source routing layer admission rejects cut and unknown layers" started.
+􁁛  Test "master replacement cannot fabricate source-free geometry" passed after 0.283 seconds.
+􀟈  Test case passing 1 argument scenario → "eco" to "inserted buffers use exact source dimensions ports and sites" started.
+􀟈  Test case passing 1 argument scenario → "clock" to "inserted buffers use exact source dimensions ports and sites" started.
+􀟈  Test case passing 1 argument scenario → "buffer-interface" to "inserted buffers use exact source dimensions ports and sites" started.
+􀟈  Test case passing 1 argument scenario → "buffer-site" to "inserted buffers use exact source dimensions ports and sites" started.
+􀟈  Test case passing 1 argument scenario → "buffer-height" to "inserted buffers use exact source dimensions ports and sites" started.
+􀟈  Test case passing 1 argument scenario → "missing" to "inserted buffers use exact source dimensions ports and sites" started.
+􀟈  Test case passing 1 argument scenario → "blocked" to "inserted buffers use exact source dimensions ports and sites" started.
+􁁛  Test "missing canonical state is blocked with a structured diagnostic" passed after 0.289 seconds.
+􁁛  Test "flush retained endpoints do not acquire fabricated half-width caps" passed after 0.289 seconds.
+􁁛  Test "source-free CTS cannot fabricate buffer dimensions or pins" passed after 0.289 seconds.
+􁁛  Test "routing records layer, spacing and antenna evidence" passed after 0.289 seconds.
+􁁛  Test "request validation rejects ambiguous timing modes and non-SDC constraints" passed after 0.289 seconds.
+􁁛  Test "source-free ECO cannot fabricate a buffer master or pin geometry" passed after 0.289 seconds.
+􁁛  Test "retained multilayer DEF keeps each route clause on its own layer" passed after 0.292 seconds.
+􁁛  Test "power planning materializes connected power nets and vias" passed after 0.292 seconds.
+􀟈  Test case passing 1 argument scenario → "width" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "orientation-size" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "missing-layer" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "wrong-layer" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "direction" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "pin-outside" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "missing-site" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "site-size" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "off-site" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "missing-via" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "via-layers" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "via-footprint" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+􀟈  Test case passing 1 argument scenario → "coordinate-overflow" to "contradictory canonical geometry cannot enter or leave process-bound mutation" started.
+CTS source mesh span: sourceDBU=500; sourceScale=1000; captureDBU=1000; captureScale=2000.0
+CTS source mesh span: sourceDBU=1073741823; sourceScale=1000; captureDBU=2147483646; captureScale=2000.0
+􁁛  Test "review packet round trip validates current artifacts" passed after 0.900 seconds.
+􁁛  Test "source-bound DEF resolves named layers and declared clock use without name inference" passed after 0.975 seconds.
+􁁛  Test "source-bound geometry preserves origin and all standard orientations" passed after 0.972 seconds.
+􁁛  Test "all declared native stages execute with their typed prerequisites" passed after 1.001 seconds.
+􁁛  Test "fixed via export preserves declared geometry and rejects unqualified conductor widths" passed after 0.974 seconds.
+􁁛  Test "fixed source contact rules reject invalid geometry" with 10 test cases passed after 0.972 seconds.
+􁁛  Test "PORT VIA expands the exact fixed stack" passed after 0.969 seconds.
+􁁛  Test "source-bound DEF rejects semantic loss and unresolved physical references" with 28 test cases passed after 0.968 seconds.
+􁁛  Test "explicit replacement adopts exact source SIZE and reconstructs connected ports" with 11 test cases passed after 0.966 seconds.
+􁁛  Test "DEF retains each oriented source size instead of unrotated master dimensions" with 8 test cases passed after 0.962 seconds.
+􁁛  Test "routing rejects narrow access and source CTS requires characterization before construction" with 11 test cases passed after 0.958 seconds.
+􁁛  Test "invalid process geometry never becomes a projected catalogue" with 21 test cases passed after 0.957 seconds.
+􁁛  Test "source routing layer admission rejects cut and unknown layers" with 6 test cases passed after 0.953 seconds.
+􁁛  Test "site equivalence and macro candidates enforce the standard flipped-row combinations" passed after 0.953 seconds.
+􁁛  Test "inserted buffers use exact source dimensions ports and sites" with 7 test cases passed after 0.953 seconds.
+􁁛  Test "named non-default vias retain identity and footprint bounds govern redundant candidates" passed after 0.948 seconds.
+􁁛  Test "native DEF intake resolves standard site and reflected master geometry" passed after 0.951 seconds.
+􁁛  Test "via spacing uses cut edges and antenna cannot invent source feedback" passed after 0.945 seconds.
+􁁛  Test "native floorplan placement and resume retain exact cell and pin sources" passed after 0.945 seconds.
+􁁛  Test "contradictory canonical geometry cannot enter or leave process-bound mutation" with 13 test cases passed after 0.945 seconds.
+􁁛  Test "invalid invocation exits nonzero" passed after 1.003 seconds.
+􁁛  Test "retained requests execute through the CLI" with 4 test cases passed after 1.003 seconds.
+􁁛  Suite "PhysicalDesignEngine CircuiteFoundation boundary" passed after 1.004 seconds.
+􁁛  Suite "Physical-design authority boundary" passed after 1.004 seconds.
+􁁛  Suite "Canonical master dimensions" passed after 1.004 seconds.
+􁁛  Suite "Native technology constraints" passed after 1.004 seconds.
+􁁛  Test "legal geometry does not admit timing-driven or production placement" with 2 test cases passed after 1.005 seconds.
+􁁛  Test "bounded placement rejects capacity, caller ceiling, overflow and invalid fixed occupancy without artifacts" with 5 test cases passed after 1.005 seconds.
+􁁛  Test "actual native source-bound placement finds legal occupied-boundary and orientation candidates" with 3 test cases passed after 1.005 seconds.
+􁁛  Suite "Exact native process geometry projection" passed after 1.005 seconds.
+􁁛  Suite "PhysicalDesignEngine native execution" passed after 1.006 seconds.
+􁁛  Test "candidate work follows occupied boundaries instead of site count" passed after 1.006 seconds.
+􁁛  Test "missing geometry and obstructed exact TOP access do not publish candidates" with 2 test cases passed after 1.006 seconds.
+􁁛  Test "native producer and public exporter retain four real top ports" passed after 1.007 seconds.
+􁁛  Suite "Physical design CLI process" passed after 1.007 seconds.
+􁁛  Test "unsupported source geometry and contradictory port semantics reject atomically" with 10 test cases passed after 1.008 seconds.
+􁁛  Test "untrusted store bytes must match actual size and digest" passed after 1.008 seconds.
+􁁛  Test "source substitutions fail before any reads or writes" passed after 1.008 seconds.
+􁁛  Test "all three caller budgets reject atomically" passed after 1.008 seconds.
+􁁛  Test "source vertices are charged for each instance before projection" passed after 1.008 seconds.
+􁁛  Test "public export pairs the actual native producer bytes" passed after 1.008 seconds.
+􁁛  Test constantNetCannotBecomePhysicalConnectivityWithoutTieInsertion() passed after 1.008 seconds.
+􁁛  Test "source geometry and unsupported interchange fail without changing proof state" passed after 1.008 seconds.
+􁁛  Test "boundary-only source PORT points cannot qualify a width-aware native conductor" passed after 1.008 seconds.
+􁁛  Test "real source TOP-to-cell routing retains port authority" passed after 1.008 seconds.
+􁁛  Test checkedSourceNetlistAdmitsExactPhysicalConnectivityAndRejectsMutations() passed after 1.008 seconds.
+􁁛  Test "crossing a retained conductor rejects the same-design candidate without artifacts" passed after 1.008 seconds.
+􁁛  Test "disjoint constraint changes retain geometry and tree topology while invalidating dependent proof" passed after 1.008 seconds.
+􁁛  Test "actual caps and exact contact metal respect shared native layer applicability" passed after 1.008 seconds.
+􁁛  Test "missing facts and explicit work ceilings cannot publish an ECO success" with 5 test cases passed after 1.008 seconds.
+􁁛  Test "source DBU mesh span preserves physical resolution after conductive pin capture" with 2 test cases passed after 1.008 seconds.
+􁁛  Test "changed routing invalidates old repair evidence, stable geometry retains it" passed after 1.008 seconds.
+􁁛  Test "protected special routing facts cannot disappear through cell invalidation" with 8 test cases passed after 1.007 seconds.
+􁁛  Test "placement cannot discard fixed special wires and buffer insertion cannot split original identity" with 2 test cases passed after 1.007 seconds.
+􁁛  Test "ordered signed extensions define exact horizontal and vertical footprints" with 7 test cases passed after 1.005 seconds.
+􁁛  Test "invalid footprint qualification rejects without arithmetic traps" with 9 test cases passed after 0.996 seconds.
+􁁛  Test "cancelled native placement publishes no artifacts" passed after 1.009 seconds.
+􁁛  Test "public native producer retains special flush routes and declared status/use/shape" with 3 test cases passed after 0.993 seconds.
+􁁛  Test "unsupported route meaning and negative DEF caps cannot publish" with 6 test cases passed after 0.993 seconds.
+􁁛  Test "public source-bound export refuses width-only unqualified caps" passed after 0.993 seconds.
+􁁛  Suite PhysicalLogicHandoffTests passed after 1.009 seconds.
+􁁛  Test "read failure and cancellation remain typed" passed after 1.008 seconds.
+􁁛  Test "cancelled actual API invocation preserves its accepted source snapshot" passed after 1.008 seconds.
+􁁛  Test "cancelled special routing publishes no candidate" passed after 1.007 seconds.
+􁁛  Suite "Exact retained route endpoint geometry" passed after 1.009 seconds.
+􁁛  Test "pre-cancelled native CTS never publishes artifacts" passed after 1.008 seconds.
+􁁛  Test "actual CLI retains exact source-bound legal placement or explicit caller-budget failure" with 2 test cases passed after 1.009 seconds.
+􁁛  Suite "Source-bound standard layout export" passed after 1.009 seconds.
+􁁛  Suite "Native ECO geometry admission" passed after 1.009 seconds.
+􁁛  Suite "Bounded legal placement" passed after 1.009 seconds.
+􁁛  Test "all source poses and odd DBU rectangles remain exact" with 8 test cases passed after 1.010 seconds.
+􁁛  Suite "Exact native top-port interchange" passed after 1.010 seconds.
+􁁛  Test "source router rejects missing semantics, unavailable paths and lower caller budgets atomically" with 12 test cases passed after 1.009 seconds.
+􁁛  Test "special routing rejects protected metadata unavailable paths and caller limits atomically" with 10 test cases passed after 1.083 seconds.
+􁁛  Test "actual CLI emits four SPECIALNETS or refuses the finite caller budget" with 2 test cases passed after 1.338 seconds.
+􁁛  Test "actual CLI completes exact routed JSON and DEF or exits blocked with no artifacts" with 2 test cases passed after 1.417 seconds.
+􁁛  Test "four original SPECIALNETS survive cell movement and explicit-width native rerouting" passed after 1.610 seconds.
+􁁛  Suite "Source-qualified finite special-net repair" passed after 1.612 seconds.
+􁁛  Test "track count does not expand event work and overflow/cancellation stay explicit" passed after 2.216 seconds.
+􁁛  Test "actual API routes source PORT areas around blockages and OBS with lossless standard geometry" passed after 3.042 seconds.
+􁁛  Test "ECO preserves qualified unselected geometry and source clearance dominates a lower caller value" passed after 3.561 seconds.
+􁁛  Suite "Source-bound routing geometry" passed after 3.562 seconds.
+􁁛  Test "source-declared distinct thresholds retain signed crossing latency" passed after 4.857 seconds.
+CTS actual direct elapsed: 4.639624208999999 seconds; latencyPS=187.4294765369561; savedScalars=270203
+􁁛  Test "actual API routes and measures both clock edges without asserting physical signoff" passed after 4.961 seconds.
+􁁛  Test "bad source, clock model, constraint and resource inputs pubwarning: '--build-system native' has been deprecated and will be removed in a future release; please report an issue at https://github.com/swiftlang/swift-package-manager/issues if you are unable to adopt the default build system.
+lish no candidate" with 8 test cases passed after 5.101 seconds.
+CTS actual fanout elapsed: 6.074372166 seconds; skewPS=309.5507920191287; mesh=96; statistics=[CoreSpiceAnalysis.TransientExecutionStatistics(acceptedSteps: 1150, rejectedSteps: 16, solveAttempts: 1166, newtonIterations: 2332, savedScalars: 107043, workUnits: 1821422592, matrixDimension: 92), CoreSpiceAnalysis.TransientExecutionStatistics(acceptedSteps: 1710, rejectedSteps: 16, solveAttempts: 1726, newtonIterations: 3452, savedScalars: 159123, workUnits: 2696205312, matrixDimension: 92), CoreSpiceAnalysis.TransientExecutionStatistics(acceptedSteps: 1056, rejectedSteps: 17, solveAttempts: 1073, newtonIterations: 2146, savedScalars: 98301, workUnits: 1676146176, matrixDimension: 92), CoreSpiceAnalysis.TransientExecutionStatistics(acceptedSteps: 1134, rejectedSteps: 15, solveAttempts: 1149, newtonIterations: 2298, savedScalars: 105555, workUnits: 1794866688, matrixDimension: 92)]
+􁁛  Test "unequal physical sink paths produce measured nonzero rise and fall skew" passed after 6.451 seconds.
+􁁛  Test "actual buffer cell characterization composes explicit PWL with distributed RC" passed after 6.625 seconds.
+􁁛  Suite "Source-bound passive RC native CTS" passed after 6.626 seconds.
+􁁛  Test run with 130 tests in 16 suites passed after 6.627 seconds.

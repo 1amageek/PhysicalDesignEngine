@@ -5,7 +5,7 @@ import DEF
 
 public struct PhysicalDesignDEFParser: Sendable {
     public static let parserID = "physical-design-def-parser"
-    public static let parserVersion = "3.0.0"
+    public static let parserVersion = "3.1.0"
 
     public init() {}
 
@@ -51,10 +51,13 @@ public struct PhysicalDesignDEFParser: Sendable {
         private var pads: [PhysicalDesignImplementationState.Pad] = []
         private var nets: [PhysicalDesignSnapshot.Net] = []
         private var blockages: [PhysicalDesignSnapshot.Rect] = []
+        private var fills: [PhysicalDesignSnapshot.Fill] = []
         private var powerStructures: [PhysicalDesignSnapshot.PowerStructure] = []
         private var routes: [PhysicalDesignSnapshot.Route] = []
         private var pinIndexByKey: [String: Int] = [:]
         private var topPinNameToID: [String: String] = [:]
+        private var hasPropertyDefinitions = false
+        private var dimensionDeclarations: Set<String> = []
         private var hasUnits = false
         private var hasVersion = false
         private var hasDesign = false
@@ -80,12 +83,16 @@ public struct PhysicalDesignDEFParser: Sendable {
                     parseRow(token)
                 case "TRACKS":
                     parseTrack(token)
+                case "PROPERTYDEFINITIONS":
+                    parsePropertyDefinitions(token)
                 case "COMPONENTS":
                     parseComponents(token)
                 case "PINS":
                     parsePins(token)
                 case "NETS":
                     parseNets(token)
+                case "FILLS":
+                    parseFills(token)
                 case "BLOCKAGES":
                     parseBlockages(token)
                 case "SPECIALNETS":
@@ -169,6 +176,7 @@ public struct PhysicalDesignDEFParser: Sendable {
                 },
                 powerStructures: powerStructures.sorted { $0.id < $1.id },
                 routes: routes.sorted { $0.id < $1.id },
+                fills: fills,
                 implementationState: implementationState(),
                 processManifest: processGeometry?.manifestReference,
                 processAssets: processGeometry?.sources ?? [:]
@@ -228,6 +236,63 @@ public struct PhysicalDesignDEFParser: Sendable {
                 )
             }
             return statement
+        }
+
+        private mutating func parsePropertyDefinitions(_ sectionToken: PhysicalDesignDEFToken) {
+            let section = "PROPERTYDEFINITIONS"
+            if hasPropertyDefinitions {
+                addDiagnostic(severity: .error, code: "def_property_definitions_repeated",
+                    message: "DEF dimension property declarations require a single section.",
+                    token: sectionToken, section: section, suggestedActions: ["keep_one_property_definitions_section"])
+            }
+            hasPropertyDefinitions = true
+            while !isAtEnd {
+                if peek()?.text.uppercased() == "END" {
+                    consumeEndSection(named: section)
+                    return
+                }
+                let start = consume()
+                var declaration = [start]
+                while let token = peek(), token.text != ";", token.text.uppercased() != "END" {
+                    declaration.append(consume())
+                }
+                guard peek()?.text == ";" else {
+                    addDiagnostic(severity: .error, code: "def_property_definition_terminator_missing",
+                        message: "A DEF property declaration requires a terminating semicolon.",
+                        token: start, section: section, suggestedActions: ["terminate_each_property_declaration"])
+                    continue
+                }
+                _ = consume()
+                guard declaration.count >= 2,
+                    ["XCI_CELL_WIDTH", "XCI_CELL_HEIGHT"].contains(declaration[1].text.uppercased()) else {
+                    addDiagnostic(severity: .error, code: "def_property_definition_unknown",
+                        message: "Only reserved component dimension property declarations are supported.",
+                        token: start, section: section, suggestedActions: ["use_only_supported_dimension_declarations"])
+                    continue
+                }
+                let name = declaration[1].text.uppercased()
+                guard declaration.count >= 3, declaration[0].text.uppercased() == "COMPONENT",
+                    declaration[2].text.uppercased() == "INTEGER" else {
+                    addDiagnostic(severity: .error, code: "def_property_definition_changed",
+                        message: "Reserved dimension properties require COMPONENT ownership and INTEGER type.",
+                        token: start, section: section, suggestedActions: ["restore_reserved_dimension_owner_and_type"])
+                    continue
+                }
+                guard declaration.count == 3 else {
+                    addDiagnostic(severity: .error, code: "def_property_definition_unsupported",
+                        message: "Reserved dimension declarations do not admit defaults, ranges or extra fields.",
+                        token: start, section: section, suggestedActions: ["remove_dimension_defaults_ranges_and_extra_fields"])
+                    continue
+                }
+                if !dimensionDeclarations.insert(name).inserted {
+                    addDiagnostic(severity: .error, code: "def_property_definition_duplicate",
+                        message: "Reserved dimension property \(name) is declared more than once.",
+                        token: declaration[1], section: section, suggestedActions: ["declare_each_reserved_dimension_once"])
+                }
+            }
+            addDiagnostic(severity: .error, code: "def_property_definitions_end_missing",
+                message: "PROPERTYDEFINITIONS requires its matching END marker.",
+                token: sectionToken, section: section, suggestedActions: ["close_the_property_definitions_section"])
         }
 
         private mutating func parseVersion() {
@@ -856,6 +921,24 @@ public struct PhysicalDesignDEFParser: Sendable {
                 antennaRatio: nil,
                 maximumAntennaRatio: nil
             ))
+        }
+
+        private mutating func parseFills(_ token: PhysicalDesignDEFToken) {
+            guard let expectedCount = beginSection(named: "FILLS", token: token) else { return }
+            var actualCount = 0
+            while !isAtEnd {
+                if isEndSection(named: "FILLS") { consumeEndSection(named: "FILLS"); break }
+                guard consumeSectionMarker(named: "FILLS") else { continue }
+                let item = readStatementTokens()
+                guard item.count == 11, item[0].text.uppercased() == "LAYER", item[2].text.uppercased() == "RECT",
+                      let layer = parseLayer(item[1]), let rect = rectangle(from: item, section: "FILLS") else {
+                    addDiagnostic(severity: .error, code: "def_fill_unsupported", message: "Native fill interchange requires one exact layer and rectangular fill.",
+                        token: item.first ?? token, section: "FILLS", suggestedActions: ["supply_exact_rectangular_fill_geometry"])
+                    actualCount += 1; continue
+                }
+                fills.append(.init(id: "fill_\(actualCount)", layer: layer, geometry: rect)); actualCount += 1
+            }
+            finishSection(named: "FILLS", expectedCount: expectedCount, actualCount: actualCount, token: token)
         }
 
         private mutating func parseBlockages(_ token: PhysicalDesignDEFToken) {

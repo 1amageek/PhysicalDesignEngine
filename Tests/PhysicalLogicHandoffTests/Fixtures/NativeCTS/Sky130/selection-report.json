@@ -1,0 +1,505 @@
+{
+  "schemaVersion": 1,
+  "scope": "Actual Native CTS logical equivalence with selected unmodified Sky130 cell and interface facts. Analytical fixture RC is not Sky130 process calibration. Omitted manufacturing laws mean no full raw PDK, DRC, routed timing, release or production legality claim.",
+  "sources": [
+    {
+      "origin": "/Users/1amageek/.volare/sky130A/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef",
+      "originSHA256": "3a3ea4e9d0973402702764d897659e52fe3d413eb48c306cd811de40a75264fa",
+      "originByteCount": 1415362,
+      "selectedFile": "cells.lef",
+      "selectedSHA256": "7bade9db4df84264d5931b5a9f6947b3279c762cf5856fa2884cae4a1f5af0a6",
+      "selectedByteCount": 7536,
+      "ranges": [
+        {
+          "startByte": 0,
+          "endByteExclusive": 14,
+          "SHA256": "3e48a0bd3d4e2e024d84c0d6fc335901bf73b695da1dd3dae85d58d9ae518f22"
+        },
+        {
+          "startByte": 42,
+          "endByteExclusive": 62,
+          "SHA256": "f11670fc347f9197f9390c0fda5658d4965de1e3f00347d94d0c6ce0dbd5f4ab"
+        },
+        {
+          "startByte": 62,
+          "endByteExclusive": 83,
+          "SHA256": "5c4c396166a6b05b1d29c4101b6ec9bb76744c832a8393f0a1043edb2feb9e06"
+        },
+        {
+          "startByte": 259291,
+          "endByteExclusive": 260964,
+          "SHA256": "54833988096a6153335c75dc1a8671b3d2d16e5a06d978129be18cda4f9c415c"
+        },
+        {
+          "startByte": 639768,
+          "endByteExclusive": 641207,
+          "SHA256": "86c658da4a6743a7624d956981f7ece380a12d55a745f1d471ebc0de4c4e1d22"
+        },
+        {
+          "startByte": 429468,
+          "endByteExclusive": 433825,
+          "SHA256": "94ca05ca6b92b753ca01aeefd6593a58da6ad0001ee8b4eebad8524557caed63"
+        },
+        {
+          "startByte": 1415350,
+          "endByteExclusive": 1415362,
+          "SHA256": "1b644ce0749ecfcdade8a36b32343c83c8e31e1ae6174d43ac8175b99ac67693"
+        }
+      ],
+      "excluded": [
+        {
+          "startByte": 14,
+          "endByteExclusive": 42,
+          "fact": "NOWIREEXTENSIONATPIN ON ;",
+          "reason": "Unsupported global wire-extension law; explicit selected-route profile only."
+        },
+        {
+          "fact": "All other cell macros excluded by explicit master selection."
+        }
+      ]
+    },
+    {
+      "origin": "/Users/1amageek/.volare/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib",
+      "originSHA256": "8e78e14442062dba34d414fca6490b2f6b96038d4510d1438ca44fee31487135",
+      "originByteCount": 12841637,
+      "selectedFile": "timing.lib",
+      "selectedSHA256": "0267fb17aaa32fedcd90d156d017d12e2c44ace81ee50dd6c0f2c3548d9e5b88",
+      "selectedByteCount": 38722,
+      "ranges": [
+        {
+          "startByte": 0,
+          "endByteExclusive": 5737,
+          "SHA256": "e6dae2330073550c49c3d6753b5e76f670aa18a74682fbb9e3ff950b59983968"
+        },
+        {
+          "startByte": 3421594,
+          "endByteExclusive": 3430800,
+          "SHA256": "b22d0e695904d8afbbbc7eb97938696fa66cdc7a72441009d4759aea6e7693d5"
+        },
+        {
+          "startByte": 5832083,
+          "endByteExclusive": 5841310,
+          "SHA256": "c1d66cc00732f93bf970b2ceef0910bc5f424854639f76f93cd23ea76bb4bdcf"
+        },
+        {
+          "startByte": 4213071,
+          "endByteExclusive": 4227620,
+          "SHA256": "3ff607f54da578dc1c2b5366cea14d758e3be63b565acd30990d26060ccd69df"
+        },
+        {
+          "startByte": 12841634,
+          "endByteExclusive": 12841637,
+          "SHA256": "804f89fc0ec98c9824183e795d3edd19e930f7bc471f9012aa3d503be2f8974b"
+        }
+      ],
+      "excluded": [
+        {
+          "fact": "All other cell blocks excluded; complete selected cells/templates/header preserved."
+        }
+      ]
+    },
+    {
+      "origin": "/Users/1amageek/.volare/sky130A/libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__nom.tlef",
+      "originSHA256": "5de46c6f7c2cf82599b93d30a6459465f770f63c85b36182c672782219938519",
+      "originByteCount": 18167,
+      "selectedFile": "technology.lef",
+      "selectedSHA256": "49fbe642e15885bc43765b48afaed15ca51417387b7c586bd6c1ce1521e84fda",
+      "selectedByteCount": 2545,
+      "ranges": [
+        {
+          "startByte": 0,
+          "endByteExclusive": 1029,
+          "SHA256": "15736afba1374bd3f8a9e612449032f3e15a9cd7e8672a85b2b7be8f8faedc14"
+        },
+        {
+          "startByte": 1142,
+          "endByteExclusive": 1154,
+          "SHA256": "78cacb8bdb3ca8d43150583c0928b910cf7774acd97ba5542eec610ee983d2af"
+        },
+        {
+          "startByte": 1154,
+          "endByteExclusive": 1175,
+          "SHA256": "a8b80a58015c4a2feff79e0237fe49e8ea8ea580eba260e434a805e3f99aa3a7"
+        },
+        {
+          "startByte": 1175,
+          "endByteExclusive": 1214,
+          "SHA256": "2fd1b707ec5feea4a929cdb5ac444717043d950024ad3c5fc0ad4d1e25f39e79"
+        },
+        {
+          "startByte": 1214,
+          "endByteExclusive": 1224,
+          "SHA256": "f4d26faea44654530ae3354e0f303211c51530edee7788084b3a27748e82df63"
+        },
+        {
+          "startByte": 1225,
+          "endByteExclusive": 1237,
+          "SHA256": "a81e0c6bd8358b3553e54363eeaab5561791785dd9a29b158c73e44cbbd72719"
+        },
+        {
+          "startByte": 1237,
+          "endByteExclusive": 1258,
+          "SHA256": "a8b80a58015c4a2feff79e0237fe49e8ea8ea580eba260e434a805e3f99aa3a7"
+        },
+        {
+          "startByte": 1258,
+          "endByteExclusive": 1297,
+          "SHA256": "17c37ffe66f4d0e1cef819ac85a3e7a00da505eeaee1992e197079f07c6bdb7f"
+        },
+        {
+          "startByte": 1297,
+          "endByteExclusive": 1307,
+          "SHA256": "463d082cbe99a9d672cf98d94fa6c7dcb7c4d5ad48184d9afaf415f80096ab13"
+        },
+        {
+          "startByte": 1344,
+          "endByteExclusive": 1354,
+          "SHA256": "537f65612651c229551168216a087e026823447cb7cf64885b771e6983385cb6"
+        },
+        {
+          "startByte": 1354,
+          "endByteExclusive": 1371,
+          "SHA256": "a801b9b67291b9550886ef3233afd6209e3078058ccc9e0a523c880b5609898b"
+        },
+        {
+          "startByte": 1371,
+          "endByteExclusive": 1394,
+          "SHA256": "0ee9dd944ed165fd8a30d177ecaf6292df160fbb1def0b92b6d08b061d2b32b1"
+        },
+        {
+          "startByte": 1394,
+          "endByteExclusive": 1395,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 1395,
+          "endByteExclusive": 1415,
+          "SHA256": "184893bc72489e25a348e403ae2b2dcdc3c4f7c75d71a0c32a19ac59314997e6"
+        },
+        {
+          "startByte": 1415,
+          "endByteExclusive": 1436,
+          "SHA256": "b41efa05674809aed14dc853d43b107bfef2a0ed2d9a17442180c28edd940c42"
+        },
+        {
+          "startByte": 1436,
+          "endByteExclusive": 1437,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 1437,
+          "endByteExclusive": 1468,
+          "SHA256": "26c305b86adc24acae7e11a31c831971b8bcad7e46bbf121ad74c5fdcf3d8b7b"
+        },
+        {
+          "startByte": 1468,
+          "endByteExclusive": 1499,
+          "SHA256": "b53e12a23fe3cd0f884f0fe62a0bcc03b208122256326889ee7d05cc4ac1d040"
+        },
+        {
+          "startByte": 1499,
+          "endByteExclusive": 1514,
+          "SHA256": "a7665da70fe9d1ea2a52f4d10338bf5788d317bc59616964b7eda075657fc51f"
+        },
+        {
+          "startByte": 1514,
+          "endByteExclusive": 1539,
+          "SHA256": "1487197ab75197fd7085d71a64640092ce601d6b8ef12c2838fe936474b82c53"
+        },
+        {
+          "startByte": 1539,
+          "endByteExclusive": 1559,
+          "SHA256": "40cc285397d5544674e350c2d681c293004d28af279b8502dd6ca1d9074e49a6"
+        },
+        {
+          "startByte": 1559,
+          "endByteExclusive": 1590,
+          "SHA256": "fdc405dadbf0c99d20fb0ed136d533462ced44b029a6ba9dd4a9d239033f02b4"
+        },
+        {
+          "startByte": 1590,
+          "endByteExclusive": 1608,
+          "SHA256": "b3f522c6a34edba5f9ea5b77cf60bbcaeea43d068f7f5a90dad89cc81cc01bab"
+        },
+        {
+          "startByte": 1608,
+          "endByteExclusive": 1638,
+          "SHA256": "2c7d892c9b8d9e3392b8aed5d33505e7e7d62d589e07c4930e8ab358ba9f837f"
+        },
+        {
+          "startByte": 1638,
+          "endByteExclusive": 1676,
+          "SHA256": "edfe598582ed8bcb498a69c6c80dabe725c8bcbd88e8fa7b9e70db28eacf0d49"
+        },
+        {
+          "startByte": 1676,
+          "endByteExclusive": 1703,
+          "SHA256": "69981b85e5bbc0dd940bd24434ac4fad4c67630953cb541529ef8b2cab0f4410"
+        },
+        {
+          "startByte": 1703,
+          "endByteExclusive": 1704,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 1821,
+          "endByteExclusive": 1829,
+          "SHA256": "75d7fa583e1ab09a307f625d5193aa34206f5b30036e832a6bd2d920db6e6777"
+        },
+        {
+          "startByte": 1830,
+          "endByteExclusive": 1841,
+          "SHA256": "8bf6d7011904e6864b4c646c5acb67ec816181ac12b90434485f1546ee8d9b8f"
+        },
+        {
+          "startByte": 1841,
+          "endByteExclusive": 1854,
+          "SHA256": "b578367cd984cb71e0249b0fb7ca9435f73701255eac72295d64914ed571b681"
+        },
+        {
+          "startByte": 1854,
+          "endByteExclusive": 1855,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 1855,
+          "endByteExclusive": 1894,
+          "SHA256": "361f582fc4b508fc1d005f40983631c3173922eff1c25094406f14b3b96460a8"
+        },
+        {
+          "startByte": 1894,
+          "endByteExclusive": 1933,
+          "SHA256": "1a490e6633e91dcc3bc98c7b4bfcdac96df585d9f405d41b459bc92511fbc8b4"
+        },
+        {
+          "startByte": 1933,
+          "endByteExclusive": 1972,
+          "SHA256": "95d3fb5a6ac7b236bf9566229ddf99e31ebf2037fa5c66054fac2272774488da"
+        },
+        {
+          "startByte": 1972,
+          "endByteExclusive": 2020,
+          "SHA256": "93db813c9d39eeebb830dec738e1eababcf9ddb544e18e5f05914953378a9205"
+        },
+        {
+          "startByte": 2020,
+          "endByteExclusive": 2040,
+          "SHA256": "84eecaa1bf83b7a778d6db9ca6130095c5d806ad90da9e4461bd5151747c177f"
+        },
+        {
+          "startByte": 2040,
+          "endByteExclusive": 2041,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 2194,
+          "endByteExclusive": 2195,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 2195,
+          "endByteExclusive": 2204,
+          "SHA256": "8ac564ad84a61d5643342a0dc00b94a14b4e89ba99c881f4caff5a06bda0f368"
+        },
+        {
+          "startByte": 2205,
+          "endByteExclusive": 2216,
+          "SHA256": "8f5df35b1d56ec2689ac34e43f95d7fc0bd97f0b0c60cded1cc513c5d40b8084"
+        },
+        {
+          "startByte": 2216,
+          "endByteExclusive": 2233,
+          "SHA256": "a801b9b67291b9550886ef3233afd6209e3078058ccc9e0a523c880b5609898b"
+        },
+        {
+          "startByte": 2233,
+          "endByteExclusive": 2258,
+          "SHA256": "29100c2f6edcde2e06ba57f65524d448e31b9515564efb5ee4e49203fdfe1fdb"
+        },
+        {
+          "startByte": 2258,
+          "endByteExclusive": 2259,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 2259,
+          "endByteExclusive": 2274,
+          "SHA256": "661b6a5a9b85e7be2100fd86332d186c38147a8fa812652674ab2a98a9c26695"
+        },
+        {
+          "startByte": 2274,
+          "endByteExclusive": 2290,
+          "SHA256": "2d97e71c86de7de2534b31710e8e11896ab9be3dd2c93fa817d8560c0df94e7e"
+        },
+        {
+          "startByte": 2290,
+          "endByteExclusive": 2291,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 2291,
+          "endByteExclusive": 2335,
+          "SHA256": "aa34ac804e524b262e678e8f88492ecdf444f21cc6e44f96f8c9e1c68a1befcd"
+        },
+        {
+          "startByte": 2335,
+          "endByteExclusive": 2379,
+          "SHA256": "2eb2828307faa4ae1465cd7ad869a6ea35678e7c41b0c5f0b82e86c6394f6eed"
+        },
+        {
+          "startByte": 2379,
+          "endByteExclusive": 2424,
+          "SHA256": "d307a4018ccbfb2daa6fbe0060bcfb71f97e683febbf297e9036c6373ccd1f7d"
+        },
+        {
+          "startByte": 2424,
+          "endByteExclusive": 2439,
+          "SHA256": "a7665da70fe9d1ea2a52f4d10338bf5788d317bc59616964b7eda075657fc51f"
+        },
+        {
+          "startByte": 2439,
+          "endByteExclusive": 2464,
+          "SHA256": "1487197ab75197fd7085d71a64640092ce601d6b8ef12c2838fe936474b82c53"
+        },
+        {
+          "startByte": 2464,
+          "endByteExclusive": 2482,
+          "SHA256": "fa18f03b90f3b33796ad8b338d15b187d281f3b08b3aa1fd65b90ceeb52d625b"
+        },
+        {
+          "startByte": 2482,
+          "endByteExclusive": 2502,
+          "SHA256": "055919f55f406dd61c7d38c9bf0fbb9e10e6785ae84afd7c349ddb99ede91d6d"
+        },
+        {
+          "startByte": 2502,
+          "endByteExclusive": 2546,
+          "SHA256": "8fe93be5e3c2338658101c6ad362f89709d58828556d9cbb802888083e5e805f"
+        },
+        {
+          "startByte": 2546,
+          "endByteExclusive": 2565,
+          "SHA256": "7cc129285e49a3e3fe9f025c8f9f6cbcd95d849fbc39d26108bf34daf2b579b0"
+        },
+        {
+          "startByte": 2565,
+          "endByteExclusive": 2590,
+          "SHA256": "77e0174455120a66c8c2332e1e88d9a4cbddbb229af37d8393dd64e1fdad7aae"
+        },
+        {
+          "startByte": 2590,
+          "endByteExclusive": 2591,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 2708,
+          "endByteExclusive": 2709,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 2709,
+          "endByteExclusive": 2739,
+          "SHA256": "efce12f3682c1d57ce2a860dc844c41f45326442cd70c1fcf1bfb02dd8537478"
+        },
+        {
+          "startByte": 2739,
+          "endByteExclusive": 2777,
+          "SHA256": "80e6a01c307b05464b93fbafeafeea37c19d7bff615dba93ce2e8e361e9639fc"
+        },
+        {
+          "startByte": 2899,
+          "endByteExclusive": 2921,
+          "SHA256": "906d3ad37dde4d57dd558101641bb88fe6224941f713802dae62b7fd279a7f12"
+        },
+        {
+          "startByte": 2921,
+          "endByteExclusive": 2952,
+          "SHA256": "bce015c9b1b5c3ea107ab3463405a332bec7eca9c8ae4e8d7d3f604ca940bd47"
+        },
+        {
+          "startByte": 2952,
+          "endByteExclusive": 2976,
+          "SHA256": "b9af9cb62d6ad412d1a105468e99e0ad2b3155dfea653fce29b7c3d86846f046"
+        },
+        {
+          "startByte": 2976,
+          "endByteExclusive": 2977,
+          "SHA256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        },
+        {
+          "startByte": 2977,
+          "endByteExclusive": 3005,
+          "SHA256": "e11f476b1c4ec2f9671b3ec04ffd0f3dc4f105c25c3280850a939322b8991648"
+        },
+        {
+          "startByte": 3005,
+          "endByteExclusive": 3014,
+          "SHA256": "e2c71e71893b20389046c40bf5edfe535771ed3d4a4d9650ae17a42a819c9020"
+        },
+        {
+          "startByte": 7534,
+          "endByteExclusive": 7715,
+          "SHA256": "7d125296210623ce0b9faaf6431de0b42ce40e054e3199638416b39257d764e1"
+        },
+        {
+          "startByte": 18155,
+          "endByteExclusive": 18167,
+          "SHA256": "1b644ce0749ecfcdade8a36b32343c83c8e31e1ae6174d43ac8175b99ac67693"
+        }
+      ],
+      "excluded": [
+        {
+          "startByte": 1704,
+          "endByteExclusive": 1728,
+          "fact": "ANTENNAMODEL OXIDE1 ;",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "startByte": 1728,
+          "endByteExclusive": 1821,
+          "fact": "ANTENNADIFFSIDEAREARATIO PWL ( ( 0 75 ) ( 0.0125 75 ) ( 0.0225 85.125 ) ( 22.5 10200 ) ) ;",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "startByte": 2041,
+          "endByteExclusive": 2125,
+          "fact": "ANTENNADIFFAREARATIO PWL ( ( 0 3 ) ( 0.0125 3 ) ( 0.0225 3.405 ) ( 22.5 408 ) ) ;",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "startByte": 2125,
+          "endByteExclusive": 2194,
+          "fact": "DCCURRENTDENSITY AVERAGE 0.36 ; # mA per via Iavg_max at Tj = 90oC",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "startByte": 2591,
+          "endByteExclusive": 2615,
+          "fact": "ANTENNAMODEL OXIDE1 ;",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "startByte": 2615,
+          "endByteExclusive": 2708,
+          "fact": "ANTENNADIFFSIDEAREARATIO PWL ( ( 0 400 ) ( 0.0125 400 ) ( 0.0225 2609 ) ( 22.5 11600 ) ) ;",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "startByte": 2777,
+          "endByteExclusive": 2840,
+          "fact": "DCCURRENTDENSITY AVERAGE 2.8 ; # mA/um Iavg_max at Tj = 90oC",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "startByte": 2840,
+          "endByteExclusive": 2899,
+          "fact": "ACCURRENTDENSITY RMS 6.1 ; # mA/um Irms_max at Tj = 90oC",
+          "reason": "Not enforced in this explicitly unqualified selected interface/RC profile."
+        },
+        {
+          "fact": "Other layers, sites, generated via rules and fixed vias excluded."
+        }
+      ]
+    }
+  ]
+}

@@ -8,7 +8,7 @@ routing, ECO and DFM protocols refine the same engine contract. Their native
 implementations and `PhysicalDesignEngine` use `NativePhysicalDesignExecutor`.
 Canonical ownership, invariants and failure behavior are defined in [DESIGN.md](DESIGN.md).
 
-## Request Schema 7
+## Request Schema 8
 
 | Field | Meaning |
 |---|---|
@@ -18,12 +18,20 @@ Canonical ownership, invariants and failure behavior are defined in [DESIGN.md](
 | `pdk` | Checked immutable PDKReference schema 2, exact process manifest identity |
 | `initialSnapshot` / `inputLayout` | Initial physical state or retained JSON/DEF |
 | `configuration` | Deterministic geometry and repair controls |
-| `executionIntent` | Geometry smoke, characterized CTS, or explicitly unsupported native production |
+| `executionIntent` | Geometry smoke, characterized pre-route placement/CTS, or explicitly unsupported native production |
+| `placementTimingProfile` | Immutable selected Liberty/LEF/corner cost profile and caller cumulative resource ceilings; [LegalPlacement](Sources/PhysicalDesignCore/LegalPlacement/DESIGN.md) owns scope and failure semantics |
 | `clockTimingModel` | Retained PDK/RC/Liberty/corner characterization |
 | `productionConfiguration` | Retained configuration data; not a callable external backend selector |
 
-The decoder accepts only the current schema; changing the schema integer alone
-cannot migrate legacy artifacts. `PhysicalDesignArtifactBinding` separates a
+The request decoder accepts current schema 8. Legacy schema 7 is accepted only when
+`configuration.implementationConstraints?.sourceRoutingWidthPolicy` is absent or
+nil. Other request schema versions and schema-7 requests with an explicit policy
+are rejected. Native execution separately validates the request and its retained
+inputs; successful decoding alone does not admit execution. The canonical
+request compatibility contract is owned by
+[PhysicalDesignCore](Sources/PhysicalDesignCore/DESIGN.md#contracts-and-invariants).
+Native results and run manifests remain at schema 7; the run-manifest decoder
+still accepts only its current schema. `PhysicalDesignArtifactBinding` separates a
 logical ID, content reference and availability. Inputs contain the referenced
 content identities rather than obsolete path-bearing artifact references.
 

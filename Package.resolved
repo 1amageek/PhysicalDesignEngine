@@ -1,0 +1,130 @@
+{
+  "originHash" : "02175fc042f4645c0d6b6a291c88e3afa5de6beb4c6492af3a8b427208fb6eed",
+  "pins" : [
+    {
+      "identity" : "circuitefoundation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/CircuiteFoundation.git",
+      "state" : {
+        "revision" : "5f132c58209123433e0e479e1ea61096e46061ba"
+      }
+    },
+    {
+      "identity" : "corespice",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/CoreSpice.git",
+      "state" : {
+        "revision" : "cfcadac5aeff5d95681d2d91c0bf3e75bd35f169"
+      }
+    },
+    {
+      "identity" : "drcengine",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/DRCEngine.git",
+      "state" : {
+        "revision" : "05724746320b56c41fc40c1bfe3366015ad54d65"
+      }
+    },
+    {
+      "identity" : "logicdesign",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/LogicDesign.git",
+      "state" : {
+        "revision" : "5e1d3eec838a0add91c617413682d186a5182335"
+      }
+    },
+    {
+      "identity" : "logicengine",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/LogicEngine.git",
+      "state" : {
+        "revision" : "a6dead5545439c8b5fb2dd9860bf498d8f62be56"
+      }
+    },
+    {
+      "identity" : "pdkkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/PDKKit.git",
+      "state" : {
+        "revision" : "f59dfd1dbdd20545ddf97e6a0ab9a956ad7ca809"
+      }
+    },
+    {
+      "identity" : "pexengine",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/PEXEngine.git",
+      "state" : {
+        "revision" : "8b8ead61d08ba9a6f43c191b1897f7bac09c530c"
+      }
+    },
+    {
+      "identity" : "semiconductor-layout",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/semiconductor-layout.git",
+      "state" : {
+        "revision" : "8c66b7bd6b44cab884b75ded9788a4ec548a1919"
+      }
+    },
+    {
+      "identity" : "signofftoolsupport",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/SignoffToolSupport.git",
+      "state" : {
+        "revision" : "e15ea6cd60ca1957297aafbba839e51a478d735e"
+      }
+    },
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "3b6410f7dee09eb33cdd26260c5fd47fda19b0e2",
+        "version" : "1.7.3"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "47d3869a7291f085c1fb9fb1e6d3b97a793f45c6",
+        "version" : "4.5.1"
+      }
+    },
+    {
+      "identity" : "swift-mask-data",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/swift-mask-data.git",
+      "state" : {
+        "revision" : "67410f834bdfa8a098c2ec0bfe3675210f658277"
+      }
+    },
+    {
+      "identity" : "swift-osdi",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/swift-osdi.git",
+      "state" : {
+        "revision" : "e17d3bcca1224c8ab9ccfaddea7a47580b29b748",
+        "version" : "1.2.0"
+      }
+    },
+    {
+      "identity" : "timingengine",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/TimingEngine.git",
+      "state" : {
+        "revision" : "be979a9e3095e811f5d7cc4d5f74668142d9c052"
+      }
+    },
+    {
+      "identity" : "toolqualification",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/ToolQualification.git",
+      "state" : {
+        "revision" : "601ff5933396be4ba62c77b8bb0502e2f601f159",
+        "version" : "26.1018.0"
+      }
+    }
+  ],
+  "version" : 3
+}

@@ -22,8 +22,12 @@ struct PhysicalDesignClockConductorProjection {
         var layerIDs: [Int16: LayoutLayerID] = [:], layerNames: [LayoutLayerID: String] = [:]
         var definitions: [LayoutLayerDefinition] = []
         for (number, source) in geometry.layers.sorted(by: { $0.key < $1.key }) {
-            guard let name = characterization.technology.logicalToPhysicalLayerMap[source.layerID], !name.isEmpty,
-                  let sourceLayer = geometry.sourceLayers[number] else { throw Self.invalid("exact RC layer mapping") }
+            guard let sourceLayer = geometry.sourceLayers[number] else { throw Self.invalid("exact source layer mapping") }
+            if source.purpose == .well && sourceLayer.type == .masterslice { continue }
+            guard source.isRoutingLayer || sourceLayer.type == .cut,
+                  let name = characterization.technology.logicalToPhysicalLayerMap[source.layerID], !name.isEmpty else {
+                throw Self.invalid("exact interconnect RC layer mapping")
+            }
             let layer = LayoutLayerID(name: source.layerID, purpose: sourceLayer.type == .cut ? "cut" : "drawing")
             layerIDs[number] = layer; layerNames[layer] = name
             definitions.append(.init(id: layer, displayName: source.layerID, gdsLayer: Int(number), gdsDatatype: 0,
@@ -43,7 +47,32 @@ struct PhysicalDesignClockConductorProjection {
             return .init(origin: .init(x: Double(x0) / scale, y: Double(y0) / scale),
                          size: .init(width: Double(x1 - x0) / scale, height: Double(y1 - y0) / scale))
         }
+        func worldFaces(_ faces: [NativePEXElectrodeFace], cell: PhysicalDesignSnapshot.Cell) throws -> [NativePEXElectrodeFace] {
+            let master = try geometry.requireMaster(cell.master)
+            func project(_ x: Int64, _ y: Int64) throws -> IRPoint {
+                guard let px = Int32(exactly: x), let py = Int32(exactly: y) else { throw Self.invalid("electrode coordinate arithmetic") }
+                return try geometry.projectMasterPoint(.init(x: px, y: py), master: master,
+                    orientation: cell.orientation, x: cell.x, y: cell.y)
+            }
+            return try faces.map { face in
+                try Task.checkCancellation()
+                let alongX = face.side == .minY || face.side == .maxY
+                let x = alongX ? Int64(face.begin) : Int64(face.coordinate)
+                let y = alongX ? Int64(face.coordinate) : Int64(face.begin)
+                let a = try project(x, y)
+                let b = try project(alongX ? Int64(face.end) : x, alongX ? y : Int64(face.end))
+                let dx: Int64 = face.side == .minX ? -1 : face.side == .maxX ? 1 : 0
+                let dy: Int64 = face.side == .minY ? -1 : face.side == .maxY ? 1 : 0
+                let normal = try project(x + dx, y + dy)
+                let side: NativePEXElectrodeFace.Side = normal.x < a.x ? .minX : normal.x > a.x ? .maxX : normal.y < a.y ? .minY : .maxY
+                let horizontal = a.y == b.y
+                return .init(side: side, coordinate: horizontal ? a.y : a.x,
+                    begin: horizontal ? min(a.x, b.x) : min(a.y, b.y), end: horizontal ? max(a.x, b.x) : max(a.y, b.y))
+            }
+        }
         var shapes: [LayoutShape] = [], pins: [LayoutPin] = [], vias: [LayoutVia] = [], viaDefinitions: [LayoutViaDefinition] = []
+        var selectedPortSources: [String: Set<UUID>] = [:]
+        var declaredFaces: [String: [NativePEXElectrodeFace]] = [:]
         var pinByUUID: [UUID: String] = [:], records = 0
         func admit(_ count: Int = 1) throws {
             try Task.checkCancellation()
@@ -62,14 +91,48 @@ struct PhysicalDesignClockConductorProjection {
                 for (index, port) in ports.enumerated() {
                     try admit(port.points.count + 1)
                     guard geometry.sourceLayers[port.layer]?.type != .cut else { throw Self.invalid("PORT cut without an explicit fixed via") }
+                    if layerIDs[port.layer] == nil {
+                        guard geometry.layers[port.layer]?.purpose == .well,
+                              geometry.sourceLayers[port.layer]?.type == .masterslice else { throw Self.invalid("unsupported PORT interconnect layer") }
+                        continue
+                    }
                     shapes.append(.init(id: try Self.identity("port:\(cell.id):\(name):\(index)"), layer: try layer(port.layer),
                         netID: canonical?.netID.flatMap { netIDs[$0] }, geometry: .polygon(.init(points: port.points.map(point)))))
                 }
                 if let canonical, selectedPins.contains(canonical.id) {
                     guard let access = canonical.accessLayer, let number = Int16(exactly: access) else { throw Self.invalid("pin access layer") }
-                    let accessPorts = ports.filter { $0.layer == number }
-                    guard accessPorts.count == 1, let port = accessPorts.first else { throw Self.invalid("electrode PORT multiplicity") }
-                    let rect = try rectangle(port.points), id = try Self.identity("pin:" + canonical.id)
+                    guard let electrode = model.electrodes.first(where: { $0.master == cell.master && $0.pin == name }) else {
+                        throw Self.invalid("explicit cell electrode identity")
+                    }
+                    try admit(electrode.faces.count)
+                    let faces = try worldFaces(electrode.faces, cell: cell)
+                    declaredFaces[canonical.id] = faces
+                    var candidates: [Int] = []
+                    var sources = Set<UUID>()
+                    for index in ports.indices {
+                        try admit()
+                        sources.insert(try Self.identity("port:\(cell.id):\(name):\(index)"))
+                        guard ports[index].layer == number else { continue }
+                        _ = try rectangle(ports[index].points)
+                        guard let minX = ports[index].points.map(\.x).min(), let maxX = ports[index].points.map(\.x).max(),
+                              let minY = ports[index].points.map(\.y).min(), let maxY = ports[index].points.map(\.y).max() else {
+                            throw Self.invalid("electrode rectangle extent")
+                        }
+                        var covered = true
+                        for face in faces {
+                            try admit()
+                            let alongX = face.side == .minY || face.side == .maxY
+                            let normalMin = alongX ? minY : minX, normalMax = alongX ? maxY : maxX
+                            let alongMin = alongX ? minX : minY, alongMax = alongX ? maxX : maxY
+                            covered = covered && face.begin < face.end && face.coordinate >= normalMin
+                                && face.coordinate <= normalMax && face.begin >= alongMin && face.end <= alongMax
+                        }
+                        if covered { candidates.append(index) }
+                    }
+                    // FIXME(INCOMPLETE_IMPLEMENTATION): General union-shaped pin incidence is not implemented. Native CTS admits only one uniquely face-selected actual rectangle; distributed/ambiguous faces must not receive a timing result before the lower union-pin contract is implemented and verified.
+                    guard candidates.count == 1, let selected = candidates.first else { throw Self.invalid("electrode faces require one unique actual PORT rectangle") }
+                    selectedPortSources[canonical.id] = sources
+                    let rect = try rectangle(ports[selected].points), id = try Self.identity("pin:" + canonical.id)
                     try admit()
                     pins.append(.init(id: id, name: canonical.id,
                         position: .init(x: rect.origin.x + rect.size.width / 2, y: rect.origin.y + rect.size.height / 2),
@@ -78,7 +141,30 @@ struct PhysicalDesignClockConductorProjection {
                 }
             }
         }
-        guard pins.count == selectedPins.count else { throw Self.invalid("source-bound cell pin coverage") }
+        for canonical in snapshot.pins where canonical.cellID == nil {
+            try admit()
+            guard let port = canonical.topPort, let number = Int16(exactly: port.layer),
+                  canonical.accessLayer == port.layer else { throw Self.invalid("retained top PORT geometry") }
+            let source = try port.worldRectangle()
+            let rect = LayoutRect(origin: .init(x: Double(source.x) / scale, y: Double(source.y) / scale),
+                size: .init(width: Double(source.width) / scale, height: Double(source.height) / scale))
+            let shapeID = try Self.identity("top-port:" + canonical.id)
+            shapes.append(.init(id: shapeID, layer: try layer(number), netID: canonical.netID.flatMap { netIDs[$0] }, geometry: .rect(rect)))
+            if selectedPins.contains(canonical.id) {
+                guard let electrode = (model.topPortElectrodes ?? []).first(where: { $0.pinID == canonical.id }) else {
+                    throw Self.invalid("explicit top PORT electrode identity")
+                }
+                try admit(electrode.faces.count)
+                declaredFaces[canonical.id] = electrode.faces
+                selectedPortSources[canonical.id] = [shapeID]
+                let id = try Self.identity("pin:" + canonical.id)
+                pins.append(.init(id: id, name: canonical.id,
+                    position: .init(x: rect.origin.x + rect.size.width / 2, y: rect.origin.y + rect.size.height / 2),
+                    size: rect.size, layer: try layer(number), netID: canonical.netID.flatMap { netIDs[$0] }, role: .signal))
+                pinByUUID[id] = canonical.id
+            }
+        }
+        guard pins.count == selectedPins.count else { throw Self.invalid("source-bound selected pin coverage") }
         for route in snapshot.routes {
             for segment in route.segments {
                 try admit()
@@ -121,14 +207,33 @@ struct PhysicalDesignClockConductorProjection {
         let document = LayoutDocument(id: try Self.identity("clock-document"), name: snapshot.topCell, units: units, cells: [cell], topCellID: cellID)
         let tech = LayoutTechDatabase(units: units, grid: 1 / scale, layers: definitions, vias: viaDefinitions, layerRules: [])
         let n = policy.maximumProjectionRecords, probes = policy.maximumGeometryProbes
-        let capture = try LayoutConnectivityExtractor().captureConductors(document: document, tech: tech,
-            conductiveLayers: Set(definitions.filter { $0.id.purpose != "cut" }.map(\.id)), limits: .init(
+        let limits: LayoutConductorCaptureLimits
+        if let explicit = policy.captureLimits {
+            limits = try explicit.lowerLimits()
+        } else {
+            limits = .init(
                 hierarchy: .init(maximumOccurrences: 1, maximumObjects: n, maximumGeometryPoints: probes, maximumDepth: 1),
                 decomposition: .init(maximumInputEntries: n, maximumEdgeProbes: probes, maximumOutputBands: n),
-                maximumTechnologyRecords: n, maximumFootprints: n, maximumContactProbes: probes))
+                maximumTechnologyRecords: n, maximumFootprints: n, maximumContactProbes: probes)
+        }
+        let capture = try LayoutConnectivityExtractor().captureConductors(document: document, tech: tech,
+            conductiveLayers: Set(definitions.filter { $0.id.purpose != "cut" }.map(\.id)), limits: limits)
         guard capture.shortComponentIndices.isEmpty else { throw Self.invalid("physical short in clock projection") }
         var indices: [String: Int] = [:], bindings: [NativePEXElectrodeBinding] = []
-        let cells = Dictionary(uniqueKeysWithValues: snapshot.cells.map { ($0.id, $0) })
+        let selectedSources = Set(selectedPortSources.values.flatMap { $0 })
+        var sourceComponents: [UUID: Int] = [:]
+        for index in capture.components.indices {
+            for footprint in capture.components[index].footprintIndices {
+                try admit()
+                let source = capture.footprints[footprint].sourceID
+                if selectedSources.contains(source) {
+                    guard sourceComponents[source] == nil || sourceComponents[source] == index else {
+                        throw Self.invalid("disconnected selected PORT piece")
+                    }
+                    sourceComponents[source] = index
+                }
+            }
+        }
         let canonicalPins = Dictionary(uniqueKeysWithValues: snapshot.pins.map { ($0.id, $0) })
         let multiplier = capture.coordinateUnits.scale.databaseUnitsPerMicrometer / scale
         guard let integerMultiplier = Int64(exactly: multiplier), integerMultiplier > 0 else { throw Self.invalid("capture electrode coordinate scale") }
@@ -139,31 +244,22 @@ struct PhysicalDesignClockConductorProjection {
         for (index, pin) in capture.pins.enumerated() {
             try Task.checkCancellation()
             guard let id = pinByUUID[capture.hierarchy.pins[pin.sourcePinIndex].id], let canonical = canonicalPins[id],
-                  let cellID = canonical.cellID, let cell = cells[cellID], let netID = canonical.netID,
-                  let electrode = model.electrodes.first(where: { $0.master == cell.master && $0.pin == canonical.name }),
-                  pin.componentIndices.count == 1 else { throw Self.invalid("electrode identity/open/coverage") }
-            let master = try geometry.requireMaster(cell.master)
-            func project(_ x: Int64, _ y: Int64) throws -> IRPoint {
-                guard let px = Int32(exactly: x), let py = Int32(exactly: y) else { throw Self.invalid("electrode coordinate arithmetic") }
-                return try geometry.projectMasterPoint(.init(x: px, y: py), master: master,
-                    orientation: cell.orientation, x: cell.x, y: cell.y)
+                  let netID = canonical.netID, let sourceFaces = declaredFaces[id],
+                  pin.componentIndices.count == 1, let component = pin.componentIndices.first,
+                  let sources = selectedPortSources[id] else { throw Self.invalid("electrode identity/open/coverage") }
+            for source in sources {
+                try admit()
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Native CTS has no internal ideal connection model for disconnected PORT pieces. Every retained piece must physically join the selected electrode component before this profile can publish timing.
+                guard sourceComponents[source] == component else { throw Self.invalid("disconnected or uncovered selected PORT union") }
             }
             func scaled(_ value: Int32) throws -> Int32 {
                 let v = Int64(value).multipliedReportingOverflow(by: integerMultiplier)
                 guard !v.overflow, let result = Int32(exactly: v.partialValue) else { throw Self.invalid("electrode scale arithmetic") }; return result
             }
-            let faces = try electrode.faces.map { face -> NativePEXElectrodeFace in
-                let alongX = face.side == .minY || face.side == .maxY
-                let a = try project(alongX ? Int64(face.begin) : Int64(face.coordinate), alongX ? Int64(face.coordinate) : Int64(face.begin))
-                let b = try project(alongX ? Int64(face.end) : Int64(face.coordinate), alongX ? Int64(face.coordinate) : Int64(face.end))
-                let dx: Int64 = face.side == .minX ? -1 : face.side == .maxX ? 1 : 0
-                let dy: Int64 = face.side == .minY ? -1 : face.side == .maxY ? 1 : 0
-                let normal = try project((alongX ? Int64(face.begin) : Int64(face.coordinate)) + dx,
-                                         (alongX ? Int64(face.coordinate) : Int64(face.begin)) + dy)
-                let side: NativePEXElectrodeFace.Side = normal.x < a.x ? .minX : normal.x > a.x ? .maxX : normal.y < a.y ? .minY : .maxY
-                let horizontal = a.y == b.y
-                return .init(side: side, coordinate: try scaled(horizontal ? a.y : a.x),
-                    begin: try scaled(horizontal ? min(a.x, b.x) : min(a.y, b.y)), end: try scaled(horizontal ? max(a.x, b.x) : max(a.y, b.y)))
+            let faces = try sourceFaces.map { face in
+                try admit()
+                return NativePEXElectrodeFace(side: face.side, coordinate: try scaled(face.coordinate),
+                    begin: try scaled(face.begin), end: try scaled(face.end))
             }
             indices[id] = index
             bindings.append(.init(pinIndex: index, terminal: .init(netName: .init(netID), nodeName: .init(id)), faces: faces))

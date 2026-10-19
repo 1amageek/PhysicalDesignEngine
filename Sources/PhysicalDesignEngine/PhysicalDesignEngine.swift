@@ -10,7 +10,7 @@ public struct PhysicalDesignEngine: PhysicalDesignStageExecuting {
     public init(
         artifactStore: any PhysicalDesignArtifactStore,
         implementationID: String = "physical-design-native",
-        implementationVersion: String = "1.0.0"
+        implementationVersion: String = NativePhysicalDesignExecutor.currentImplementationVersion
     ) {
         self.artifactStore = artifactStore
         self.executor = NativePhysicalDesignExecutor(

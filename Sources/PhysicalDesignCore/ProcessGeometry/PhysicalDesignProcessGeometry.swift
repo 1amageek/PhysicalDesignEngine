@@ -31,6 +31,10 @@ struct PhysicalDesignProcessGeometry: Sendable {
         let shapes: [IRBoundary]
     }
 
+    let obstructionSpacingUsesMinimumWidth: Bool
+    let obstructionSpacingWidths: [Int16: Int64]
+    let unitsPerMicron: Int
+    let manufacturingGrid: PhysicalDesignManufacturingGrid
     let manifestReference: ArtifactReference
     let sources: [String: ArtifactReference]
     let masters: [String: Master]
@@ -39,8 +43,22 @@ struct PhysicalDesignProcessGeometry: Sendable {
     let layers: [Int16: PDKLayerDefinition]
     let sourceLayers: [Int16: LEFLayerDef]
     let cutSpacings: [Int16: Int32]
+    let routingMinimumAreas: [Int16: PhysicalDesignRoutingAreaRule]
+    let minimumHoleAreas: [Int16: UInt64]
+    let maximumHoleGeometryChecks: Int?
+    let routingSpacingRules: [Int16: PhysicalDesignRoutingSpacingRule]
+
+    var allowsUnqualifiedSiteRows: Bool { !minimumHoleAreas.isEmpty && masters.isEmpty && sites.isEmpty }
 
     init(inputs: PhysicalDesignProcessInputs, request: PhysicalDesignRequest, units: Int) throws {
+        _ = try inputs.databaseUnitsPerMicron(for: units)
+        try inputs.validatePropertyCapabilities()
+        try inputs.validateAntennaCapabilities()
+        try inputs.validateEnclosureCapabilities(request: request)
+        let minimumObstructions = try inputs.obstructionSpacingUsesMinimumWidth()
+        obstructionSpacingUsesMinimumWidth = minimumObstructions
+        unitsPerMicron = units
+        manufacturingGrid = try .init(inputs: inputs, units: units)
         manifestReference = request.pdk.manifest
         sources = request.processAssets.mapValues(\.reference)
         guard Set(inputs.technologyViews.keys).isDisjoint(with: Set(inputs.cellViews.keys)) else {
@@ -92,6 +110,44 @@ struct PhysicalDesignProcessGeometry: Sendable {
         }
         layers = nativeLayers
         sourceLayers = declaredLayers
+        var compiledSpacing: [Int16: PhysicalDesignRoutingSpacingRule] = [:]
+        for (number, source) in declaredLayers where source.type == .routing && (source.spacing != nil || source.spacingTable != nil) {
+            compiledSpacing[number] = try PhysicalDesignRoutingSpacingRule(source: source, units: units)
+        }
+        routingSpacingRules = compiledSpacing
+        var obstructionWidths: [Int16: Int64] = [:]
+        if minimumObstructions {
+            for (number, source) in declaredLayers where compiledSpacing[number]?.usesParallelRunLength == true {
+                if let width = source.minwidth ?? source.width {
+                    obstructionWidths[number] = try PhysicalDesignProcessInputs.dbu(width, units: units,
+                        field: "\(source.name) minimum width for USEMINSPACING OBS", positive: true)
+                }
+            }
+        }
+        obstructionSpacingWidths = obstructionWidths
+        var areas: [Int16: PhysicalDesignRoutingAreaRule] = [:]
+        for (number, source) in declaredLayers where source.type == .routing {
+            if let area = source.area { areas[number] = try .init(areaMicronsSquared: area, unitsPerMicron: units) }
+        }
+        routingMinimumAreas = areas
+        maximumHoleGeometryChecks = request.configuration.maximumRoutingCandidateChecks
+        var holeAreas: [Int16: UInt64] = [:]
+        for assetID in documents.keys.sorted() {
+            guard let document = documents[assetID], let mapping = layerMaps[assetID] else {
+                throw PhysicalDesignTechnologyError.invalid("MINENCLOSEDAREA source context disappeared.")
+            }
+            for source in document.layers where !source.minimumEnclosedAreas.isEmpty {
+                guard source.type == .routing, source.minimumEnclosedAreas.count == 1,
+                      let layer = mapping[source.name], let canonical = declaredLayers[layer],
+                      canonical.minimumEnclosedAreas == source.minimumEnclosedAreas,
+                      let area = source.minimumEnclosedAreas.first else {
+                    throw PhysicalDesignTechnologyError.unsupported("MINENCLOSEDAREA requires one mapped canonical ROUTING source law on \(source.name).")
+                }
+                do { holeAreas[layer] = try PhysicalDesignRoutingAreaRule(areaMicronsSquared: area, unitsPerMicron: units).minimumDBU2 }
+                catch { throw PhysicalDesignTechnologyError.invalid("MINENCLOSEDAREA threshold: \(error.localizedDescription)") }
+            }
+        }
+        minimumHoleAreas = holeAreas
         cutSpacings = try declaredLayers.filter { $0.value.type == .cut }.compactMapValues { rule in
             guard let spacing = rule.spacing else { return nil }
             return try Self.coordinate(PhysicalDesignProcessInputs.dbu(spacing, units: units, field: "\(rule.name).SPACING"), field: "cut spacing")
@@ -114,15 +170,9 @@ struct PhysicalDesignProcessGeometry: Sendable {
                       via.enclosure == nil, via.rowCol == nil else {
                     throw PhysicalDesignTechnologyError.unsupported("Generated via \(via.name) requires complete native rule materialization.")
                 }
-                guard nativeVias[via.name] == nil, via.layers.count == 3,
-                      let lower = layerMap[via.layers[0].layerName], let cut = layerMap[via.layers[1].layerName],
-                      let upper = layerMap[via.layers[2].layerName], lower < upper,
-                      nativeLayers[lower]?.isRoutingLayer == true, nativeLayers[upper]?.isRoutingLayer == true,
-                      declaredLayers[lower]?.type == .routing, declaredLayers[upper]?.type == .routing, declaredLayers[cut]?.type == .cut,
-                      nativeLayers[cut]?.isRoutingLayer == false,
-                      nativeLayers[cut]?.purpose == .via || nativeLayers[cut]?.purpose == .contact else {
-                    throw PhysicalDesignTechnologyError.invalid("Via \(via.name) requires one explicit routing/cut/routing stack compatible with native layer ordering.")
-                }
+                guard nativeVias[via.name] == nil else { throw PhysicalDesignTechnologyError.invalid("Fixed VIA \(via.name) is ambiguous.") }
+                let stack = try PhysicalDesignFixedViaStack(via: via, layerMap: layerMap, layers: nativeLayers, sourceLayers: declaredLayers)
+                let lower = stack.lowerLayer, cut = stack.cutLayer, upper = stack.upperLayer
                 if let resistance = via.resistance, !resistance.isFinite || resistance < 0 {
                     throw PhysicalDesignTechnologyError.invalid("Via \(via.name) resistance must be finite and nonnegative.")
                 }
@@ -142,14 +192,20 @@ struct PhysicalDesignProcessGeometry: Sendable {
                         }
                     }
                 }
-                let enclosure = try rule.enclosure.map { value in
-                    (try PhysicalDesignProcessInputs.dbu(value.overhang1, units: units, field: "enclosure overhang1"),
-                     try PhysicalDesignProcessInputs.dbu(value.overhang2, units: units, field: "enclosure overhang2"))
+                if rule.enclosures.contains(where: { $0.side != nil }) {
+                    try Self.validateQualifiedEnclosureStack(cutLayer: cut, lowerLayer: lower, upperLayer: upper,
+                        inputs: inputs, layerMaps: layerMaps)
                 }
                 for metalLayer in [lower, upper] {
+                    let enclosures = try rule.enclosures.filter {
+                        $0.side == nil || (metalLayer == lower ? $0.side == .below : $0.side == .above)
+                    }.map { value in
+                        (try PhysicalDesignProcessInputs.dbu(value.overhang1, units: units, field: "enclosure overhang1"),
+                         try PhysicalDesignProcessInputs.dbu(value.overhang2, units: units, field: "enclosure overhang2"))
+                    }
                     let metal = Region(layer: metalLayer, polygons: shapes.filter { $0.layer == metalLayer })
                     for shape in cutShapes {
-                        try Self.validateContact(shape, metal: metal, enclosure: enclosure)
+                        try Self.validateContact(shape, metal: metal, enclosures: enclosures)
                     }
                 }
                 nativeVias[via.name] = Via(definition: via, lowerLayer: lower, cutLayer: cut, upperLayer: upper, shapes: shapes)
@@ -185,6 +241,22 @@ struct PhysicalDesignProcessGeometry: Sendable {
             }
         }
         masters = nativeMasters
+        for (name, site) in sites {
+            try manufacturingGrid.validate(site.width, field: "site \(name) width")
+            try manufacturingGrid.validate(site.height, field: "site \(name) height")
+        }
+        for (name, via) in vias {
+            for shape in via.shapes { try manufacturingGrid.validate(shape, field: "via \(name)") }
+        }
+        for (name, master) in masters {
+            for value in [master.width, master.height, Int64(master.origin.x), Int64(master.origin.y)] {
+                try manufacturingGrid.validate(value, field: "master \(name)")
+            }
+            for shape in master.obstructions { try manufacturingGrid.validate(shape, field: "OBS \(name)") }
+            for pin in master.pins.values {
+                for shape in pin.shapes { try manufacturingGrid.validate(shape, field: "PORT \(name)/\(pin.definition.name)") }
+            }
+        }
     }
 
     func pinShapes(master name: String, pin: String, orientation: DEFOrientation, x: Int64, y: Int64) throws -> [IRBoundary] {
@@ -247,38 +319,6 @@ struct PhysicalDesignProcessGeometry: Sendable {
         }
     }
 
-    func resolveVia(_ via: PhysicalDesignSnapshot.Via, within bounds: PhysicalDesignSnapshot.Rect) throws -> PhysicalDesignSnapshot.Via {
-        let source: Via
-        if let name = via.master, let declared = vias[name] {
-            source = declared
-        } else if via.master != nil {
-            throw PhysicalDesignTechnologyError.invalid("Via \(via.id) references an undeclared fixed master.")
-        } else {
-            let defaults = vias.values.filter {
-                $0.definition.isDefault && Int($0.lowerLayer) == via.lowerLayer && Int($0.upperLayer) == via.upperLayer
-            }
-            guard defaults.count == 1, let declared = defaults.first else {
-                throw PhysicalDesignTechnologyError.invalid("Via \(via.id) requires one exact DEFAULT fixed master for layers \(via.lowerLayer)/\(via.upperLayer).")
-            }
-            source = declared
-        }
-        guard Int(source.lowerLayer) == via.lowerLayer, Int(source.upperLayer) == via.upperLayer else {
-            throw PhysicalDesignTechnologyError.invalid("Via \(via.id) layer pair contradicts its fixed master.")
-        }
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Native power/clock/signal constructors join routes at the via origin. Offset access and multi-transition search require process-aware routing before they can qualify native closure.
-        for layer in [source.lowerLayer, source.upperLayer] {
-            guard Region(layer: layer, polygons: source.shapes.filter { $0.layer == layer }).contains(.init(x: 0, y: 0)) else {
-                throw PhysicalDesignTechnologyError.unsupported("Via \(source.definition.name) requires offset access beyond the center-joined native profile.")
-            }
-        }
-        var resolved = via
-        resolved.master = source.definition.name
-        guard try viaFits(resolved, within: bounds) else {
-            throw PhysicalDesignTechnologyError.invalid("Via \(via.id) translated fixed footprint leaves its construction bounds.")
-        }
-        return resolved
-    }
-
     func viaFits(_ via: PhysicalDesignSnapshot.Via, within bounds: PhysicalDesignSnapshot.Rect) throws -> Bool {
         guard let name = via.master else { throw PhysicalDesignTechnologyError.invalid("Via footprint admission requires an exact fixed master.") }
         return try viaShapes(master: name, x: via.x, y: via.y).allSatisfy { shape in
@@ -296,7 +336,7 @@ struct PhysicalDesignProcessGeometry: Sendable {
                     throw PhysicalDesignTechnologyError.invalid("Distinct fixed via cuts overlap.")
                 }
                 if let minimum, minimum > 0 {
-                    guard try first.spaceViolations(to: second, minSpace: minimum).isEmpty else {
+                    guard try PhysicalDesignFixedCutSeparation.separated(shapes[i], from: shapes[j], minimum: minimum) else {
                         throw PhysicalDesignTechnologyError.invalid("Fixed via cuts violate declared edge-to-edge SPACING.")
                     }
                 }
@@ -304,18 +344,54 @@ struct PhysicalDesignProcessGeometry: Sendable {
         }
     }
 
-    private static func validateContact(_ shape: IRBoundary, metal: Region, enclosure: (Int64, Int64)?) throws {
+    private static func validateQualifiedEnclosureStack(cutLayer: Int16, lowerLayer: Int16, upperLayer: Int16,
+        inputs: PhysicalDesignProcessInputs, layerMaps: [String: [String: Int16]]) throws {
+        var declarations = 0
+        for assetID in inputs.technologyViews.keys.sorted() {
+            guard let document = inputs.technologyViews[assetID], let mapping = layerMaps[assetID] else {
+                throw PhysicalDesignTechnologyError.invalid("Qualified ENCLOSURE source order disappeared.")
+            }
+            for (index, layer) in document.layers.enumerated() where mapping[layer.name] == cutLayer {
+                declarations += 1
+                guard layer.type == .cut,
+                      let below = document.layers[..<index].last(where: { $0.type == .routing }),
+                      let above = document.layers[(index + 1)...].first(where: { $0.type == .routing }) else {
+                    throw PhysicalDesignTechnologyError.unsupported("Qualified ENCLOSURE requires both adjacent routing layers in its exact technology source order.")
+                }
+                guard mapping[below.name] == lowerLayer, mapping[above.name] == upperLayer else {
+                    throw PhysicalDesignTechnologyError.invalid("Fixed VIA triplet contradicts qualified ENCLOSURE technology source order.")
+                }
+            }
+        }
+        guard declarations == 1 else {
+            throw PhysicalDesignTechnologyError.invalid("Qualified ENCLOSURE requires one unambiguous CUT declaration in technology source order.")
+        }
+    }
+
+    private static func validateContact(_ shape: IRBoundary, metal: Region, enclosures: [(Int64, Int64)]) throws {
         let cut = Region(layer: shape.layer, polygons: [shape])
         guard try cut.subtracting(metal).isEmpty else {
             throw PhysicalDesignTechnologyError.invalid("Fixed via metal does not cover its cut geometry.")
         }
-        guard let (first, second) = enclosure else { return }
+        guard !enclosures.isEmpty else { return }
+        var unsupportedDirectionalCut = false
+        for pair in enclosures {
+            if let satisfied = try enclosureMatches(shape, cut: cut, metal: metal, pair: pair) {
+                if satisfied { return }
+            } else { unsupportedDirectionalCut = true }
+        }
+        if unsupportedDirectionalCut {
+            throw PhysicalDesignTechnologyError.unsupported("Asymmetric ENCLOSURE requires a rectangular fixed cut when no supported alternative proves enclosure.")
+        }
+        throw PhysicalDesignTechnologyError.invalid("Fixed via metal violates all applicable ENCLOSURE alternatives.")
+    }
+
+    private static func enclosureMatches(_ shape: IRBoundary, cut: Region, metal: Region,
+        pair: (Int64, Int64)) throws -> Bool? {
+        let (first, second) = pair
         if first == second {
             let minimum = try coordinate(first, field: "cut enclosure")
-            guard try metal.enclosureViolations(inner: cut, minEnclosure: minimum).isEmpty else {
-                throw PhysicalDesignTechnologyError.invalid("Fixed via metal violates declared ENCLOSURE.")
-            }
-            return
+            return try metal.enclosureViolations(inner: cut, minEnclosure: minimum).isEmpty
         }
         guard let bounds = cut.boundingBox else { throw PhysicalDesignTechnologyError.invalid("Fixed via cut is empty.") }
         func rectangle(_ dx: Int64, _ dy: Int64) throws -> Region {
@@ -326,14 +402,10 @@ struct PhysicalDesignProcessGeometry: Sendable {
             return Region(layer: shape.layer, polygons: [.init(layer: shape.layer, datatype: 0, points: [
                 .init(x: x1, y: y1), .init(x: x2, y: y1), .init(x: x2, y: y2), .init(x: x1, y: y2), .init(x: x1, y: y1)])])
         }
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Source contact admission supports asymmetric opposite-side enclosure for rectangular cuts. Nonrectangular directional offsets require an exact polygon offset operation before they can be admitted.
-        guard try rectangle(0, 0).subtracting(cut).isEmpty else {
-            throw PhysicalDesignTechnologyError.unsupported("Asymmetric ENCLOSURE requires a rectangular fixed cut.")
-        }
-        guard try rectangle(first, second).subtracting(metal).isEmpty
-                || rectangle(second, first).subtracting(metal).isEmpty else {
-            throw PhysicalDesignTechnologyError.invalid("Fixed via metal violates opposite-side ENCLOSURE.")
-        }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Native fixed-contact API/CLI admits asymmetric offsets only for rectangular cuts. A nonrectangular directional alternative cannot prove success until exact polygon offsets are implemented and verified.
+        guard try rectangle(0, 0).subtracting(cut).isEmpty else { return nil }
+        return try rectangle(first, second).subtracting(metal).isEmpty
+            || rectangle(second, first).subtracting(metal).isEmpty
     }
 
     func projectMasterPoint(_ point: IRPoint, master: Master, orientation: DEFOrientation, x: Int64, y: Int64) throws -> IRPoint {

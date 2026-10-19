@@ -1,0 +1,44 @@
+MIT License
+
+Copyright (c) 2026 1amageek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Applicability and retained third-party material
+---------------------------------------------
+
+The MIT grant above applies only to original PhysicalDesignEngine-owned source.
+It does not relicense third-party material or any dependency's source, artifacts,
+or license terms.
+
+The retained Sky130 fixture material remains third-party Apache-2.0 material.
+Its original notices include Copyright 2020 The SkyWater PDK Authors. Existing
+source bytes, copyright/license notices, selection identities and provenance
+remain unchanged. See the following retained paths:
+
+- Fixtures/CharacterizedPlacement/Sky130/README.md
+- Fixtures/CharacterizedPlacement/Sky130/original-technology.raw
+- Fixtures/CharacterizedPlacement/Sky130/selection-report.json
+- Tests/PhysicalLogicHandoffTests/Fixtures/NativeCTS/Sky130/README.md
+- Tests/PhysicalLogicHandoffTests/Fixtures/NativeCTS/Sky130/original-technology.raw
+- Tests/PhysicalLogicHandoffTests/Fixtures/NativeCTS/Sky130/selection-report.json
+
+The Apache-2.0 terms remain available at
+https://www.apache.org/licenses/LICENSE-2.0 . This owned-code MIT grant does not
+replace or remove those third-party terms and attributions.

@@ -8,6 +8,7 @@ public struct PhysicalDesignImplementationConstraints: Sendable, Hashable, Codab
     public var clockBufferMaster: String
     public var clockRouteLayer: Int
     public var routeWidth: Int64
+    public var sourceRoutingWidthPolicy: PhysicalDesignSourceRoutingWidthPolicy?
     public var routeSpacing: Int64
     public var trackPitch: Int64
 
@@ -20,7 +21,8 @@ public struct PhysicalDesignImplementationConstraints: Sendable, Hashable, Codab
         clockRouteLayer: Int = 3,
         routeWidth: Int64 = 100,
         routeSpacing: Int64 = 100,
-        trackPitch: Int64 = 100
+        trackPitch: Int64 = 100,
+        sourceRoutingWidthPolicy: PhysicalDesignSourceRoutingWidthPolicy? = nil
     ) {
         self.wirelengthWeight = wirelengthWeight
         self.congestionWeight = congestionWeight
@@ -29,6 +31,7 @@ public struct PhysicalDesignImplementationConstraints: Sendable, Hashable, Codab
         self.clockBufferMaster = clockBufferMaster
         self.clockRouteLayer = clockRouteLayer
         self.routeWidth = routeWidth
+        self.sourceRoutingWidthPolicy = sourceRoutingWidthPolicy
         self.routeSpacing = routeSpacing
         self.trackPitch = trackPitch
     }

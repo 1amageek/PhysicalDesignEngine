@@ -9,8 +9,8 @@ struct NativePhysicalDesignPlacementAllocator: PhysicalDesignPlacementAllocating
     }
 
     func allocate(_ input: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration,
-        processGeometry: PhysicalDesignProcessGeometry?) throws -> PhysicalDesignPlacementAllocation {
-        try Task.checkCancellation()
+        processGeometry: PhysicalDesignProcessGeometry?, checkpoint: (@Sendable () throws -> Void)? = nil) throws -> PhysicalDesignPlacementAllocation {
+        try Task.checkCancellation(); try checkpoint?()
         guard let core = input.core else { throw PhysicalDesignPlacementError.capacity("core") }
         try check(core)
         let rows = input.rows.sorted { $0.id < $1.id }
@@ -18,11 +18,12 @@ struct NativePhysicalDesignPlacementAllocator: PhysicalDesignPlacementAllocating
         let structural = try multiply(try multiply(try multiply(input.cells.count, rows.count), 8), occupiedCount)
         let ceiling = min(configuration.maximumPlacementCandidateChecks ?? structural, structural)
         var occupancy = try input.blockages.map { rect in
+            try checkpoint?()
             try check(rect)
             return Occupancy(rect: rect, spacing: 0, isBlockage: true)
         }
         for cell in input.cells.filter(\.locked).sorted(by: { $0.id < $1.id }) {
-            try Task.checkCancellation()
+            try Task.checkCancellation(); try checkpoint?()
             let rect = bounds(cell)
             try check(rect)
             let compatible = try rows.contains { row in
@@ -44,7 +45,7 @@ struct NativePhysicalDesignPlacementAllocator: PhysicalDesignPlacementAllocating
         var checks = 0
         var blockageConflicts = 0
         for index in indices {
-            try Task.checkCancellation()
+            try Task.checkCancellation(); try checkpoint?()
             let previous = output.cells[index]
             let orientations = processGeometry == nil ? [previous.orientation]
                 : [previous.orientation] + DEFOrientation.allCases.filter { $0 != previous.orientation }
@@ -67,11 +68,12 @@ struct NativePhysicalDesignPlacementAllocator: PhysicalDesignPlacementAllocating
                     // Event storage scales with geometry, never with the row's site count.
                     var events: Set<Int64> = [row.originX]
                     for interval in intervals {
+                        try checkpoint?()
                         let boundary = try sum(interval.rect.maxX, interval.spacing)
                         events.insert(try aligned(max(row.originX, boundary), on: row))
                     }
                     for x in events.sorted() {
-                        try Task.checkCancellation()
+                        try Task.checkCancellation(); try checkpoint?()
                         let right = try sum(x, cell.width)
                         guard x >= row.originX, right <= end else { continue }
                         guard checks < ceiling else { throw PhysicalDesignPlacementError.candidateBudget }
@@ -81,6 +83,7 @@ struct NativePhysicalDesignPlacementAllocator: PhysicalDesignPlacementAllocating
                         guard core.contains(rect) else { continue }
                         var conflict = false
                         for interval in intervals {
+                            try checkpoint?()
                             let left = try subtract(interval.rect.x, interval.spacing)
                             let occupiedRight = try sum(interval.rect.maxX, interval.spacing)
                             if rect.x < occupiedRight && rect.maxX > left {

@@ -37,7 +37,7 @@ trust and foundry qualification remain separate authorities.
 
 ```mermaid
 flowchart TD
-    Inputs[Exact manifest / LEF / Liberty / RC / schema-2 clock model] --> Admission
+    Inputs[Exact manifest / LEF / Liberty / RC / schema-3 clock model] --> Admission
     Admission --> Candidate[Explicit topology + bounded placement and source routing]
     Candidate --> Capture[Actual PORT / width-aware wire / fixed via conductor capture]
     Capture --> PEX[Existing mesh + explicit electrode contacts]
@@ -54,10 +54,14 @@ flowchart TD
 
 ## Contracts and Invariants
 
-The schema-2 clock model requires an explicit method, exact process/version/corner,
+The schema-3 clock model requires an explicit method, exact process/version/corner,
 source asset IDs, source digests, clock roots, original sinks, topology profile,
 source PWL waveforms, buffer waveform shapes, electrodes, constraints and numerical
 limits. Schema 1 and its arbitrary-byte/length/constant-delay semantics are rejected.
+Schema 2 remains explicitly admitted with absent/empty top-port electrode data and
+its original cell-output-root semantics; neither its retained version nor source
+digest is rewritten. Schema 3 requires an explicit top-port electrode table,
+including an empty table for a cell-root-only model.
 Every selected Liberty/RC asset belongs to the exact manifest corner and matches
 its retained binding by format, role, digest and byte count. RC selection retains
 the exact PVT and parameter dictionary; Celsius-to-kelvin conversion is explicit.
@@ -66,8 +70,22 @@ binding and verified bytes; this proves input integrity, not calibration accurac
 Units are seconds, volts, farads, ohms and explicit integer DBU. No nominal corner,
 unit, pin direction, buffer master or root waveform is inferred.
 
-Every clock root has one explicit canonical output pin and at least one exact
-input sink. The declared source must be the sole output of its clock net. Connected
+Every clock root has one explicit canonical driver and at least one exact cell
+input sink. A driver is either a cell output or a top-level input with an actual
+retained `PhysicalDesignTopPort`. The declared source must be the sole functional
+driver of its clock net. The actual top-port USE remains SIGNAL or CLOCK; clock meaning comes from the
+explicit model and canonical clock net, not a metadata rewrite. Primary-input
+roots require schema 3 and one explicit
+`PhysicalDesignClockTopPortElectrode`, keyed by canonical pin ID, whose faces are
+in the snapshot's world DBU frame. Those faces must be covered by the actual
+retained top-port metal and independently pass the lower PEX exposed-face checker.
+The source is the caller's ideal prescribed PWL boundary, without an invented
+external driver cell, Liberty capacitance, delay or slew. Its source terminal is
+excluded from receiver pin-capacitance loading. Other top ports contribute their
+retained metal to conductor capture, including the quiet-boundary network.
+Top-port electrode identity must exactly cover the configured primary roots; no
+unused/foreign electrode, missing surface, duplicate driver or implicit source is
+admitted. Connected
 sink pin names, directions and clock semantics agree with selected source masters
 and strict Liberty. Selected sink cells require capacitance/clock admission;
 selected propagation buffer cells additionally require the unique supported
@@ -106,6 +124,17 @@ The caller supplies electrode profiles by exact master and PORT name in the
 canonical N-oriented, ORIGIN-adjusted master DBU frame. ProcessGeometry's existing
 orientation/placement transform applies them to each occurrence, including newly
 placed buffers. No nearest face or representative pin point selects a boundary.
+For a selected cell PORT containing multiple rectangles, all original metal pieces
+are retained. Caller-declared transformed electrode faces must fit inside one
+unique actual access-layer rectangle. That exact rectangle supplies nonconducting
+pin incidence only; every retained PORT piece must belong to the same captured
+component. The existing PEX owner still validates actual exposed contacts, never a
+bounding box. Multiple possible incidence rectangles, disconnected pieces and
+faces spread across several rectangles are explicitly unsupported in this bounded
+profile. General union-shaped pin incidence is not claimed. Each added rectangle,
+face and captured component/footprint probe consumes the caller's cumulative
+projection-record allowance and checks cancellation; no unbounded source scan is
+introduced.
 
 The supported method is passive linear RC transient with an explicit quiet-other-
 conductor boundary. Other conductors are held at the declared reference voltage;
@@ -126,6 +155,10 @@ to the measured input-delay-threshold arrival plus the evaluated cell delay.
 Scale voltage to the exact supply. This shape selection is retained, never derived
 from the transition duration. Invalid shape, range, alignment or horizon fails.
 
+The clock requests trapezoidal as `TransientConfig.preferredMethod`. CoreSpice's
+linked analysis contract owns checked backward-Euler startup and smooth-history
+admission before the preferred higher-order method; the clock does not override
+that numerical lifecycle or change tolerances to select a method.
 CoreSpice solves the actual admitted RC circuit, not Manhattan distance or a
 first-moment shift. In nodal form its passive operator is `C dv/dt + G v = b(t)`;
 sheet/cut/contact resistors and both-ended capacitors are stamped by the existing
@@ -168,9 +201,97 @@ and routing candidates, capture records, mesh nodes/operators/contacts, transien
 dimension, attempts, accepted points, saved scalars, work, time horizon, refinements
 and measurement scans. Structural ceilings bound finite topology and existing
 geometry searches; caller values may lower those ceilings. Arithmetic and
-allocation products are checked before work. Lower limits are propagated rather
+allocation products are checked before work. `PhysicalDesignClockNumerics.captureLimits`
+is an optional schema-3 resource profile. Its serializable value adapts the existing
+lower capture owner's ten explicit quotas without defining a new geometry algorithm:
+hierarchy occurrences/objects/points/depth, decomposition input entries/edge probes/
+output bands, technology records, footprints and contact candidate probes. A lower
+input entry is a polygon plus each point (each expanded VIA layer rectangle counts
+separately); a contact probe is a candidate pair or pin-band/footprint test, including
+rejected candidates. Projection records and successful contacts are different units.
+The adapter validates each quota and forwards it unchanged; it does not multiply,
+reset or silently enlarge caller limits. Schema 2 rejects an explicit capture profile.
+When the field is absent, schemas 2 and 3 preserve the existing projection-record and
+geometry-probe mapping exactly; raw version/digest and legacy failure behavior remain
+unchanged. The fixture profile owner selects explicit operational limits from actual
+expanded geometry counts and checked finite candidate bounds. A lower explicit quota
+must refuse without publishing candidate artifacts. The same actual-source fixture
+runs both API and built CLI with input-entry or contact-candidate quota one; each
+must preserve the corresponding lower resource diagnostic and publish no candidate. The selected actual-Sky130 fixture's
+single no-relaxation diagnostic measured all-rectangle upper inventories of 12,557
+and 23,561 expanded polygons for primary and derived clocks, respectively. The
+larger inventory has 94,284 points and seven rectangular selected pins. Its owner
+selects checked `inputEntries = polygons + points + 5 * pins`,
+`outputBands = polygons + pins`, `footprints = polygons`, and
+`contactProbes = polygons * (polygons - 1) / 2 + polygons * pins` ceilings. Existing
+hierarchy, edge-probe and technology-record ceilings remain unchanged. These are
+fixture operational limits, not universal production defaults or measured runtime
+work. The legacy cell-root fixture selects sufficient old record/probe ceilings
+under the same legacy units and keeps `captureLimits` absent. Lower limits are propagated rather
 than reconstructed from undocumented defaults. Numerical configuration explicitly
 sets time steps, voltage/current/LTE tolerances and iteration/reduction ceilings.
+The profile ownership and consumption path is explicit:
+
+| Profile | Owner consuming it | Lifetime and units |
+|---|---|---|
+| `maximumInputBytes` | Clock model loader | Cumulative exact source bytes for the admitted model |
+| `maximumProjectionRecords` | Model and conductor projection | Source facts, geometry records, electrode faces and correspondence probes |
+| `captureLimits`, or documented legacy record/probe mapping | Existing layout conductor capture | One flat actual candidate; independent hierarchy, decomposition and candidate-contact units |
+| `maximumCellSpanDBU`, `extraction` | Existing PEX calculator | Same captured candidate, exact DBU conversion and mesh/operator budgets |
+| `electrodes` | Existing PEX electrode builder | Explicit retained faces, finite contacts and electrical boundaries |
+| Time horizon, step/refinement and crossing-agreement fields | Clock transient measurement | Explicit numerical/model policy for each measured root or branch |
+| `transient` | Existing CoreSpice transient, composed by clock measurement | Accepted steps, solves, Newton work, saved scalars and work are subtracted from one request-owned allowance across candidates, edges, branches and refinements; matrix and breakpoint ceilings bound each transient run |
+
+The selected actual-cell fixture retains an operational transient work ceiling
+selected from the previous work surrogate using checked integer arithmetic. For
+maximum matrix dimension `D`, square CSR has at most `D * D` entries. The passive
+circuit creates at most `extraction.maximumNetworkElements +
+electrodes.maximumContacts + maximumProjectionRecords + 1` devices: extracted R/C
+elements, electrode resistors, terminal loads, and one explicit voltage source.
+The previous per-iteration surrogate was `D^3 + 2 * NNZ + 2 * devices + 8 * D`;
+it was not measured FLOPs. With the selected hard limits, the device bound was
+8,110,001 and the iteration bound was 1,018,228,002. Adding the previous `20 * D`
+LTE vector-work allowance before multiplying by the request-wide 1,000,000 Newton
+ceiling selected work ceiling 1,018,248,002,000,000.
+
+That ceiling remains unchanged as an operational limit. The corrected CoreSpice
+Newton residual and refinement paths charge additional work; the previous formula
+does not prove that the retained ceiling covers their worst case for all admitted
+circuits or that the work guard cannot precede the Newton guard. The actual primary
+and derived API and CLI fixture runs completed within this ceiling. CoreSpice's
+typed matrix, CSR, device-binding and work admission remains authoritative. The
+exact numerical configuration is retained in the model binding; tolerances, RC,
+time window and other quotas remain unchanged. A serialized 120-second execution
+bounds each validation attempt independently; successful CTS for other inputs is
+not implied by this finite ceiling.
+
+The selected actual-cell fixture owns a caller-supplied minimum timestep of
+`1e-19` seconds as its operational resolution floor. Independent Decimal80
+references reconstructed the full and half-step systems at this one candidate
+floor from the retained zero-state R/C/PWL models with `gmin = 0` and unchanged
+tolerances. Their normalized bootstrap LTE values are:
+
+| Retained model dimension | Normalized bootstrap LTE at `1e-19` seconds |
+|---|---:|
+| 455 | 0.07659417864647895 |
+| 847 | 0.03690267873598096 |
+
+This reference establishes only the first step of those two observed models.
+Equilibrated condition estimates and independently accumulated residuals accompany
+the reference; they do not certify a componentwise forward-error bound. Every
+other net, later timestep, refinement and the complete CTS flow still requires the
+actual bounded integration run. The fixture may select this floor without changing
+CoreSpice algorithms, production defaults, tolerance, RC, original source assets
+or other quotas. The timing model is newly encoded with this numerical setting;
+its artifact bytes, digest and request binding are new. Minimum-step failure and
+timeout remain explicit failures.
+
+The fixture owner checks the complete downstream profile against the same candidate
+before claiming success. Raising one failed default does not establish that later
+mesh, electrode or transient quotas are sufficient. Numerical tolerances, physical
+mesh resolution and timing constraints are independent of resource ceilings; a
+resource failure cannot silently change any of those model assumptions.
+
 No-progress, minimum-step rejection, overflow and exhausted limits are typed
 failures, not partial completed observations.
 
@@ -213,3 +334,45 @@ The characterized profile does not claim centerline path lengths through multi-a
 The request selects a PDK corner (`cornerID`) and an explicit electrical RC corner (`rcCornerID`); the latter must equal the selected PDK corner's declared `rcCorner`. Liberty and RC asset IDs must belong to that PDK corner and have `.liberty` and `.extraction` roles respectively. Electrical RC parameters are explicit, retained, and checked by the PEX owner. A PDK corner name is not silently reused as an RC corner name.
 
 Artifact publication starts only after numerical and standard export admission and a final cancellation check. A completed result requires all written artifact bytes to be read back and verified. Store I/O failure cannot become completion; unreferenced partial run files from a multi-write I/O failure carry no successful result/manifest authority. The CTS candidate itself stays invocation-local until numerical constraints succeed.
+
+Primary-clock and actual-cell CTS equivalence regressions are owned by
+`PhysicalLogicHandoffTests/NativeCTSLogicEquivalenceTests.swift`: checked source
+synthesis, actual Native CTS stage, retained JSON/DEF, reconstructed candidate
+actual functions and independent RUP recheck. Selected Sky130 source facts and
+analytical fixture RC remain explicitly unqualified; these tests do not certify
+full raw PDK acceptance, foundry accuracy, PEX/STA/DRC/LVS closure or release.
+
+### Interconnect material boundary
+
+Clock RC projection includes typed routing metal and cut layers. Typed `.well`
+MASTERSLICE regions retain their complete source and snapshot identity but are not
+interconnect metal; no well resistivity or substrate dynamics are fabricated.
+Selected terminals/electrodes on excluded well layers fail explicitly. All routing
+metal, supply-rail metal, actual PORT pieces, routes and fixed via geometry remain
+in the interconnect capture. OBS remains the routing owner's obstruction contract,
+not fabricated conductive material. Substrate/well dynamics and full process
+qualification are outside this prescribed-PWL interconnect profile.
+
+## CTS Candidate Generation Profile
+
+The characterized CTS model declares exact exposed electrode faces. Its current
+bounded candidate generator uses preferred-axis track routing and explicitly
+disables terminal-track jog generation. Ordinary signal routing retains its
+terminal-only jog domain; physical admission of qualified retained orthogonal
+metal is unchanged. This is a candidate-generation choice, not a LEF DIRECTION
+prohibition. Every CTS candidate still passes the same complete geometry, exposed
+face, extraction, transient and source-bound proof gates.
+
+Source-face-aware CTS terminal-jog generation is unsupported. A new jog can
+physically internalize a declared face even when ordinary source spacing and
+connectivity are valid: the observed cell-1/CLK minX x8370/y3820..4220 was covered
+for 45 DBU by the li1 jog (8510,3780)..(8050,3780), width170/caps85. The lower
+electrode builder correctly rejects the missing exposed interval. Supporting
+that additional CTS domain requires explicit face-aware candidate admission;
+there is no fallback that ignores or moves a source electrode. The working
+preferred-axis profile is verified by fresh actual-source CTS publication and
+its existing numerical gates, not generalized face-aware CTS qualification.
+
+RoutingTerminalJogTests distinguishes the same fixture's ordinary jog-capable
+domain from preferred-only refusal. NativeCTSLogicEquivalenceTests verifies fresh
+actual CTS face admission, exact generated-edge uniqueness and functional proof.

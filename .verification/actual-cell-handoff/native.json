@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/Users/1amageek/Library/Developer/Toolchains/swift-6.4.0-RELEASE.xctoolchain/usr/bin/swift",
+    "test",
+    "--build-system",
+    "native",
+    "--config-path",
+    "/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/lsi-logic-assessment-config-yhc0113s",
+    "--jobs",
+    "4"
+  ],
+  "exit": 0,
+  "seconds": 10.606,
+  "timeout": 300
+}

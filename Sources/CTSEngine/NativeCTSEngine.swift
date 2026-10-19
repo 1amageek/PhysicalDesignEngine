@@ -8,7 +8,7 @@ public struct NativeCTSEngine: CTSExecuting {
     public init(
         artifactStore: any PhysicalDesignArtifactStore,
         implementationID: String = "physical-design-native.cts",
-        implementationVersion: String = "1.0.0"
+        implementationVersion: String = NativePhysicalDesignExecutor.currentImplementationVersion
     ) {
         self.executor = NativePhysicalDesignExecutor(
             expectedStage: .clockTreeSynthesis,

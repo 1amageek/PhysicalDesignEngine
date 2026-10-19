@@ -7,6 +7,7 @@ import CoreSpice
 import PhysicalDesignEngine
 import DEF
 import LogicIR
+import LogicDesignSerialization
 @testable import PhysicalDesignCore
 
 @Suite("Source-bound passive RC native CTS", .timeLimit(.minutes(2)))
@@ -151,6 +152,37 @@ struct CharacterizedNativeCTSTests {
         let result = try await task.value
         #expect(result.status == .cancelled && result.artifactBindings.isEmpty)
     }
+    @Test("actual CTS output permits nonclock routing while retaining owned clock metal and invalidating prior extraction timing")
+    func retainedClockNonclockRouting() async throws {
+        let (request, store, _, _) = try await fixture(buffered: false)
+        let engine = PhysicalDesignEngine(artifactStore: store)
+        let cts = try await engine.execute(request)
+        #expect(cts.status == .completed, "\(cts.diagnostics)")
+        let codec = PhysicalDesignJSONCodec()
+        let original = try codec.decode(PhysicalDesignSnapshot.self, from: await store.read(try #require(cts.payload.physicalDesign?.layoutArtifact)))
+        var snapshot = original
+        for (id, x, direction) in [("D_IN", Int64(700), "input"), ("D_OUT", Int64(8300), "output")] {
+            snapshot.pins.append(.init(id: id, name: id, x: x + 100, y: 4100, netID: "D", direction: direction, accessLayer: 2,
+                topPort: .init(rectangle: .init(x: 0, y: 0, width: 600, height: 600), layer: 2,
+                    placementX: x, placementY: 3900, orientation: .n, placementStatus: .fixed, use: .signal)))
+        }
+        snapshot.nets.append(.init(id: "D", pinIDs: ["D_IN", "D_OUT"]))
+        var route = request; route.stage = .globalRouting; route.runID = "CTS-followup-signals"
+        route.executionIntent = .geometrySmoke; route.clockTimingModel = nil; route.initialSnapshot = snapshot
+        let result = try await engine.execute(route)
+        #expect(result.status == .completed, "\(result.diagnostics)")
+        let output = try codec.decode(PhysicalDesignSnapshot.self, from: await store.read(try #require(result.payload.physicalDesign?.layoutArtifact)))
+        #expect(output.routes.filter { $0.netID == "CLK" } == original.routes.filter { $0.netID == "CLK" })
+        #expect(output.vias.filter { $0.netID == "CLK" } == original.vias.filter { $0.netID == "CLK" })
+        #expect(output.routes.contains { $0.netID == "D" })
+        #expect(output.clockTrees[0].sinkPinIDs == original.clockTrees[0].sinkPinIDs && output.clockTrees[0].timingEstimate == nil)
+        route.runID = "CTS-owned-reroute"; route.stage = .timingECO; route.initialSnapshot = output
+        route.configuration.ecoAction = .rerouteNet; route.configuration.ecoTargetNetID = "CLK"
+        let refused = try await engine.execute(route)
+        #expect(refused.status == .blocked && refused.artifactBindings.isEmpty)
+        #expect(refused.diagnostics.contains { $0.code.rawValue == "routing_clock_tree_unsupported" })
+    }
+
     func fixture(buffered: Bool, secondSink: Bool = false, distinctThresholds: Bool = false) async throws -> (PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore, PhysicalDesignClockTimingModel, PhysicalDesignClockTimingModelReference) {
         let (_, base, store) = try await ProcessGeometryTests().fixture(replacement: "buffer", routingPorts: true)
         let calibration = try await store.registerInput(Data("analytical passive sheet calibration".utf8), relativePath: "inputs/calibration.txt", kind: .technology, format: .json)

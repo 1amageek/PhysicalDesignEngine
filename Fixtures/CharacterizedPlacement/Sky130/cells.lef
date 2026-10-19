@@ -1,0 +1,75 @@
+VERSION 5.7 ;
+  DIVIDERCHAR "/" ;
+  BUSBITCHARS "[]" ;
+MACRO sky130_fd_sc_hd__inv_1
+  CLASS CORE ;
+  FOREIGN sky130_fd_sc_hd__inv_1 ;
+  ORIGIN 0.000 0.000 ;
+  SIZE 1.380 BY 2.720 ;
+  SYMMETRY X Y R90 ;
+  SITE unithd ;
+  PIN A
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    ANTENNAGATEAREA 0.247500 ;
+    PORT
+      LAYER li1 ;
+        RECT 0.320 1.075 0.650 1.315 ;
+    END
+  END A
+  PIN VGND
+    DIRECTION INOUT ;
+    USE GROUND ;
+    SHAPE ABUTMENT ;
+    PORT
+      LAYER met1 ;
+        RECT 0.000 -0.240 1.380 0.240 ;
+    END
+  END VGND
+  PIN VNB
+    DIRECTION INOUT ;
+    USE GROUND ;
+    PORT
+      LAYER pwell ;
+        RECT 0.210 0.105 1.140 1.015 ;
+        RECT 0.210 0.085 0.315 0.105 ;
+        RECT 0.145 -0.085 0.315 0.085 ;
+    END
+  END VNB
+  PIN VPB
+    DIRECTION INOUT ;
+    USE POWER ;
+    PORT
+      LAYER nwell ;
+        RECT -0.190 1.305 1.570 2.910 ;
+    END
+  END VPB
+  PIN VPWR
+    DIRECTION INOUT ;
+    USE POWER ;
+    SHAPE ABUTMENT ;
+    PORT
+      LAYER met1 ;
+        RECT 0.000 2.480 1.380 2.960 ;
+    END
+  END VPWR
+  PIN Y
+    DIRECTION OUTPUT ;
+    USE SIGNAL ;
+    ANTENNADIFFAREA 0.429000 ;
+    PORT
+      LAYER li1 ;
+        RECT 0.720 1.485 1.050 2.465 ;
+        RECT 0.820 0.885 1.050 1.485 ;
+        RECT 0.720 0.255 1.050 0.885 ;
+    END
+  END Y
+  OBS
+      LAYER li1 ;
+        RECT 0.000 2.635 1.380 2.805 ;
+        RECT 0.340 1.495 0.550 2.635 ;
+        RECT 0.320 0.085 0.550 0.905 ;
+        RECT 0.000 -0.085 1.380 0.085 ;
+  END
+END sky130_fd_sc_hd__inv_1
+END LIBRARY

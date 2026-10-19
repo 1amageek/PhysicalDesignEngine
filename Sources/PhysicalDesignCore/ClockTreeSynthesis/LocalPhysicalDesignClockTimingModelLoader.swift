@@ -44,11 +44,26 @@ public struct LocalPhysicalDesignClockTimingModelLoader: PhysicalDesignClockTimi
             let cells = Dictionary(uniqueKeysWithValues: snapshot.cells.map { ($0.id, $0) })
             var selectedCells = Set<String>()
             var propagationCells = Set<String>()
+            var primaryRoots = Set<String>()
             guard Set(model.clocks.map(\.netID)) == Set(snapshot.nets.filter(\.isClock).map(\.id)), snapshot.clockTrees.isEmpty else { throw invalid("exact pre-CTS clock coverage") }
             for clock in model.clocks {
                 guard let net = snapshot.nets.first(where: { $0.id == clock.netID }), net.isClock,
                       Set(net.pinIDs) == Set([clock.sourcePinID] + clock.sinkPinIDs),
-                      pins[clock.sourcePinID]?.direction == "output", net.pinIDs.filter({ pins[$0]?.direction == "output" }).count == 1 else { throw invalid("sole clock source/net identity") }
+                      let source = pins[clock.sourcePinID] else { throw invalid("clock source/net identity") }
+                let drivers = net.pinIDs.filter { id in
+                    guard let pin = pins[id] else { return false }
+                    return pin.cellID == nil ? pin.direction == "input" : pin.direction == "output"
+                }
+                guard drivers == [source.id] else { throw invalid("sole clock source/net identity") }
+                if source.cellID == nil {
+                    guard model.schemaVersion == PhysicalDesignClockTimingModel.currentSchemaVersion,
+                          source.direction == "input", let port = source.topPort, (port.use == .clock || port.use == .signal),
+                          source.accessLayer == port.layer else { throw invalid("explicit primary clock PORT/source profile") }
+                    _ = try port.worldRectangle()
+                    primaryRoots.insert(source.id)
+                } else {
+                    guard source.direction == "output", source.topPort == nil else { throw invalid("cell clock source direction") }
+                }
                 for id in clock.sinkPinIDs {
                     guard let pin = pins[id], pin.direction == "input", let cellID = pin.cellID, let cell = cells[cellID] else { throw invalid("source-bound sink \(id)") }
                     selectedCells.insert(cell.master)
@@ -56,6 +71,9 @@ public struct LocalPhysicalDesignClockTimingModelLoader: PhysicalDesignClockTimi
                 if clock.topology != .direct, let master = clock.bufferMaster { selectedCells.insert(master); propagationCells.insert(master) }
                 guard clock.rise.first?.voltage == 0, clock.rise.last?.voltage == selected.pvt.voltage,
                       clock.fall.first?.voltage == selected.pvt.voltage, clock.fall.last?.voltage == 0 else { throw invalid("explicit waveform supply/corner") }
+            }
+            guard Set((model.topPortElectrodes ?? []).map(\.pinID)) == primaryRoots else {
+                throw invalid("exact primary clock electrode coverage")
             }
             let library = try LibertyParser().parseCharacterized(await artifactStore.read(reference.cellLibraryArtifact),
                                                                  cellNames: selectedCells.sorted(), propagationCellNames: propagationCells.sorted())

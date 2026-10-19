@@ -1,10 +1,11 @@
 import Foundation
 import CircuiteFoundation
 import LogicIR
+import LogicDesignSerialization
 import PDKCore
 
 public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 7
+    public static let currentSchemaVersion = 8
 
     public var schemaVersion: Int
     public var runID: String
@@ -21,7 +22,9 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
     public var configuration: PhysicalDesignConfiguration
     public var initialSnapshot: PhysicalDesignSnapshot?
     public var executionIntent: PhysicalDesignExecutionIntent
+    public var placementTimingProfile: PhysicalDesignPlacementTimingReference?
     public var clockTimingModel: PhysicalDesignClockTimingModelReference?
+    public var repairMeasurementProfile: PhysicalDesignRepairMeasurementReference?
     public var productionConfiguration: PhysicalDesignProductionConfiguration?
 
     public init(
@@ -37,8 +40,10 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         initialSnapshot: PhysicalDesignSnapshot? = nil,
         executionIntent: PhysicalDesignExecutionIntent = .geometrySmoke,
         clockTimingModel: PhysicalDesignClockTimingModelReference? = nil,
+        placementTimingProfile: PhysicalDesignPlacementTimingReference? = nil,
         productionConfiguration: PhysicalDesignProductionConfiguration? = nil,
-        processAssets: [String: PhysicalDesignArtifactBinding] = [:]
+        processAssets: [String: PhysicalDesignArtifactBinding] = [:],
+        repairMeasurementProfile: PhysicalDesignRepairMeasurementReference? = nil
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -52,13 +57,17 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         self.initialSnapshot = initialSnapshot
         self.executionIntent = executionIntent
         self.clockTimingModel = clockTimingModel
+        self.placementTimingProfile = placementTimingProfile
         self.productionConfiguration = productionConfiguration
         self.processAssets = processAssets
+        self.repairMeasurementProfile = repairMeasurementProfile
         let timingArtifacts = clockTimingModel.map { [$0.modelArtifact] + $0.sourceArtifacts } ?? []
         let productionArtifacts = productionConfiguration?.inputArtifacts ?? []
         let prerequisiteBindings = [constraints]
             + (inputLayout.map { [$0.layoutArtifact] } ?? [])
             + timingArtifacts
+            + (placementTimingProfile.map { [$0.artifact] } ?? [])
+            + (repairMeasurementProfile.map { [$0.artifact] } ?? [])
             + productionArtifacts
             + inputBindings
             + processAssets.keys.sorted().compactMap { processAssets[$0] }
@@ -91,14 +100,16 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
         case configuration
         case initialSnapshot
         case executionIntent
+        case placementTimingProfile
         case clockTimingModel
+        case repairMeasurementProfile
         case productionConfiguration
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
-        guard schemaVersion == Self.currentSchemaVersion else {
+        guard schemaVersion == Self.currentSchemaVersion || schemaVersion == 7 else {
             throw DecodingError.dataCorruptedError(
                 forKey: .schemaVersion,
                 in: container,
@@ -118,14 +129,26 @@ public struct PhysicalDesignRequest: Sendable, Hashable, Codable {
             initialSnapshot: try container.decodeIfPresent(PhysicalDesignSnapshot.self, forKey: .initialSnapshot),
             executionIntent: try container.decode(PhysicalDesignExecutionIntent.self, forKey: .executionIntent),
             clockTimingModel: try container.decodeIfPresent(PhysicalDesignClockTimingModelReference.self, forKey: .clockTimingModel),
+            placementTimingProfile: try container.decodeIfPresent(PhysicalDesignPlacementTimingReference.self, forKey: .placementTimingProfile),
             productionConfiguration: try container.decodeIfPresent(PhysicalDesignProductionConfiguration.self, forKey: .productionConfiguration),
-            processAssets: try container.decode([String: PhysicalDesignArtifactBinding].self, forKey: .processAssets)
+            processAssets: try container.decode([String: PhysicalDesignArtifactBinding].self, forKey: .processAssets),
+            repairMeasurementProfile: try container.decodeIfPresent(PhysicalDesignRepairMeasurementReference.self, forKey: .repairMeasurementProfile)
         )
+        self.schemaVersion = schemaVersion
+        guard supportsExecutionSchema else {
+            throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: container,
+                debugDescription: "An explicit source routing width policy requires request schema 8.")
+        }
         let declaredInputs = try container.decode([ArtifactReference].self, forKey: .inputs)
         guard declaredInputs.count == inputs.count, Set(declaredInputs) == Set(inputs) else {
             throw DecodingError.dataCorruptedError(forKey: .inputs, in: container,
                 debugDescription: "Declared inputs must match the exact request prerequisites.")
         }
+    }
+
+    var supportsExecutionSchema: Bool {
+        schemaVersion == Self.currentSchemaVersion
+            || (schemaVersion == 7 && configuration.implementationConstraints?.sourceRoutingWidthPolicy == nil)
     }
 
     public func requireBinding(

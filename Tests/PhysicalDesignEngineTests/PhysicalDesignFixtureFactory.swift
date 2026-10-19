@@ -2,6 +2,7 @@ import Foundation
 import CircuiteFoundation
 import CircuiteFoundationFoundation
 import LogicIR
+import LogicDesignSerialization
 import PDKCore
 @testable import PhysicalDesignCore
 

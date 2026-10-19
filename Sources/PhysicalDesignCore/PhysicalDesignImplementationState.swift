@@ -50,6 +50,7 @@ public struct PhysicalDesignImplementationState: Sendable, Hashable, Codable {
     }
 
     public struct PlacementProof: Sendable, Hashable, Codable {
+        public var timingEvidence: PhysicalDesignPlacementTimingEvidence? = nil
         public var cellCount: Int
         public var legalCellCount: Int
         public var overlapCount: Int

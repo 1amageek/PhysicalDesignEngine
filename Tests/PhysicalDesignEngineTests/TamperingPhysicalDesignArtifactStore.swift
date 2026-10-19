@@ -21,6 +21,10 @@ actor TamperingPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
         return try await base.read(binding)
     }
 
+    func prepareBinding(for artifact: PhysicalDesignArtifactWrite) async throws -> PhysicalDesignArtifactBinding {
+        try await base.prepareBinding(for: artifact)
+    }
+
     func write(
         _ artifacts: [PhysicalDesignArtifactWrite]
     ) async throws -> [PhysicalDesignArtifactBinding] {

@@ -205,6 +205,22 @@ struct SpecialNetRepairTests {
         }
     }
 
+    @Test("source power planning routes existing explicit power ports without synthetic pins or structures")
+    func sourcePowerPlanning() async throws {
+        let (base, store, _) = try await fixture()
+        var request = base; request.stage = .powerPlanning; request.runID = "source-power-plan"
+        request.configuration.powerNetNames = request.initialSnapshot!.nets.map(\.id)
+        let result = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+        #expect(result.status == .completed, "\(result.diagnostics)")
+        let output = try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: await store.read(try #require(result.payload.physicalDesign?.layoutArtifact)))
+        #expect(output.pins.map(\.id) == request.initialSnapshot?.pins.map(\.id))
+        #expect(output.powerStructures.isEmpty && output.routes.count == 4)
+        request.runID = "missing-power-port"; request.configuration.powerNetNames.append("FABRICATED")
+        let refused = try await PhysicalDesignEngine(artifactStore: store).execute(request)
+        #expect(refused.status == .blocked && refused.artifactBindings.isEmpty)
+        #expect(refused.diagnostics.contains { $0.code.rawValue == "power_source_connectivity_required" })
+    }
+
     /// Lower native geometry fixture. Full transistor-mask/LVS composition is owned by the host.
     func fixture() async throws -> (PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore, PhysicalDesignProcessGeometry) {
         let (_, base, store) = try await ProcessGeometryTests().fixture()

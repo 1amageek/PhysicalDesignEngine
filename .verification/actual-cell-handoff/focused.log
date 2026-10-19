@@ -1,0 +1,200 @@
+warning: 'physicaldesignengine': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/1amageek/Desktop/LSI/PhysicalDesignEngine/Sources/PhysicalDesignCore/TopPorts/DESIGN.md
+warning: 'semiconductor-layout': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/1amageek/Desktop/LSI/PhysicalDesignEngine/.build/checkouts/semiconductor-layout/Sources/LayoutCore/PathGeometry/DESIGN.md
+warning: 'circuitefoundation': found 2 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/1amageek/Desktop/LSI/PhysicalDesignEngine/.build/checkouts/CircuiteFoundation/Sources/CircuiteFoundationFileSystem/DESIGN.md
+    /Users/1amageek/Desktop/LSI/PhysicalDesignEngine/.build/checkouts/CircuiteFoundation/Sources/CircuiteFoundationFileSystem/SourceDiscovery/DESIGN.md
+[0/1] Planning build
+Building for debugging...
+[0/8] Write sources
+[2/8] Write swift-version-7EE3F01B468E1A0A.txt
+[4/75] Compiling PhysicalDesignCore PhysicalDesignArtifactBinding.swift
+[5/75] Compiling PhysicalDesignCore PhysicalDesignArtifactReferenceBuilder.swift
+[6/75] Compiling PhysicalDesignCore PhysicalDesignArtifactReviewError.swift
+[7/75] Compiling PhysicalDesignCore PhysicalDesignArtifactReviewValidating.swift
+[8/75] Compiling PhysicalDesignCore PhysicalDesignArtifactReviewValidator.swift
+[9/75] Compiling PhysicalDesignCore PhysicalDesignArtifactStore.swift
+[10/75] Compiling PhysicalDesignCore PhysicalDesignArtifactWrite.swift
+[11/75] Compiling PhysicalDesignCore PhysicalDesignCapabilityClaims.swift
+[12/75] Compiling PhysicalDesignCore PhysicalDesignClaimStatus.swift
+[13/75] Compiling PhysicalDesignCore PhysicalDesignConfiguration.swift
+[14/75] Compiling PhysicalDesignCore PhysicalDesignDEFDiagnostic.swift
+[15/75] Compiling PhysicalDesignCore PhysicalDesignDEFExportError.swift
+[16/75] Compiling PhysicalDesignCore PhysicalDesignDEFLexer.swift
+[17/75] Compiling PhysicalDesignCore PhysicalDesignDEFParseError.swift
+[18/75] Compiling PhysicalDesignCore PhysicalDesignDEFParseResult.swift
+[19/75] Compiling PhysicalDesignCore PhysicalDesignDEFParser.swift
+[20/75] Compiling PhysicalDesignCore PhysicalDesignDEFToken.swift
+[21/75] Compiling PhysicalDesignCore PhysicalDesignDEFWriter.swift
+[22/75] Compiling PhysicalDesignCore PhysicalDesignDesignDiff.swift
+[23/75] Compiling PhysicalDesignCore PhysicalDesignDesignDiffChange.swift
+[24/75] Compiling PhysicalDesignCore PhysicalDesignDiffBuilder.swift
+[25/75] Compiling PhysicalDesignCore PhysicalDesignExecutableReference.swift
+[26/75] Compiling PhysicalDesignCore LocalPhysicalDesignClockTimingModelLoader.swift
+[27/75] Compiling PhysicalDesignCore NativePhysicalDesignClockTreeSynthesizer.swift
+[28/75] Compiling PhysicalDesignCore PhysicalDesignClockCharacterization.swift
+[29/75] Compiling PhysicalDesignCore PhysicalDesignClockConductorProjection.swift
+[30/75] Compiling PhysicalDesignCore PhysicalDesignClockNumerics.swift
+[31/75] Compiling PhysicalDesignCore PhysicalDesignClockTimingEstimate.swift
+[32/75] Compiling PhysicalDesignCore PhysicalDesignClockTimingEvidence.swift
+[33/75] Compiling PhysicalDesignCore PhysicalDesignClockTimingModel.swift
+[34/75] Compiling PhysicalDesignCore PhysicalDesignClockTimingModelError.swift
+[35/75] Compiling PhysicalDesignCore PhysicalDesignClockTimingModelLoading.swift
+[36/75] Compiling PhysicalDesignCore PhysicalDesignClockTimingModelReference.swift
+[37/75] Compiling PhysicalDesignCore PhysicalDesignClockTransientMeasurement.swift
+[38/75] Compiling PhysicalDesignCore PhysicalDesignClockWaveform.swift
+[39/75] Compiling PhysicalDesignCore FileSystemPhysicalDesignArtifactStore.swift
+[40/75] Compiling PhysicalDesignCore InMemoryPhysicalDesignArtifactStore.swift
+[41/75] Compiling PhysicalDesignCore NativePhysicalDesignPlacementAllocator.swift
+[42/75] Compiling PhysicalDesignCore PhysicalDesignPlacementAllocating.swift
+[43/75] Compiling PhysicalDesignCore PhysicalDesignPlacementAllocation.swift
+[44/75] Compiling PhysicalDesignCore PhysicalDesignPlacementError.swift
+[45/75] Compiling PhysicalDesignCore PhysicalDesignMasterGeometry.swift
+[46/75] Compiling PhysicalDesignCore NativePhysicalDesignExecutor.swift
+[47/75] Compiling PhysicalDesignCore PhysicalDesignAntennaRepairStrategy.swift
+[48/75] Emitting module PhysicalDesignCore
+[49/75] Compiling PhysicalDesignCore PhysicalDesignExecutionIntent.swift
+[50/75] Compiling PhysicalDesignCore PhysicalDesignExecutionStatus.swift
+[51/75] Compiling PhysicalDesignCore PhysicalDesignImplementationConstraints.swift
+[52/75] Compiling PhysicalDesignCore PhysicalDesignImplementationState.swift
+[53/75] Compiling PhysicalDesignCore PhysicalDesignJSONCodec.swift
+[54/75] Compiling PhysicalDesignCore PhysicalDesignJSONValue.swift
+[55/75] Compiling PhysicalDesignCore PhysicalDesignMetric.swift
+[56/75] Compiling PhysicalDesignCore PhysicalDesignNativeMutationEngine.swift
+[57/75] Compiling PhysicalDesignCore PhysicalDesignPayload.swift
+[58/75] Compiling PhysicalDesignCore PhysicalDesignProcessEvidence.swift
+[59/75] Compiling PhysicalDesignCore PhysicalDesignProcessTermination.swift
+[60/75] Compiling PhysicalDesignCore PhysicalDesignProductionConfiguration.swift
+[61/75] Compiling PhysicalDesignCore PhysicalDesignProductionConfigurationError.swift
+[62/75] Compiling PhysicalDesignCore PhysicalDesignReference.swift
+[63/75] Compiling PhysicalDesignCore PhysicalDesignRepairConstraints.swift
+[64/75] Compiling PhysicalDesignCore PhysicalDesignRequest.swift
+[65/75] Compiling PhysicalDesignCore PhysicalDesignResult.swift
+[66/75] Compiling PhysicalDesignCore PhysicalDesignReviewPacket.swift
+[67/75] Compiling PhysicalDesignCore PhysicalDesignRunManifest.swift
+[68/75] Compiling PhysicalDesignCore PhysicalDesignSnapshot.swift
+[69/75] Compiling PhysicalDesignCore PhysicalDesignStage.swift
+[70/75] Compiling PhysicalDesignCore PhysicalDesignStageCompletionEvidence.swift
+[71/97] Compiling PhysicalDesignCore PhysicalDesignStageExecuting.swift
+[72/97] Compiling PhysicalDesignCore PhysicalDesignStoreError.swift
+[73/97] Compiling PhysicalDesignCore PhysicalECOAction.swift
+[74/97] Compiling PhysicalDesignCore PhysicalDesignProcessGeometry+Admission.swift
+[75/97] Compiling PhysicalDesignCore PhysicalDesignProcessGeometry+Routing.swift
+[76/97] Compiling PhysicalDesignCore PhysicalDesignProcessGeometry.swift
+[77/97] Compiling PhysicalDesignCore PhysicalDesignRoutingSourceError.swift
+[78/97] Compiling PhysicalDesignCore PhysicalDesignProcessInputs.swift
+[79/97] Compiling PhysicalDesignCore PhysicalDesignRouteClass.swift
+[80/97] Compiling PhysicalDesignCore PhysicalDesignRouteEndpointExtensions.swift
+[81/97] Compiling PhysicalDesignCore PhysicalDesignSourceRouter.swift
+[82/97] Compiling PhysicalDesignCore PhysicalDesignSourceRouting.swift
+[83/97] Compiling PhysicalDesignCore NativePhysicalDesignStandardLayoutExporter.swift
+[84/97] Compiling PhysicalDesignCore PhysicalDesignDEFText.swift
+[85/97] Compiling PhysicalDesignCore PhysicalDesignExportGeometryBudget.swift
+[86/97] Compiling PhysicalDesignCore PhysicalDesignExportReadStore.swift
+[87/97] Compiling PhysicalDesignCore PhysicalDesignStandardLayoutExportError.swift
+[88/97] Compiling PhysicalDesignCore PhysicalDesignStandardLayoutExportLimits.swift
+[89/97] Compiling PhysicalDesignCore PhysicalDesignStandardLayoutExporting.swift
+[90/97] Compiling PhysicalDesignCore PhysicalDesignTechnologyConstraints.swift
+[91/97] Compiling PhysicalDesignCore PhysicalDesignTechnologyError.swift
+[92/97] Compiling PhysicalDesignCore PhysicalDesignTopPort.swift
+[93/112] Compiling PhysicalECO PhysicalECOExecuting.swift
+[94/112] Emitting module PhysicalECO
+[95/112] Compiling PhysicalECO NativePhysicalECOEngine.swift
+[96/112] Compiling RoutingEngine RoutingExecuting.swift
+[97/112] Emitting module RoutingEngine
+[98/112] Compiling RoutingEngine NativeRoutingEngine.swift
+[99/112] Compiling PlacementEngine NativePlacementEngine.swift
+[100/112] Compiling PlacementEngine PlacementExecuting.swift
+[101/112] Emitting module PlacementEngine
+[102/121] Compiling PhysicalDesignLogicHandoff CheckedPhysicalLogicHandoff.swift
+[103/121] Compiling PhysicalDesignLogicHandoff NativePhysicalLogicConnectivityChecker.swift
+[104/121] Compiling PhysicalDesignLogicHandoff PhysicalLogicHandoffError.swift
+[105/121] Compiling PhysicalDesignLogicHandoff PhysicalLogicConnectivityChecking.swift
+[106/121] Compiling PhysicalDesignLogicHandoff PhysicalLogicCorrespondence.swift
+[107/121] Emitting module PhysicalDesignLogicHandoff
+[108/122] Emitting module PhysicalDFM
+[109/122] Compiling PhysicalDFM NativePhysicalDFMEngine.swift
+[110/122] Compiling PhysicalDFM PhysicalDFMExecuting.swift
+[111/122] Emitting module CTSEngine
+[112/122] Compiling CTSEngine CTSExecuting.swift
+[113/122] Compiling CTSEngine NativeCTSEngine.swift
+[114/122] Emitting module FloorplanEngine
+[115/122] Compiling FloorplanEngine FloorplanExecuting.swift
+[116/122] Compiling FloorplanEngine NativeFloorplanEngine.swift
+[117/122] Compiling PhysicalDesignLogicHandoff PhysicalLogicHandoffLimits.swift
+[118/126] Compiling PhysicalDesignEngine PhysicalDesignEngine.swift
+[119/126] Emitting module PhysicalDesignEngine
+[120/130] Compiling PhysicalDesignCLISupport PhysicalDesignCLIErrorOutput.swift
+[121/131] Compiling PhysicalDesignCLISupport PhysicalDesignCLIError.swift
+[122/131] Emitting module PhysicalDesignCLISupport
+[123/131] Compiling PhysicalDesignCLISupport PhysicalDesignCLICommand.swift
+[124/131] Compiling PhysicalDesignCLISupport PhysicalDesignCLIInvocationResult.swift
+[125/148] Emitting module PhysicalDesignCLI
+[126/148] Compiling PhysicalDesignCLI PhysicalDesignCLIEntry.swift
+[126/148] Write Objects.LinkFileList
+[128/148] Emitting module PhysicalLogicHandoffTests
+[129/148] Compiling PhysicalLogicHandoffTests PhysicalLogicHandoffTests.swift
+[129/148] Linking physical-design
+[131/148] Emitting module PhysicalDesignEngineTests
+[131/152] Applying physical-design
+[133/152] Compiling PhysicalDesignEngineTests TamperingPhysicalDesignArtifactStore.swift
+/Users/1amageek/Desktop/LSI/PhysicalDesignEngine/Tests/PhysicalDesignEngineTests/TopPortInterchangeTests.swift:92:121: warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 90 |         let encoded = try PhysicalDesignJSONCodec().encode(#require(decoded.result.snapshot))
+ 91 |         #expect(try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: encoded) == decoded.result.snapshot)
+ 92 |         let exported = try PhysicalDesignDEFWriter().write(#require(decoded.result.snapshot), processGeometry: #require(decoded.geometry))
+    |                                                                                                                         `- warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 93 |         let actual = try #require(DEFLibraryReader.read(Data(exported.utf8)).pins.first { $0.name == "in" })
+ 94 |         #expect(actual.x == 1000 && actual.y == 5000 && actual.orientation == orientation)
+[134/152] Compiling PhysicalDesignEngineTests TechnologyConstraintsTests.swift
+/Users/1amageek/Desktop/LSI/PhysicalDesignEngine/Tests/PhysicalDesignEngineTests/TopPortInterchangeTests.swift:92:121: warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 90 |         let encoded = try PhysicalDesignJSONCodec().encode(#require(decoded.result.snapshot))
+ 91 |         #expect(try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: encoded) == decoded.result.snapshot)
+ 92 |         let exported = try PhysicalDesignDEFWriter().write(#require(decoded.result.snapshot), processGeometry: #require(decoded.geometry))
+    |                                                                                                                         `- warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 93 |         let actual = try #require(DEFLibraryReader.read(Data(exported.utf8)).pins.first { $0.name == "in" })
+ 94 |         #expect(actual.x == 1000 && actual.y == 5000 && actual.orientation == orientation)
+[135/152] Compiling PhysicalDesignEngineTests TopPortInterchangeTests.swift
+/Users/1amageek/Desktop/LSI/PhysicalDesignEngine/Tests/PhysicalDesignEngineTests/TopPortInterchangeTests.swift:92:121: warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 90 |         let encoded = try PhysicalDesignJSONCodec().encode(#require(decoded.result.snapshot))
+ 91 |         #expect(try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: encoded) == decoded.result.snapshot)
+ 92 |         let exported = try PhysicalDesignDEFWriter().write(#require(decoded.result.snapshot), processGeometry: #require(decoded.geometry))
+    |                                                                                                                         `- warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 93 |         let actual = try #require(DEFLibraryReader.read(Data(exported.utf8)).pins.first { $0.name == "in" })
+ 94 |         #expect(actual.x == 1000 && actual.y == 5000 && actual.orientation == orientation)
+[136/152] Compiling PhysicalDesignEngineTests resource_bundle_accessor.swift
+/Users/1amageek/Desktop/LSI/PhysicalDesignEngine/Tests/PhysicalDesignEngineTests/TopPortInterchangeTests.swift:92:121: warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 90 |         let encoded = try PhysicalDesignJSONCodec().encode(#require(decoded.result.snapshot))
+ 91 |         #expect(try PhysicalDesignJSONCodec().decode(PhysicalDesignSnapshot.self, from: encoded) == decoded.result.snapshot)
+ 92 |         let exported = try PhysicalDesignDEFWriter().write(#require(decoded.result.snapshot), processGeometry: #require(decoded.geometry))
+    |                                                                                                                         `- warning: '#require(_:_:)' is redundant because 'decoded.geometry' never equals 'nil' (from macro 'require')
+ 93 |         let actual = try #require(DEFLibraryReader.read(Data(exported.utf8)).pins.first { $0.name == "in" })
+ 94 |         #expect(actual.x == 1000 && actual.y == 5000 && actual.orientation == orientation)
+[137/152] Compiling PhysicalDesignEngineTests RouteEndpointGeometryTests.swift
+[138/152] Compiling PhysicalDesignEngineTests RoutingGeometryTests.swift
+[139/152] Compiling PhysicalDesignEngineTests SpecialNetRepairTests.swift
+[140/152] Compiling PhysicalDesignEngineTests StandardLayoutExportTests.swift
+[141/152] Compiling PhysicalDesignEngineTests PhysicalDesignCLIProcessTests.swift
+[142/152] Compiling PhysicalDesignEngineTests PhysicalDesignFixtureFactory.swift
+[143/152] Compiling PhysicalDesignEngineTests PhysicalDesignFoundationIntegrationTests.swift
+[144/152] Compiling PhysicalDesignEngineTests ProcessGeometryTests.swift
+[145/152] Compiling PhysicalDesignEngineTests ProductionEvidenceTests.swift
+[146/152] Compiling PhysicalDesignEngineTests CharacterizedNativeCTSTests.swift
+[147/152] Compiling PhysicalDesignEngineTests ECOGeometryAdmissionTests.swift
+[148/152] Compiling PhysicalDesignEngineTests LegalPlacementTests.swift
+[149/152] Compiling PhysicalDesignEngineTests MasterGeometryTests.swift
+[150/152] Compiling PhysicalDesignEngineTests NativeExecutionTests.swift
+[151/154] Compiling PhysicalDesignEnginePackageTests runner.swift
+[152/154] Emitting module PhysicalDesignEnginePackageTests
+[152/154] Write Objects.LinkFileList
+[153/154] Linking PhysicalDesignEnginePackageTests
+Build complete! (20.52s)
+warning: '--build-system native' has been deprecated and will be removed in a future release; please report an issue at https://github.com/swiftlang/swift-package-manager/issues if you are unable to adopt the default build system.
+􀟈  Test run started.
+􀄵  Testing Library Version: 6.4 (efd8d65801f569d)
+􀄵  Target Platform: arm64-apple-macosx
+􀟈  Suite PhysicalLogicHandoffTests started.
+􀟈  Test checkedSourceNetlistAdmitsExactPhysicalConnectivityAndRejectsMutations() started.
+􁁛  Test checkedSourceNetlistAdmitsExactPhysicalConnectivityAndRejectsMutations() passed after 0.064 seconds.
+􁁛  Suite PhysicalLogicHandoffTests passed after 0.064 seconds.
+􁁛  Test run with 1 test in 1 suite passed after 0.064 seconds.

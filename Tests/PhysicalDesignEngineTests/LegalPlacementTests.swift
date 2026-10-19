@@ -78,7 +78,7 @@ struct LegalPlacementTests {
         var request = fixture.request
         request.executionIntent = intent
         let result = try await NativePlacementEngine(artifactStore: fixture.store).execute(request)
-        let code = intent == .characterizedTiming ? "native_characterized_timing_stage_unsupported" : "native_production_implementation_unsupported"
+        let code = intent == .characterizedTiming ? "placement_timing_profile_required" : "native_production_implementation_unsupported"
         #expect(result.status == .blocked)
         #expect(result.diagnostics.contains { $0.code.rawValue == code })
         #expect(result.artifactBindings.isEmpty)

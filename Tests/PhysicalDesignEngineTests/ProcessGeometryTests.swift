@@ -263,7 +263,7 @@ struct ProcessGeometryTests {
         let mutation = PhysicalDesignNativeMutationEngine()
         let outcome = await mutation.applyPrepared(request, to: snapshot, processGeometry: geometry)
         #expect(outcome.status == .blocked && outcome.snapshot == nil)
-        let code = scenario.hasPrefix("clock") ? "clock_timing_model_required" : (scenario == "power" ? "native_via_source_invalid" : "routing_pin_access_unavailable")
+        let code = scenario.hasPrefix("clock") ? "clock_timing_model_required" : (scenario == "power" ? "power_source_connectivity_required" : "routing_pin_access_unavailable")
         #expect(outcome.diagnostics.contains { $0.code.rawValue == code }, "\(outcome.diagnostics)")
     }
 
@@ -691,12 +691,18 @@ struct ProcessGeometryTests {
             request.configuration.repairConstraints?.antennaStrategy = strategy
             let outcome = await PhysicalDesignNativeMutationEngine().applyPrepared(request, to: snapshot, processGeometry: geometry)
             #expect(outcome.status == .blocked && outcome.snapshot == nil)
-            #expect(outcome.diagnostics.contains { $0.code.rawValue == "antenna_source_feedback_unimplemented" })
+            #expect(outcome.diagnostics.contains { $0.code.rawValue == "repair_measurement_profile_required" })
             #expect(snapshot.nets[0].antennaRatio == 100)
         }
     }
 
-    func fixture(_ scenario: String = "valid", replacement: String? = nil, routingPorts: Bool = false) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
+    func fixture(_ scenario: String = "valid", replacement: String? = nil, routingPorts: Bool = false, grid: String? = nil, minimumArea: String? = nil) async throws -> (PhysicalDesignProcessGeometry, PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
+        let (request, store) = try await fixtureSources(scenario, replacement: replacement, routingPorts: routingPorts, grid: grid, minimumArea: minimumArea)
+        let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
+        return (try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: 1000), request, store)
+    }
+
+    func fixtureSources(_ scenario: String = "valid", replacement: String? = nil, routingPorts: Bool = false, grid: String? = nil, minimumArea: String? = nil) async throws -> (PhysicalDesignRequest, InMemoryPhysicalDesignArtifactStore) {
         let store = InMemoryPhysicalDesignArtifactStore()
         var technology = """
         VERSION 5.8 ;
@@ -739,6 +745,16 @@ struct ProcessGeometryTests {
             """
         }
         switch scenario {
+        case "spacing-table", "spacing-table-polygon", "spacing-table-source-violation", "obs-default", "obs-on", "obs-off", "obs-pin", "obs-conflict":
+            technology = technology.replacingOccurrences(of: "SPACING 0.1 ;", with: "SPACINGTABLE PARALLELRUNLENGTH 0 0.5 WIDTH 0 0.1 0.2 WIDTH 0.4 0.2 0.3 ;")
+            if scenario == "spacing-table-polygon" {
+                cells = cells.replacingOccurrences(of: "RECT 1.2 0.1 1.8 0.7", with: "POLYGON 1.2 0.1 1.8 0.1 1.8 0.4 1.5 0.4 1.5 0.7 1.2 0.7")
+                    .replacingOccurrences(of: "RECT 0.1 0.1 0.7 0.7", with: "POLYGON 0.1 0.1 0.7 0.1 0.7 0.3 0.3 0.3 0.3 0.7 0.1 0.7")
+                    .replacingOccurrences(of: "RECT 0.9 0 1.1 0.8", with: "POLYGON 0.9 0 1.1 0 1.1 0.4 1.0 0.4 1.0 0.8 0.9 0.8")
+            } else if scenario == "spacing-table" || scenario.hasPrefix("obs-") {
+                cells = cells.replacingOccurrences(of: "RECT 0.9 0 1.1 0.8", with: "RECT 0.9 0 1.0 0.4")
+            }
+        case "fill-layer-spacing": technology = technology.replacingOccurrences(of: "PITCH 0.4 ; OFFSET 0.1 ; WIDTH 0.1 ; SPACING 0.1", with: "PITCH 0.4 ; OFFSET 0.1 ; WIDTH 0.1 ; SPACING 0.3")
         case "cut-obs": cells = cells.replacingOccurrences(of: "OBS LAYER metH ; RECT 0.9 0 1.1 0.8 ; END", with: "OBS LAYER metH ; RECT 0.9 0 1.1 0.8 ; LAYER cutHV ; RECT -10 -10 20 20 ; END")
         case "port-cut-spacing": cells = cells.replacingOccurrences(of: "END INV_X1", with: "PIN Z1 DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; VIA 2.5 2.5 hv ; END END Z1\nPIN Z2 DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; VIA 2.599 2.5 hv ; END END Z2\nEND INV_X1")
         case "site-y": technology = technology.replacingOccurrences(of: "SYMMETRY X Y R90 ; END unit", with: "SYMMETRY Y ; END unit")
@@ -812,6 +828,36 @@ struct ProcessGeometryTests {
             }
             cells = cells.replacingOccurrences(of: "END LIBRARY", with: macro + "\nEND LIBRARY")
         }
+        if scenario == "database-implicit-cell" || scenario == "database-implicit-tech" {
+            cells = cells.replacingOccurrences(of: "UNITS DATABASE MICRONS 1000 ; END UNITS", with: "")
+        }
+        if scenario == "database-implicit-tech" { technology = technology.replacingOccurrences(of: "UNITS DATABASE MICRONS 1000 ; END UNITS", with: "") }
+        if scenario == "database-conflict" { cells = cells.replacingOccurrences(of: "DATABASE MICRONS 1000", with: "DATABASE MICRONS 2000") }
+        if let minimumArea { technology = technology.replacingOccurrences(of: "TYPE ROUTING ;", with: "TYPE ROUTING ; AREA \(minimumArea) ;") }
+        if let grid { technology = technology.replacingOccurrences(of: "VERSION 5.8 ;", with: "VERSION 5.8 ; MANUFACTURINGGRID \(grid) ;") }
+        if scenario == "manufacturing-grid-output" { technology = technology.replacingOccurrences(of: "OFFSET 0.1 ;", with: "OFFSET 0.101 ;") }
+        if scenario == "manufacturing-grid-via" { technology = technology.replacingOccurrences(of: "RECT -0.025 -0.025 0.025 0.025", with: "RECT -0.024 -0.025 0.026 0.025") }
+        if scenario == "manufacturing-grid-port" { cells = cells.replacingOccurrences(of: "RECT 0.1 0.3", with: "RECT 0.101 0.3") }
+        if scenario == "manufacturing-grid-conflict" { cells = cells.replacingOccurrences(of: "VERSION 5.8 ;", with: "VERSION 5.8 ; MANUFACTURINGGRID 0.01 ;") }
+        if scenario.hasPrefix("obs-") {
+            let extra = scenario == "obs-pin"
+                ? "PIN WIDE DIRECTION INPUT ; USE SIGNAL ; PORT LAYER metH ; RECT 0 4 1 5 ; END END WIDE"
+                : "OBS LAYER metH ; RECT 0 4 1 5 ; END"
+            cells = cells.replacingOccurrences(of: "END INV_X1", with: extra + "\nEND INV_X1")
+            if scenario == "obs-on" || scenario == "obs-off" || scenario == "obs-conflict" {
+                technology = technology.replacingOccurrences(of: "VERSION 5.8 ;", with: "VERSION 5.8 ; USEMINSPACING OBS \(scenario == "obs-on" ? "ON" : "OFF") ;")
+            }
+            if scenario == "obs-conflict" { cells = cells.replacingOccurrences(of: "VERSION 5.8 ;", with: "VERSION 5.8 ; USEMINSPACING OBS ON ;") }
+        }
+        if scenario.hasPrefix("layer-property-") {
+            let declarations = "PROPERTYDEFINITIONS LAYER LEF58_TYPE STRING ; LAYER RULE REAL ;"
+                + (scenario == "layer-property-library" ? " LIBRARY FLAG STRING \"rule\" ;" : "")
+                + " END PROPERTYDEFINITIONS"
+            technology = technology.replacingOccurrences(of: "VERSION 5.8 ;", with: "VERSION 5.8 ; " + declarations)
+            let assignment = ["layer-property-unknown", "layer-property-unmapped"].contains(scenario) ? "PROPERTY RULE 0.1 ;"
+                : "PROPERTY LEF58_TYPE \"TYPE \(scenario == "layer-property-subtype" ? "DIFFUSION" : "NWELL") ;\" ;"
+            technology = technology.replacingOccurrences(of: "END LIBRARY", with: "LAYER wellLayer TYPE MASTERSLICE ; " + assignment + " END wellLayer\nEND LIBRARY")
+        }
         let technologyBinding = try await store.registerInput(Data(technology.utf8), relativePath: "inputs/tech.lef", kind: .technology, format: .lef)
         let cellsBinding = try await store.registerInput(Data(cells.utf8), relativePath: "inputs/cells.lef", kind: .technology, format: .lef)
         var layers: [PDKLayerDefinition] = [
@@ -819,6 +865,10 @@ struct ProcessGeometryTests {
             .init(layerID: "V", name: "metV", number: 3, purpose: .metal, isRoutingLayer: true),
             .init(layerID: "C", name: "cutHV", number: 4, purpose: .via, isRoutingLayer: scenario == "wrong-cut-layer")
         ]
+        if scenario.hasPrefix("layer-property-"), scenario != "layer-property-unmapped" {
+            layers.append(.init(layerID: "well", name: "wellLayer", number: 5,
+                purpose: scenario == "layer-property-purpose" ? .implant : .well))
+        }
         if scenario == "ambiguous-layer" { layers.append(.init(layerID: "extra", name: "metH", number: 5, purpose: .metal, isRoutingLayer: true)) }
         let layerIDs = layers.map(\.layerID)
         let manifest = PDKManifest(processID: "fixture-130nm", version: "1", assets: [
@@ -834,7 +884,6 @@ struct ProcessGeometryTests {
             requestedModeIDs: base.requestedModeIDs, pdk: try PDKReference(manifest: manifestBinding.reference, manifestLocator: PhysicalDesignFixtureFactory.locator(for: manifestBinding),
                 processID: "fixture-130nm", version: "1"),
             processAssets: ["tech": technologyBinding, "cells": cellsBinding])
-        let inputs = try #require(try await PhysicalDesignProcessInputs.load(request: request, store: store))
-        return (try PhysicalDesignProcessGeometry(inputs: inputs, request: request, units: 1000), request, store)
+        return (request, store)
     }
 }

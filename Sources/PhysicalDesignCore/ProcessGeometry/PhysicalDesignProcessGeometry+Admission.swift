@@ -5,6 +5,7 @@ import MaskGeometry
 
 extension PhysicalDesignProcessGeometry {
     func bind(_ snapshot: PhysicalDesignSnapshot) throws -> PhysicalDesignSnapshot {
+        guard snapshot.unitsPerMicron == unitsPerMicron else { throw PhysicalDesignTechnologyError.invalid("Snapshot DATABASE frame differs from its exact process projection.") }
         if snapshot.processManifest != nil || !snapshot.processAssets.isEmpty {
             guard snapshot.processManifest == manifestReference, snapshot.processAssets == sources else {
                 throw PhysicalDesignTechnologyError.invalid("A process-bound snapshot requires the same manifest and complete asset-ID/reference map.")
@@ -16,7 +17,8 @@ extension PhysicalDesignProcessGeometry {
         return bound
     }
 
-    func floorplanSite(for snapshot: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration) throws -> String {
+    func floorplanSite(for snapshot: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration) throws -> String? {
+        if allowsUnqualifiedSiteRows, snapshot.cells.isEmpty { return nil }
         let names = try Set(snapshot.cells.map { cell -> String in
             let master = try requireMaster(cell.master)
             guard let name = master.definition.site else {
@@ -34,15 +36,25 @@ extension PhysicalDesignProcessGeometry {
     }
 
     func validate(_ snapshot: PhysicalDesignSnapshot, requirePlacementRows: Bool = true) throws {
+        guard snapshot.unitsPerMicron == unitsPerMicron else {
+            throw PhysicalDesignTechnologyError.invalid("Snapshot DATABASE frame differs from its exact process projection.")
+        }
         guard snapshot.validationDiagnostics().isEmpty,
               snapshot.processManifest == manifestReference, snapshot.processAssets == sources else {
             throw PhysicalDesignTechnologyError.invalid("Process admission requires a valid snapshot bound to the exact selected sources.")
         }
+        try manufacturingGrid.validate(snapshot)
         let cells = Dictionary(uniqueKeysWithValues: snapshot.cells.map { ($0.id, $0) })
         let rowsByY = Dictionary(grouping: snapshot.rows, by: \.originY)
         var instancePins: [String: [String: [IRBoundary]]] = [:]
         for bounds in [snapshot.die, snapshot.core].compactMap({ $0 }) { try Self.validateBounds(bounds) }
         for row in snapshot.rows {
+            if allowsUnqualifiedSiteRows, snapshot.cells.isEmpty, row.siteName == nil {
+                let width = row.siteWidth.multipliedReportingOverflow(by: row.siteCount)
+                guard !width.overflow else { throw PhysicalDesignTechnologyError.invalid("Unqualified row bounds overflow during process admission.") }
+                try Self.validateBounds(.init(x: row.originX, y: row.originY, width: width.partialValue, height: row.height))
+                continue
+            }
             guard let name = row.siteName, let site = sites[name], site.definition.siteClass == .core else {
                 throw PhysicalDesignTechnologyError.invalid("Row \(row.id) requires a declared CORE site.")
             }
@@ -66,9 +78,13 @@ extension PhysicalDesignProcessGeometry {
                 throw PhysicalDesignTechnologyError.invalid("Cell \(cell.id) dimensions or orientation contradict its exact master.")
             }
             // Project OBS as well as pin shapes, so overflow cannot hide in an unused port.
-            _ = try obstructionShapes(master: cell.master, orientation: cell.orientation, x: cell.x, y: cell.y)
+            for shape in try obstructionShapes(master: cell.master, orientation: cell.orientation, x: cell.x, y: cell.y) {
+                try manufacturingGrid.validate(shape, field: "instance OBS \(cell.id)")
+            }
             instancePins[cell.id] = try master.pins.mapValues { pin in
-                try pinShapes(master: cell.master, pin: pin.definition.name, orientation: cell.orientation, x: cell.x, y: cell.y)
+                let shapes = try pinShapes(master: cell.master, pin: pin.definition.name, orientation: cell.orientation, x: cell.x, y: cell.y)
+                for shape in shapes { try manufacturingGrid.validate(shape, field: "instance PORT \(cell.id)/\(pin.definition.name)") }
+                return shapes
             }
             if cell.placed, requirePlacementRows || !snapshot.rows.isEmpty {
                 let bounds = PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height)
@@ -123,6 +139,7 @@ extension PhysicalDesignProcessGeometry {
                 throw PhysicalDesignTechnologyError.invalid("Via \(via.id) requires an exact fixed master and matching routing layers.")
             }
             for shape in try viaShapes(master: name, x: via.x, y: via.y) {
+                try manufacturingGrid.validate(shape, field: "instance via \(via.id)")
                 if shape.layer == source.cutLayer { cuts[source.cutLayer, default: []].append(shape) }
                 guard shape.points.allSatisfy({ die.containsPoint(x: Int64($0.x), y: Int64($0.y)) }) else {
                     throw PhysicalDesignTechnologyError.invalid("Via \(via.id) source footprint is outside the die.")
@@ -130,6 +147,7 @@ extension PhysicalDesignProcessGeometry {
             }
         }
         for (layer, shapes) in cuts { try Self.validateCutSpacing(shapes, minimum: cutSpacings[layer]) }
+        try validateHoleAreas(snapshot)
     }
 
     private func requireRoutingLayer(_ layer: Int) throws -> Int16 {

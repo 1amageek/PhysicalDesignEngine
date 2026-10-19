@@ -8,7 +8,7 @@ public struct NativePlacementEngine: PlacementExecuting {
     public init(
         artifactStore: any PhysicalDesignArtifactStore,
         implementationID: String = "physical-design-native.placement",
-        implementationVersion: String = "1.0.0"
+        implementationVersion: String = NativePhysicalDesignExecutor.currentImplementationVersion
     ) {
         self.executor = NativePhysicalDesignExecutor(
             expectedStage: .placement,

@@ -356,21 +356,27 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         public var id: String
         public var netID: String
         public var strategy: String
-        public var previousRatio: Double
-        public var resultingRatio: Double
+        public var previousRatio: Double?
+        public var resultingRatio: Double?
+        public var ratioStatus: PhysicalDesignAntennaRatioStatus?
+        public var satisfiedRuleIDs: [String]?
 
         public init(
             id: String,
             netID: String,
             strategy: String,
-            previousRatio: Double,
-            resultingRatio: Double
+            previousRatio: Double?,
+            resultingRatio: Double?,
+            ratioStatus: PhysicalDesignAntennaRatioStatus? = .legacyUnverified,
+            satisfiedRuleIDs: [String]? = nil
         ) {
             self.id = id
             self.netID = netID
             self.strategy = strategy
             self.previousRatio = previousRatio
             self.resultingRatio = resultingRatio
+            self.ratioStatus = ratioStatus
+            self.satisfiedRuleIDs = satisfiedRuleIDs
         }
     }
 
@@ -636,9 +642,11 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
         }
         for repair in antennaRepairs {
             if !netIDs.contains(repair.netID) || repair.strategy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !repair.previousRatio.isFinite || !repair.resultingRatio.isFinite
-                || repair.previousRatio < 0 || repair.resultingRatio < 0
-                || repair.resultingRatio > repair.previousRatio {
+                || repair.previousRatio.map({ !$0.isFinite || $0 < 0 }) == true
+                || repair.resultingRatio.map({ !$0.isFinite || $0 < 0 }) == true
+                || (repair.previousRatio != nil && repair.resultingRatio != nil && repair.resultingRatio! > repair.previousRatio!)
+                || ((repair.ratioStatus ?? .legacyUnverified) == .legacyUnverified && (repair.previousRatio == nil || repair.resultingRatio == nil))
+                || ((repair.ratioStatus == .unavailableFromNativeRuleVerdict || repair.ratioStatus == .sourceProcessLawMeasurements) && (repair.resultingRatio != nil || repair.satisfiedRuleIDs?.isEmpty != false)) {
                 diagnostics.append("antenna repair \(repair.id) is invalid")
             }
         }
@@ -734,6 +742,10 @@ public struct PhysicalDesignSnapshot: Sendable, Hashable, Codable {
                 }
             }
             if let proof = implementationState.placementProof {
+                if let timing = proof.timingEvidence {
+                    do { try timing.requireSelectedGeometry(self) }
+                    catch { diagnostics.append("placement timing evidence does not bind the selected geometry") }
+                }
                 if proof.cellCount < 0 || proof.legalCellCount < 0 || proof.overlapCount < 0 || proof.outsideCoreCount < 0 || proof.blockageConflictCount < 0 || proof.blockedCellCount < 0 {
                     diagnostics.append("placement proof contains negative counts")
                 }

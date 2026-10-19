@@ -84,7 +84,7 @@ struct PhysicalDesignClockTransientMeasurement {
             try remaining.validate()
             let cancellation = CancellationToken()
             let config = TransientConfig(stopTime: policy.stopTimeSeconds, executionLimits: remaining, maxTimeStep: step, initialTimeStep: step,
-                minTimeStep: policy.minimumTimeStepSeconds, initialMethod: .trapezoidal, lteTolerance: policy.lteTolerance,
+                minTimeStep: policy.minimumTimeStepSeconds, preferredMethod: .trapezoidal, lteTolerance: policy.lteTolerance,
                 maxTimeStepReductions: policy.maximumStepReductions, useInitialConditions: true, initialNodeVoltages: initial, gminSteppingThreshold: Int.max)
             let result = try await withTaskCancellationHandler {
                 try await TransientAnalysis(config: config, convergenceConfig: .init(abstol: policy.currentTolerance,

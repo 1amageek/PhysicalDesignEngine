@@ -8,7 +8,7 @@ public struct NativePhysicalDFMEngine: PhysicalDFMExecuting {
     public init(
         artifactStore: any PhysicalDesignArtifactStore,
         implementationID: String = "physical-design-native.dfm",
-        implementationVersion: String = "1.0.0"
+        implementationVersion: String = NativePhysicalDesignExecutor.currentImplementationVersion
     ) {
         self.executor = NativePhysicalDesignExecutor(
             allowedStages: [.antennaRepair, .fillInsertion, .redundantViaInsertion, .hotspotRepair],

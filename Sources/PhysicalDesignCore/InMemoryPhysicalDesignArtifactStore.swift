@@ -59,9 +59,20 @@ public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     }
 
     public func read(_ binding: PhysicalDesignArtifactBinding) async throws -> Data {
+        try await read(binding, maximumBytes: binding.reference.byteCount)
+    }
+
+    public func read(_ binding: PhysicalDesignArtifactBinding, maximumBytes: UInt64) async throws -> Data {
+        try Task.checkCancellation()
         let reference = binding.reference
+        guard reference.byteCount <= maximumBytes else {
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): reference exceeds the bounded read byte ceiling")
+        }
         guard let data = dataByPath[binding.path] else {
             throw PhysicalDesignStoreError.readFailed("artifact does not exist: \(binding.path)")
+        }
+        guard UInt64(data.count) <= maximumBytes else {
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): retained bytes exceed the bounded read byte ceiling")
         }
         if UInt64(data.count) != reference.byteCount {
             throw PhysicalDesignStoreError.readFailed("\(binding.path): byte count does not match the reference")
@@ -73,7 +84,13 @@ public actor InMemoryPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
         if actualDigest != reference.digest {
             throw PhysicalDesignStoreError.readFailed("\(binding.path): SHA-256 digest does not match the reference")
         }
+        try Task.checkCancellation()
         return data
+    }
+
+    public func prepareBinding(for artifact: PhysicalDesignArtifactWrite) async throws -> PhysicalDesignArtifactBinding {
+        try Task.checkCancellation()
+        return try referenceBuilder.makeReference(for: artifact, rootID: rootID)
     }
 
     public func write(

@@ -2,6 +2,7 @@ import Foundation
 import CircuiteFoundation
 import CircuiteFoundationCrypto
 import CircuiteFoundationFoundation
+import CircuiteFoundationFileSystem
 
 public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore {
     public let projectRoot: URL
@@ -21,31 +22,159 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
     }
 
     public func read(_ binding: PhysicalDesignArtifactBinding) async throws -> Data {
+        try await read(binding, maximumBytes: binding.reference.byteCount)
+    }
+
+    public func read(_ binding: PhysicalDesignArtifactBinding, maximumBytes: UInt64) async throws -> Data {
+        try Task.checkCancellation()
         let reference = binding.reference
-        let location: ArtifactLocation
-        let url: URL
+        guard reference.byteCount <= maximumBytes,
+              let capacity = Int(exactly: reference.byteCount) else {
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): reference exceeds the bounded read byte ceiling or platform capacity")
+        }
+        let relativePath: ArtifactRelativePath
         do {
-            location = try ArtifactLocation(workspaceRelativePath: binding.path)
-            url = try validatedURL(for: location, allowMissingLeaf: false)
+            let location = try ArtifactLocation(workspaceRelativePath: binding.path)
+            _ = try validatedURL(for: location, allowMissingLeaf: false)
+            relativePath = try ArtifactRelativePath(segments: binding.path.split(separator: "/").map(String.init))
         } catch {
             throw PhysicalDesignStoreError.invalidPath(binding.path)
         }
 
+        // The byte-only API derives finite page/work limits, without inventing a timeout.
+        // A zero-byte reference still needs one terminal page; CF rejects nonempty files
+        // against the exact expected count before hashing or materializing their bodies.
+        let totalLimit = max(reference.byteCount, 1)
+        let pageLimit = min(totalLimit, 1_048_576)
+        let pageCount = reference.byteCount == 0 ? 1 : (reference.byteCount - 1) / pageLimit + 1
+        let workCount = pageCount.multipliedReportingOverflow(by: 2)
+        guard !workCount.overflow else {
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): bounded read work count overflow")
+        }
+        let budget = try ArtifactAccessBudget(
+            maximumPageByteCount: pageLimit,
+            maximumTotalByteCount: totalLimit,
+            maximumPageCount: pageCount,
+            maximumWorkUnitCount: workCount.partialValue,
+            maximumDurationNanoseconds: UInt64.max
+        )
+        let root: ArtifactRootCapability
         do {
-            let data = try Data(contentsOf: url)
-            if UInt64(data.count) != reference.byteCount {
-                throw PhysicalDesignStoreError.readFailed("\(binding.path): byte count does not match the reference")
-            }
-            let actualDigest = try hasher.digest(data: data, using: reference.digest.algorithm)
-            if actualDigest != reference.digest {
-                throw PhysicalDesignStoreError.readFailed("\(binding.path): SHA-256 digest does not match the reference")
-            }
+            root = try ArtifactRootCapability(rootID: rootID, directoryURL: projectRoot, digester: hasher)
+        } catch {
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): \(error)")
+        }
+        let outcome: Result<Data, any Error>
+        do {
+            // Existing store semantics resolve a binding's path in this project root.
+            // The caller's availability root label does not grant another filesystem root.
+            let intent = try ArtifactAccessIntent(
+                expectedReference: reference,
+                availability: .local(artifactID: reference.id, rootID: rootID, relativePath: relativePath),
+                operation: .read,
+                budget: budget
+            )
+            let session = try await root.open(intent)
+            outcome = await readAndClose(session, binding: binding, capacity: capacity, pageLimit: pageLimit)
+        } catch {
+            outcome = .failure(error)
+        }
+        let termination = await root.close()
+        do {
+            try await termination.wait()
+        } catch {
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): \(failureDescription(outcome)); root close failed: \(error)")
+        }
+        do {
+            let data = try outcome.get()
+            try Task.checkCancellation()
             return data
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch ArtifactAccessError.cancelled {
+            throw CancellationError()
         } catch let error as PhysicalDesignStoreError {
             throw error
         } catch {
-            throw PhysicalDesignStoreError.readFailed("\(binding.path): \(error.localizedDescription)")
+            throw PhysicalDesignStoreError.readFailed("\(binding.path): \(error)")
         }
+    }
+
+    private func readAndClose(
+        _ session: any ArtifactReadSession,
+        binding: PhysicalDesignArtifactBinding,
+        capacity: Int,
+        pageLimit: UInt64
+    ) async -> Result<Data, any Error> {
+        let outcome: Result<Data, any Error>
+        do {
+            try Task.checkCancellation()
+            var data = Data()
+            // The CF open has already admitted actual regular-file size and exact digest.
+            // The public Data return boundary requires one bounded owned materialization.
+            data.reserveCapacity(capacity)
+            var offset: UInt64 = 0
+            while true {
+                try Task.checkCancellation()
+                let page = try await session.readPage(ArtifactReadPageRequest(offset: offset, maximumByteCount: pageLimit))
+                let remaining = binding.reference.byteCount - offset
+                guard page.offset == offset, page.bytes.byteCount <= remaining else {
+                    throw PhysicalDesignStoreError.readFailed("\(binding.path): page exceeds the admitted exact content extent")
+                }
+                offset += page.bytes.byteCount
+                guard page.cumulativeByteCount == offset else {
+                    throw PhysicalDesignStoreError.readFailed("\(binding.path): inconsistent bounded read page count")
+                }
+                page.bytes.withUnsafeBytes { bytes in
+                    data.append(contentsOf: bytes)
+                }
+                if page.completion == .complete {
+                    guard let receipt = page.finalReceipt,
+                          receipt.observedArtifactID == binding.reference.id,
+                          receipt.totalByteCount == binding.reference.byteCount,
+                          offset == binding.reference.byteCount,
+                          data.count == capacity else {
+                        throw PhysicalDesignStoreError.readFailed("\(binding.path): incomplete or mismatched bounded read receipt")
+                    }
+                    break
+                }
+                guard page.bytes.byteCount > 0, offset < binding.reference.byteCount else {
+                    throw PhysicalDesignStoreError.readFailed("\(binding.path): bounded read made no progress")
+                }
+            }
+            let actualDigest = try hasher.digest(data: data, using: binding.reference.digest.algorithm)
+            guard actualDigest == binding.reference.digest else {
+                throw PhysicalDesignStoreError.readFailed("\(binding.path): returned bytes do not match the reference digest")
+            }
+            try Task.checkCancellation()
+            outcome = .success(data)
+        } catch {
+            outcome = .failure(error)
+        }
+        let termination = await session.close()
+        do {
+            let receipt = try await termination.wait()
+            if case .success = outcome {
+                guard receipt.sessionIdentity == session.identity, receipt.didReachTerminalPage else {
+                    return .failure(PhysicalDesignStoreError.readFailed("\(binding.path): bounded read did not terminate completely"))
+                }
+            }
+        } catch {
+            return .failure(PhysicalDesignStoreError.readFailed("\(binding.path): \(failureDescription(outcome)); session close failed: \(error)"))
+        }
+        return outcome
+    }
+
+    private func failureDescription(_ outcome: Result<Data, any Error>) -> String {
+        switch outcome {
+        case .success: "Read completed"
+        case .failure(let error): "Read failed: \(error)"
+        }
+    }
+
+    public func prepareBinding(for artifact: PhysicalDesignArtifactWrite) async throws -> PhysicalDesignArtifactBinding {
+        try Task.checkCancellation()
+        return try referenceBuilder.makeReference(for: artifact, rootID: rootID)
     }
 
     public func write(
@@ -258,7 +387,7 @@ public struct FileSystemPhysicalDesignArtifactStore: PhysicalDesignArtifactStore
 
     private func requireContained(_ url: URL) throws {
         let rootPath = projectRoot.path.hasSuffix("/") ? projectRoot.path : projectRoot.path + "/"
-        guard url == projectRoot || url.path.hasPrefix(rootPath) else {
+        guard url.path == projectRoot.path || url.path.hasPrefix(rootPath) else {
             throw PhysicalDesignStoreError.invalidPath(url.path)
         }
     }

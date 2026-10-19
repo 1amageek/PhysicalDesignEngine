@@ -37,7 +37,7 @@ struct PhysicalDesignFoundationIntegrationTests {
         #expect(request.initialSnapshot?.topCell == "fixture_top")
     }
 
-    @Test("legacy request schemas are rejected at the native execution boundary")
+    @Test("request schemas older than 7 are rejected at the native execution boundary")
     func legacyRequestSchemasAreRejected() async throws {
         let store = InMemoryPhysicalDesignArtifactStore()
         let engine = PhysicalDesignEngine(artifactStore: store)
@@ -45,7 +45,7 @@ struct PhysicalDesignFoundationIntegrationTests {
             stage: .floorplan,
             snapshot: PhysicalDesignFixtureFactory.snapshot(includeFloorplan: false)
         )
-        request.schemaVersion = PhysicalDesignRequest.currentSchemaVersion - 1
+        request.schemaVersion = 6
 
         let result = try await engine.execute(request)
 

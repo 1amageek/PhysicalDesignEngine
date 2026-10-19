@@ -8,7 +8,7 @@ public struct NativePhysicalECOEngine: PhysicalECOExecuting {
     public init(
         artifactStore: any PhysicalDesignArtifactStore,
         implementationID: String = "physical-design-native.eco",
-        implementationVersion: String = "1.0.0"
+        implementationVersion: String = NativePhysicalDesignExecutor.currentImplementationVersion
     ) {
         self.executor = NativePhysicalDesignExecutor(
             allowedStages: [.timingECO, .drcRepair],

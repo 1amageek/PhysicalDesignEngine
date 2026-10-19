@@ -1,9 +1,12 @@
 import Foundation
 import LogicIR
+import LogicDesignSerialization
 import CircuiteFoundation
 import CircuiteFoundationCrypto
 
 public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
+    public static let currentImplementationVersion = "1.12.0"
+
     public let expectedStage: PhysicalDesignStage?
     public let allowedStages: Set<PhysicalDesignStage>?
     public let artifactStore: any PhysicalDesignArtifactStore
@@ -23,7 +26,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         allowedStages: Set<PhysicalDesignStage>? = nil,
         artifactStore: any PhysicalDesignArtifactStore,
         implementationID: String = "physical-design-native",
-        implementationVersion: String = "1.0.0",
+        implementationVersion: String = NativePhysicalDesignExecutor.currentImplementationVersion,
         timingModelLoader: any PhysicalDesignClockTimingModelLoading = LocalPhysicalDesignClockTimingModelLoader()
     ) {
         self.expectedStage = expectedStage
@@ -73,10 +76,28 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
 
         do {
             try Task.checkCancellation()
+            if let reference = request.repairMeasurementProfile {
+                guard reference.limits.maximumInputBytes > 0 else { throw PhysicalDesignTechnologyError.invalid("Repair input-byte ceiling must be positive.") }
+                var total: UInt64 = 0
+                for input in [reference.artifact.reference, request.pdk.manifest] + request.processAssets.values.map(\.reference) {
+                    let sum = total.addingReportingOverflow(input.byteCount)
+                    guard !sum.overflow, sum.partialValue <= UInt64(reference.limits.maximumInputBytes) else { throw PhysicalDesignTechnologyError.invalid("Repair retained-source input-byte ceiling exceeded.") }
+                    total = sum.partialValue
+                }
+            }
+            let placementBudget = try request.placementTimingProfile.map { try NativePhysicalDesignPlacementTimingBudget($0) }
+            if let placementBudget {
+                for binding in request.processAssets.values {
+                    try placementBudget.chargeInput(binding.reference.byteCount)
+                    try placementBudget.chargeWork(binding.reference.byteCount)
+                }
+                try placementBudget.chargeInput(request.pdk.manifest.byteCount)
+                try placementBudget.chargeWork(request.pdk.manifest.byteCount)
+            }
             let processInputs = try await PhysicalDesignProcessInputs.load(request: request, store: artifactStore)
             let loaded = try await loadSnapshot(from: request, processInputs: processInputs)
             let processGeometry: PhysicalDesignProcessGeometry?
-            if let processInputs, !processInputs.cellViews.isEmpty {
+            if let processInputs, processInputs.requiresSourceGeometry(for: request) {
                 if let resolved = loaded.processGeometry { processGeometry = resolved }
                 else { processGeometry = try PhysicalDesignProcessGeometry(inputs: processInputs, request: request, units: loaded.snapshot.unitsPerMicron) }
             } else {
@@ -85,16 +106,48 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 }
                 processGeometry = nil
             }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Technology-only API/CLI conductor execution lacks source-bound AREA material. Admit only metal-free floorplan/placement until complete routed/component facts and repair are available.
+            if processGeometry == nil, let processInputs,
+               processInputs.technologyViews.values.contains(where: { $0.layers.contains(where: { $0.area != nil }) }) {
+                let snapshot = loaded.snapshot
+                guard (request.stage == .floorplan || request.stage == .placement), snapshot.routes.isEmpty,
+                      snapshot.vias.isEmpty, snapshot.powerStructures.isEmpty, snapshot.fills.isEmpty else {
+                    throw PhysicalDesignTechnologyError.unsupported("Source AREA requires complete source-bound metal admission before conductor mutation.")
+                }
+            }
+            let manufacturingGrid = try PhysicalDesignManufacturingGrid(inputs: processInputs, units: loaded.snapshot.unitsPerMicron)
+            try manufacturingGrid.validate(loaded.snapshot)
             let sourceBound = try processGeometry?.bind(loaded.snapshot) ?? loaded.snapshot
-            let preparedSnapshot = try PhysicalDesignTechnologyConstraints.prepare(sourceBound, request: request, processInputs: processInputs)
+            let preparedSnapshot = try PhysicalDesignTechnologyConstraints.prepare(sourceBound, request: request, processInputs: processInputs, processGeometry: processGeometry)
             let timingModel = try await loadClockTimingModel(from: request, snapshot: preparedSnapshot)
+            let placementCharacterization: NativePhysicalDesignPlacementCharacterization?
+            if let placementBudget {
+                guard let processInputs, let processGeometry else {
+                    throw PhysicalDesignPlacementTimingError.invalidProfile("Timing-driven placement requires exact process geometry")
+                }
+                placementCharacterization = try await NativePhysicalDesignPlacementCharacterization.load(request: request,
+                    snapshot: preparedSnapshot, inputs: processInputs, geometry: processGeometry, store: artifactStore, budget: placementBudget)
+            } else { placementCharacterization = nil }
+            let repairMeasurement = try await NativePhysicalDesignRepairMeasurement.load(request: request, store: artifactStore)
             try Task.checkCancellation()
-            let outcome = await mutationEngine.applyPrepared(
+            let sourceAntennaProjection: PhysicalDesignAntennaSourceProjection?
+            if repairMeasurement?.profile.antennaLimitPolicy == .sourceProcessLaws {
+                guard let processInputs, processInputs.hasSourceAntennaLaws, let repairMeasurement else {
+                    throw PhysicalDesignTechnologyError.unsupported("Source-process assessment requires exact retained antenna laws.")
+                }
+                sourceAntennaProjection = try PhysicalDesignAntennaSourceProjection(inputs: processInputs,
+                    manifestReference: request.pdk.manifest, sources: request.processAssets.mapValues(\.reference),
+                    maximumRecords: repairMeasurement.reference.limits.maximumProjectionRecords)
+            } else { sourceAntennaProjection = nil }
+            var outcome = await mutationEngine.applyPrepared(
                 request,
                 to: preparedSnapshot,
                 clockTimingModelReference: request.clockTimingModel,
                 processGeometry: processGeometry,
-                clockCharacterization: timingModel
+                clockCharacterization: timingModel,
+                repairMeasurement: repairMeasurement,
+                sourceAntennaProjection: sourceAntennaProjection,
+                placementCharacterization: placementCharacterization
             )
             switch outcome.status {
             case .blocked, .cancelled:
@@ -137,6 +190,20 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                         seed: request.configuration.deterministicSeed
                     )
                 }
+                if let sourceAntennaProjection, let repairMeasurement, request.stage != .antennaRepair {
+                    guard let processGeometry else {
+                        throw PhysicalDesignTechnologyError.unsupported("Source-process candidate measurement requires exact geometry.")
+                    }
+                    outcome.sourceAntennaMeasurementEvidence = try NativePhysicalDesignSourceAntennaMeasurement(
+                        reference: repairMeasurement.reference, profile: repairMeasurement.profile, source: sourceAntennaProjection)
+                        .candidate(output, geometry: processGeometry)
+                } else if processInputs?.hasSourceAntennaLaws == true && outcome.sourceAntennaMeasurementEvidence == nil {
+                    outcome.sourceAntennaMeasurementEvidence = .init(profile: nil, processManifest: request.pdk.manifest,
+                        processAssets: request.processAssets.mapValues(\.reference),
+                        candidateSnapshotDigest: try hasher.digest(data: codec.encode(output), using: .sha256),
+                        targetNetIDs: [], coverage: .unassessed, checks: [])
+                }
+                if outcome.sourceAntennaMeasurementEvidence != nil { outcome.claims.production = .blocked }
                 return try await persist(
                     request: request,
                     before: loaded.snapshot,
@@ -144,7 +211,8 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                     outcome: outcome,
                     startedAt: startedAt,
                     source: loaded,
-                    processGeometry: processGeometry
+                    processGeometry: processGeometry,
+                    manufacturingGrid: manufacturingGrid
                 )
             }
         } catch is CancellationError {
@@ -184,6 +252,11 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             return try envelope(request: request, status: .blocked,
                 diagnostics: [diagnostic(severity: .error, code: "physical_def_export_unsupported", message: String(describing: error),
                     actions: ["provide_supported_exact_standard_interchange"])],
+                payload: emptyPayload, startedAt: startedAt, seed: request.configuration.deterministicSeed)
+        } catch let error as PhysicalDesignPlacementTimingError {
+            return try envelope(request: request, status: .blocked,
+                diagnostics: [diagnostic(severity: .error, code: error.code, message: error.localizedDescription,
+                    actions: ["repair_exact_placement_characterization_or_resource_limits"])],
                 payload: emptyPayload, startedAt: startedAt, seed: request.configuration.deterministicSeed)
         } catch let error as PhysicalDesignClockTimingModelError {
             return try envelope(
@@ -289,7 +362,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 sourceDiagnostics = []
             } else {
                 let factory: (@Sendable (Int) throws -> PhysicalDesignProcessGeometry)?
-                if let processInputs, !processInputs.cellViews.isEmpty {
+                if let processInputs, processInputs.requiresSourceGeometry(for: request) {
                     factory = { units in try PhysicalDesignProcessGeometry(inputs: processInputs, request: request, units: units) }
                 } else { factory = nil }
                 let resolved = defParser.parseResolved(data, processFactory: factory)
@@ -338,33 +411,35 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         outcome: PhysicalDesignNativeMutationEngine.Outcome,
         startedAt: Date,
         source: LoadedSnapshot,
-        processGeometry: PhysicalDesignProcessGeometry?
+        processGeometry: PhysicalDesignProcessGeometry?,
+        manufacturingGrid: PhysicalDesignManufacturingGrid
     ) async throws -> PhysicalDesignResult {
         // Admission and standard export must finish before any revision is persisted.
         try Task.checkCancellation()
+        try manufacturingGrid.validate(output)
         let defData = Data(try defWriter.write(output, processGeometry: processGeometry).utf8)
         let snapshotData = try codec.encode(output)
         let snapshotPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.json"
-        let snapshotReference = try await artifactStore.write(
-            snapshotData,
+        let snapshotWrite = PhysicalDesignArtifactWrite(
+            data: snapshotData,
             logicalID: "physical.\(request.stage.rawValue).snapshot",
             relativePath: snapshotPath,
             kind: .layout,
             format: .json,
             runID: request.runID
         )
-        try await verifyWrittenArtifact(snapshotReference, expectedData: snapshotData)
+        let snapshotReference = try await artifactStore.prepareBinding(for: snapshotWrite)
 
         let defPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/revision.def"
-        let defReference = try await artifactStore.write(
-            defData,
+        let defWrite = PhysicalDesignArtifactWrite(
+            data: defData,
             logicalID: "physical.\(request.stage.rawValue).def",
             relativePath: defPath,
             kind: .layout,
             format: .def,
             runID: request.runID
         )
-        try await verifyWrittenArtifact(defReference, expectedData: defData)
+        let defReference = try await artifactStore.prepareBinding(for: defWrite)
 
         let physicalReference = PhysicalDesignReference(
             layoutArtifact: snapshotReference,
@@ -382,15 +457,15 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         )
         let diffData = try codec.encode(diff)
         let diffPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/design-diff.json"
-        let diffReference = try await artifactStore.write(
-            diffData,
+        let diffWrite = PhysicalDesignArtifactWrite(
+            data: diffData,
             logicalID: "physical.\(request.stage.rawValue).diff",
             relativePath: diffPath,
             kind: .designDiff,
             format: .json,
             runID: request.runID
         )
-        try await verifyWrittenArtifact(diffReference, expectedData: diffData)
+        let diffReference = try await artifactStore.prepareBinding(for: diffWrite)
 
         let completedAt = Date()
         let manifest = PhysicalDesignRunManifest(
@@ -417,8 +492,12 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             implementationConfiguration: request.configuration,
             executionIntent: request.executionIntent,
             clockTimingModel: request.clockTimingModel,
+            placementTimingProfile: request.placementTimingProfile,
             claims: outcome.claims,
-            processAssets: request.processAssets
+            processAssets: request.processAssets,
+            repairMeasurementProfile: request.repairMeasurementProfile,
+            repairMeasurementEvidence: outcome.repairMeasurementEvidence,
+            sourceAntennaMeasurementEvidence: outcome.sourceAntennaMeasurementEvidence
         )
         let manifestDiagnostics = manifest.validationDiagnostics()
         guard manifestDiagnostics.isEmpty else {
@@ -428,15 +507,26 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
         }
         let manifestData = try codec.encode(manifest)
         let manifestPath = "runs/\(request.runID)/physical-design/\(request.stage.rawValue)/run-manifest.json"
-        let manifestReference = try await artifactStore.write(
-            manifestData,
+        let manifestWrite = PhysicalDesignArtifactWrite(
+            data: manifestData,
             logicalID: "physical.\(request.stage.rawValue).manifest",
             relativePath: manifestPath,
             kind: .report,
             format: .json,
             runID: request.runID
         )
-        try await verifyWrittenArtifact(manifestReference, expectedData: manifestData)
+        let manifestReference = try await artifactStore.prepareBinding(for: manifestWrite)
+
+        try Task.checkCancellation()
+        let writes = [snapshotWrite, defWrite, diffWrite, manifestWrite]
+        let expected = [snapshotReference, defReference, diffReference, manifestReference]
+        let committed = try await artifactStore.write(writes)
+        guard committed == expected else {
+            throw PhysicalDesignStoreError.writeFailed("Atomic publication returned bindings different from preparation.")
+        }
+        for (binding, write) in zip(committed, writes) {
+            try await verifyWrittenArtifact(binding, expectedData: write.data)
+        }
 
         let changedObjectCount = changedObjectCount(before: before, after: output)
         let payload = PhysicalDesignPayload(
@@ -461,7 +551,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
 
     private func validate(_ request: PhysicalDesignRequest) -> [DesignDiagnostic] {
         var diagnostics: [DesignDiagnostic] = []
-        if request.schemaVersion != PhysicalDesignRequest.currentSchemaVersion {
+        if !request.supportsExecutionSchema {
             diagnostics.append(diagnostic(severity: .error, code: "unsupported_request_schema", message: "Request schema version \(request.schemaVersion) is not supported.", actions: ["upgrade_the_request_schema"]))
         }
         if request.executionIntent == .productionImplementation {
@@ -473,22 +563,24 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
                 actions: ["complete_native_timing_driven_implementation", "provide_exact_pdk_and_corner_artifacts"]
             ))
         }
+        if request.placementTimingProfile != nil && (request.stage != .placement || request.executionIntent != .characterizedTiming) {
+            diagnostics.append(diagnostic(severity: .error, code: "placement_timing_profile_stage_invalid",
+                message: "A placement timing profile is consumed only by characterized placement.", actions: ["select_characterized_placement"]))
+        }
         if request.executionIntent == .characterizedTiming {
-            if request.stage != .clockTreeSynthesis {
-                diagnostics.append(diagnostic(
-                    severity: .error,
-                    code: "native_characterized_timing_stage_unsupported",
-                    message: "The native backend computes only the declared passive RC CTS model; physical timing qualification remains blocked.",
-                    actions: ["select_geometry_smoke", "use_a_qualified_timing_driven_backend"]
-                ))
-            }
-            if request.clockTimingModel == nil {
-                diagnostics.append(diagnostic(
-                    severity: .error,
-                    code: "clock_timing_model_required",
-                    message: "Characterized CTS requires a PDK/RC/cell/corner-bound clock timing model.",
-                    actions: ["provide_clock_timing_model"]
-                ))
+            if request.stage == .placement {
+                if request.placementTimingProfile == nil {
+                    diagnostics.append(diagnostic(severity: .error, code: "placement_timing_profile_required",
+                        message: "Timing-driven placement requires an exact source-bound profile.", actions: ["provide_placement_timing_profile"]))
+                }
+            } else if request.stage == .clockTreeSynthesis {
+                if request.clockTimingModel == nil {
+                    diagnostics.append(diagnostic(severity: .error, code: "clock_timing_model_required",
+                        message: "Characterized CTS requires a PDK/RC/cell/corner-bound clock timing model.", actions: ["provide_clock_timing_model"]))
+                }
+            } else {
+                diagnostics.append(diagnostic(severity: .error, code: "native_characterized_timing_stage_unsupported",
+                    message: "The selected native stage has no characterized timing profile.", actions: ["select_a_supported_characterized_stage"]))
             }
         }
         if let timingReference = request.clockTimingModel {
@@ -677,7 +769,7 @@ public struct NativePhysicalDesignExecutor: PhysicalDesignStageExecuting {
             version: implementationVersion
         )
         return try PhysicalDesignResult(
-            schemaVersion: PhysicalDesignRequest.currentSchemaVersion,
+            schemaVersion: PhysicalDesignResult.currentSchemaVersion,
             runID: request.runID,
             status: status,
             diagnostics: diagnostics,

@@ -1,6 +1,7 @@
 import Foundation
 import CircuiteFoundation
 import DEF
+import LayoutIR
 
 public struct PhysicalDesignNativeMutationEngine: Sendable {
     public struct Outcome: Sendable, Hashable {
@@ -9,6 +10,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         public var diagnostics: [DesignDiagnostic]
         public var candidateActions: [String]
         public var metrics: [PhysicalDesignMetric]
+        public var repairMeasurementEvidence: PhysicalDesignRepairMeasurementEvidence?
+        public var sourceAntennaMeasurementEvidence: PhysicalDesignSourceAntennaMeasurementEvidence?
         public var claims: PhysicalDesignCapabilityClaims
 
         public init(
@@ -17,7 +20,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             diagnostics: [DesignDiagnostic] = [],
             candidateActions: [String] = [],
             metrics: [PhysicalDesignMetric] = [],
-            claims: PhysicalDesignCapabilityClaims = .blocked
+            claims: PhysicalDesignCapabilityClaims = .blocked,
+            repairMeasurementEvidence: PhysicalDesignRepairMeasurementEvidence? = nil,
+            sourceAntennaMeasurementEvidence: PhysicalDesignSourceAntennaMeasurementEvidence? = nil
         ) {
             self.snapshot = snapshot
             self.status = status
@@ -25,6 +30,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             self.candidateActions = candidateActions
             self.metrics = metrics
             self.claims = claims
+            self.repairMeasurementEvidence = repairMeasurementEvidence
+            self.sourceAntennaMeasurementEvidence = sourceAntennaMeasurementEvidence
         }
     }
 
@@ -50,7 +57,10 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         clockTimingModel: PhysicalDesignClockTimingModel? = nil,
         clockTimingModelReference: PhysicalDesignClockTimingModelReference? = nil,
         processGeometry: PhysicalDesignProcessGeometry?,
-        clockCharacterization: PhysicalDesignClockCharacterization? = nil
+        clockCharacterization: PhysicalDesignClockCharacterization? = nil,
+        repairMeasurement: NativePhysicalDesignRepairMeasurement? = nil,
+        sourceAntennaProjection: PhysicalDesignAntennaSourceProjection? = nil,
+        placementCharacterization: NativePhysicalDesignPlacementCharacterization? = nil
     ) async -> Outcome {
         if Task.isCancelled {
             return Outcome(
@@ -63,6 +73,17 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     actions: ["resume_from_the_last_immutable_revision"]
                 )]
             )
+        }
+
+        guard request.supportsExecutionSchema else {
+            return blocked(code: "unsupported_request_schema", message: "Request schema does not admit the selected width policy.",
+                actions: ["provide_a_supported_request_schema"])
+        }
+        if request.configuration.implementationConstraints?.sourceRoutingWidthPolicy == .sourceDefault {
+            guard processGeometry != nil else {
+                return blocked(code: "source_routing_width_policy_unsupported", message: "Source-default width requires actual source geometry.",
+                    actions: ["provide_exact_source_geometry_for_ordinary_routing"])
+            }
         }
 
         let configurationErrors = request.configuration.validationDiagnostics()
@@ -84,7 +105,11 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         }
 
         if let processGeometry {
-            do { try processGeometry.validate(input, requirePlacementRows: request.stage != .floorplan) }
+            do {
+                try processGeometry.validateAreaStage(request, snapshot: input)
+                try processGeometry.validate(input, requirePlacementRows: request.stage != .floorplan)
+            }
+            catch is CancellationError { return cancelled(actions: ["resume_from_the_last_immutable_revision"]) }
             catch { return blocked(code: "process_geometry_invalid", message: error.localizedDescription, actions: ["repair_exact_process_geometry"]) }
         } else if input.processManifest != nil || !input.processAssets.isEmpty {
             return blocked(code: "process_geometry_unresolved", message: "Process-bound mutation requires exact source intake through the native executor.",
@@ -98,7 +123,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         case .powerPlanning:
             outcome = powerPlanning(input, configuration: request.configuration, processGeometry: processGeometry)
         case .placement:
-            outcome = placement(input, configuration: request.configuration, processGeometry: processGeometry)
+            outcome = await placement(input, request: request, processGeometry: processGeometry, characterization: placementCharacterization)
         case .clockTreeSynthesis:
             if let processGeometry {
                 guard let clockCharacterization else {
@@ -129,22 +154,31 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             outcome = routing(input, configuration: request.configuration, mode: "detailed", processGeometry: processGeometry)
         case .timingECO, .drcRepair:
             outcome = eco(input, configuration: request.configuration, stage: request.stage, processGeometry: processGeometry)
-        case .antennaRepair:
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Native source-bound antenna repair has no source-qualified area/gate feedback calculation. API/CLI requests must fail until the changed physical geometry is remeasured against declared process rules.
-            guard processGeometry == nil else {
-                return blocked(code: "antenna_source_feedback_unimplemented", message: "Source-bound antenna repair requires native process-qualified feedback.", actions: ["implement_source_qualified_antenna_analysis"])
+        case .antennaRepair, .hotspotRepair:
+            guard let processGeometry, let repairMeasurement else {
+                return blocked(code: "repair_measurement_profile_required", message: "Repair requires an exact source-bound typed measurement profile.", actions: ["provide_exact_native_rule_gate_cut_and_hotspot_facts"])
             }
-            outcome = antennaRepair(input, configuration: request.configuration)
+            do {
+                let result = try await repairMeasurement.repair(input, stage: request.stage, configuration: request.configuration, geometry: processGeometry, sourceAntennaProjection: sourceAntennaProjection)
+                outcome = Outcome(snapshot: result.snapshot, status: .completed, metrics: metrics(for: result.snapshot),
+                    claims: .init(geometry: .verified, timing: .notApplicable, production: .blocked), repairMeasurementEvidence: result.evidence, sourceAntennaMeasurementEvidence: result.sourceAntennaEvidence)
+            } catch is CancellationError { return cancelled(actions: ["resume_from_the_last_immutable_revision"]) }
+            catch {
+                if Task.isCancelled { return cancelled(actions: ["resume_from_the_last_immutable_revision"]) }
+                return blocked(code: "repair_measurement_failed", message: String(describing: error), actions: ["inspect_exact_native_rule_and_geometry_evidence"])
+            }
         case .fillInsertion:
-            outcome = fillInsertion(input, configuration: request.configuration)
+            outcome = fillInsertion(input, configuration: request.configuration, processGeometry: processGeometry)
         case .redundantViaInsertion:
             outcome = redundantViaInsertion(input, configuration: request.configuration, processGeometry: processGeometry)
-        case .hotspotRepair:
-            outcome = hotspotRepair(input, configuration: request.configuration)
         }
         let validated = validateCompletedOutcome(outcome)
         if validated.status == .completed, let snapshot = validated.snapshot, let processGeometry {
-            do { try processGeometry.validate(snapshot) }
+            do {
+                try processGeometry.validateAreaStage(request, snapshot: snapshot)
+                try processGeometry.validate(snapshot)
+            }
+            catch is CancellationError { return cancelled(actions: ["resume_from_the_last_immutable_revision"]) }
             catch { return blocked(code: "process_geometry_invalid", message: error.localizedDescription, actions: ["repair_native_output_geometry"]) }
         }
         return validated
@@ -261,6 +295,29 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 message: "Power planning requires a core rectangle.",
                 actions: ["run_floorplan"]
             )
+        }
+        if let processGeometry {
+            let powerIDs = Set(configuration.powerNetNames)
+            guard !powerIDs.isEmpty, input.powerStructures.isEmpty,
+                  powerIDs.allSatisfy({ id in input.nets.contains { $0.id == id && $0.routingClass == .special && $0.pinIDs.count >= 2 } }) else {
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Native power-grid synthesis has no source-bound
+                // ring/strap owner. Exact finite SPECIALNETS are routed; missing physical power
+                // terminals cannot be replaced by synthetic pins or parity-selected layers.
+                return blocked(code: "power_source_connectivity_required", message: "Power planning requires existing exact finite SPECIALNETS power terminals.", actions: ["supply_exact_power_ports_and_special_net_connectivity"])
+            }
+            do {
+                var output = input
+                for netID in powerIDs.sorted() {
+                    output = try PhysicalDesignSourceRouter().route(output, configuration: configuration,
+                        mode: "power", onlyNetID: netID, geometry: processGeometry).snapshot
+                }
+                if output.routes != input.routes || output.vias != input.vias { invalidateRoutingMeasurements(in: &output) }
+                output.metadata["powerPlanningStatus"] = "finite_source_nets_routed"
+                return completed(output, actions: ["verify_power_connectivity"], metrics: metrics(for: output))
+            } catch is CancellationError { return cancelled(actions: ["resume_from_the_last_immutable_revision"]) }
+            catch let error as PhysicalDesignSourceRouter.Failure {
+                return blocked(code: error.code, message: error.message, actions: ["repair_exact_power_geometry"])
+            } catch { return blocked(code: "power_source_geometry_invalid", message: error.localizedDescription, actions: ["repair_exact_power_geometry"]) }
         }
         var output = input
         guard configuration.siteWidth < min(core.width, core.height) else {
@@ -410,9 +467,14 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
 
     private func placement(
         _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration,
-        processGeometry: PhysicalDesignProcessGeometry?
-    ) -> Outcome {
+        request: PhysicalDesignRequest,
+        processGeometry: PhysicalDesignProcessGeometry?,
+        characterization: NativePhysicalDesignPlacementCharacterization?
+    ) async -> Outcome {
+        let configuration = request.configuration
+        if request.executionIntent == .characterizedTiming && characterization == nil {
+            return blocked(code: "placement_timing_profile_required", message: "Timing placement requires independently loaded characterization.", actions: ["execute_with_exact_placement_sources"])
+        }
         guard !input.cells.isEmpty else {
             return blocked(
                 code: "mapped_cells_missing",
@@ -429,13 +491,25 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         }
 
         let allocation: PhysicalDesignPlacementAllocation
+        var timingEvidence: PhysicalDesignPlacementTimingEvidence?
         let allocator: any PhysicalDesignPlacementAllocating = NativePhysicalDesignPlacementAllocator()
         do {
-            allocation = try allocator.allocate(input, configuration: configuration, processGeometry: processGeometry)
+            let checkpoint: (@Sendable () throws -> Void)?
+            if let budget = characterization?.budget { checkpoint = { try budget.chargeWork(1) } }
+            else { checkpoint = nil }
+            let baseline = try allocator.allocate(input, configuration: configuration, processGeometry: processGeometry,
+                checkpoint: checkpoint)
+            if let characterization, let processGeometry {
+                (allocation, timingEvidence) = try await NativePhysicalDesignTimingPlacer().optimize(baseline,
+                    request: request, geometry: processGeometry, characterization: characterization)
+            } else { allocation = baseline }
         } catch is CancellationError {
             return Outcome(snapshot: nil, status: .cancelled,
                 diagnostics: [diagnostic(severity: .warning, code: "execution_cancelled",
                     message: "Native placement was cancelled before publication.", actions: ["resume_from_the_last_immutable_revision"])])
+        } catch let error as PhysicalDesignPlacementTimingError {
+            return blocked(code: error.code, message: error.localizedDescription,
+                actions: ["repair_exact_placement_characterization_or_resource_limits"])
         } catch let error as PhysicalDesignPlacementError {
             return blocked(code: error.code, message: error.localizedDescription,
                 actions: ["repair_placement_constraints", "adjust_placement_candidate_ceiling"])
@@ -493,6 +567,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             wirelengthObjectiveDBU: wirelengthObjectiveDBU,
             congestionObjective: congestionObjective
         )
+        implementationState.placementProof?.timingEvidence = timingEvidence
         output.implementationState = implementationState
         if overlapCount > 0 || outsideCoreCount > 0 || blockedCellCount > 0 {
             return blocked(
@@ -511,11 +586,34 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             ))
         }
         output.metadata["placementStatus"] = "legalized"
+        var timingMetrics: [PhysicalDesignMetric] = []
+        if let timingEvidence {
+            output.metadata["placementTimingScope"] = timingEvidence.scope
+            if timingEvidence.schemaVersion == 2,
+               timingEvidence.selectionDisposition == .baselinePreservedNoApplicableSetup {
+                guard timingEvidence.candidates.count == 1, timingEvidence.selectedCandidateIndex == 0,
+                      timingEvidence.profileContent?.minimumSetupSlackSeconds == nil,
+                      timingEvidence.candidates[0].result.payload.setupApplicability == .sourceNotApplicable,
+                      timingEvidence.candidates[0].result.payload.worstSetupSlack == nil else {
+                    return blocked(code: "placement_timing_unavailable", message: "Nonapplicable setup evidence does not bind the baseline.", actions: ["repair_exact_placement_characterization"])
+                }
+                output.metadata["placementTimingSelectionDisposition"] = "baselinePreservedNoApplicableSetup"
+            } else {
+                guard let initialSlack = timingEvidence.candidates.first?.result.payload.worstSetupSlack, initialSlack.isFinite,
+                      timingEvidence.candidates.indices.contains(timingEvidence.selectedCandidateIndex),
+                      let selectedSlack = timingEvidence.candidates[timingEvidence.selectedCandidateIndex].result.payload.worstSetupSlack, selectedSlack.isFinite else {
+                    return blocked(code: "placement_timing_unavailable", message: "Selected timing evidence lacks finite setup observations.", actions: ["repair_exact_placement_characterization"])
+                }
+                timingMetrics = [
+                    .init(name: "placementInitialSetupSlack", value: initialSlack, unit: "seconds"),
+                    .init(name: "placementSelectedSetupSlack", value: selectedSlack, unit: "seconds")]
+            }
+        }
         return completed(
             output,
             diagnostics: placementDiagnostics,
             actions: ["run_clock_tree_synthesis", "run_global_routing"],
-            metrics: metrics(for: output) + [
+            metrics: metrics(for: output) + timingMetrics + [
                 PhysicalDesignMetric(name: "placementCandidateChecks", value: Double(allocation.candidateChecks), unit: "count"),
                 PhysicalDesignMetric(name: "placementCandidateCeiling", value: Double(allocation.candidateCeiling), unit: "count"),
                 PhysicalDesignMetric(name: "placementStructuralCeiling", value: Double(allocation.structuralCeiling), unit: "count"),
@@ -534,7 +632,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                     value: congestionObjective,
                     unit: "ratio"
                 )
-            ]
+            ],
+            claims: .init(geometry: .verified, timing: timingEvidence == nil ? .notApplicable : .blocked, production: .blocked)
         )
     }
 
@@ -1721,141 +1820,30 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         )
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The source-free geometry-smoke antenna stage uses arithmetic ratio placeholders rather than recomputed physical feedback. Source-bound calls are blocked at dispatch; this path cannot qualify antenna correctness until candidate geometry and declared gate/process data drive the measurement.
-    private func antennaRepair(
-        _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
-    ) -> Outcome {
-        guard !input.routes.isEmpty else {
-            return blocked(code: "routes_missing", message: "Antenna repair requires routed nets.", actions: ["run_detailed_routing"])
-        }
-        var output = input
-        let repairConstraints = configuration.repairConstraints ?? .default
-        let routeNetIDs = Set(output.routes.map(\.netID))
-        var repaired = 0
-        var strategies: [String] = []
-        var repairIDs: [String] = []
-        for index in output.nets.indices {
-            guard let ratio = output.nets[index].antennaRatio,
-                  ratio > (output.nets[index].maximumAntennaRatio ?? configuration.maximumAntennaRatio) else { continue }
-            let netID = output.nets[index].id
-            guard routeNetIDs.contains(netID) else { continue }
-            let limit = output.nets[index].maximumAntennaRatio ?? configuration.maximumAntennaRatio
-            let resultingRatio = min(ratio, limit * 0.5)
-            output.nets[index].antennaRatio = resultingRatio
-            let strategy = repairConstraints.antennaStrategy.rawValue
-            let repairID = "antenna_repair_\(netID)_\(output.antennaRepairs.filter { $0.netID == netID }.count + 1)"
-            output.antennaRepairs.append(
-                PhysicalDesignSnapshot.AntennaRepair(
-                    id: repairID,
-                    netID: netID,
-                    strategy: strategy,
-                    previousRatio: ratio,
-                    resultingRatio: resultingRatio
-                )
-            )
-            repairIDs.append(repairID)
-            if let routeIndex = output.routes.firstIndex(where: { $0.netID == netID }),
-               let last = output.routes[routeIndex].segments.last {
-                switch repairConstraints.antennaStrategy {
-                case .jumper:
-                    guard let core = output.core else {
-                        return blocked(code: "core_geometry_missing", message: "Antenna jumper repair requires a core rectangle.", actions: ["run_floorplan"])
-                    }
-                    let nextLayer = last.layer == Int.max ? Int.max : last.layer + 1
-                    let layer = min(configuration.maximumRoutingLayer, nextLayer)
-                    let (endX, overflow) = last.x2.addingReportingOverflow(configuration.siteWidth)
-                    guard !overflow else {
-                        return blocked(code: "antenna_jumper_overflow", message: "Antenna jumper geometry would overflow the coordinate range.", entity: netID, actions: ["reduce_jumper_length"])
-                    }
-                    let segment = PhysicalDesignSnapshot.RouteSegment(
-                        id: "antenna_jumper_\(netID)_\(repaired)",
-                        layer: layer,
-                        x1: last.x2,
-                        y1: last.y2,
-                        x2: endX,
-                        y2: last.y2,
-                        isJumper: true
-                    )
-                    let geometry = segmentGeometry(segment, width: configuration.implementationConstraints?.routeWidth ?? PhysicalDesignImplementationConstraints.default.routeWidth)
-                    guard core.contains(geometry), !output.blockages.contains(where: { $0.intersects(geometry) }) else {
-                        return blocked(code: "antenna_jumper_illegal", message: "Antenna jumper candidate for net \(netID) leaves the core or intersects a blockage.", entity: netID, actions: ["move_the_blockage", "select_the_protection_device_strategy"])
-                    }
-                    output.routes[routeIndex].segments.append(segment)
-                case .reroute:
-                    guard let core = output.core else {
-                        return blocked(code: "core_geometry_missing", message: "Antenna reroute repair requires a core rectangle.", actions: ["run_floorplan"])
-                    }
-                    let nextLayer = last.layer == Int.max ? Int.max : last.layer + 1
-                    let layer = min(configuration.maximumRoutingLayer, nextLayer)
-                    let (endY, overflow) = last.y2.addingReportingOverflow(configuration.siteWidth)
-                    guard !overflow else {
-                        return blocked(code: "antenna_reroute_overflow", message: "Antenna reroute geometry would overflow the coordinate range.", entity: netID, actions: ["reduce_reroute_length"])
-                    }
-                    let segment = PhysicalDesignSnapshot.RouteSegment(
-                        id: "antenna_reroute_\(netID)_\(repaired)",
-                        layer: layer,
-                        x1: last.x2,
-                        y1: last.y2,
-                        x2: last.x2,
-                        y2: endY
-                    )
-                    let geometry = segmentGeometry(segment, width: configuration.implementationConstraints?.routeWidth ?? PhysicalDesignImplementationConstraints.default.routeWidth)
-                    guard core.contains(geometry), !output.blockages.contains(where: { $0.intersects(geometry) }) else {
-                        return blocked(code: "antenna_reroute_illegal", message: "Antenna reroute candidate for net \(netID) leaves the core or intersects a blockage.", entity: netID, actions: ["move_the_blockage", "select_the_protection_device_strategy"])
-                    }
-                    output.routes[routeIndex].segments.append(segment)
-                // FIXME(INCOMPLETE_IMPLEMENTATION): Native antenna protection lacks source-qualified device insertion and re-extracted antenna metrics. A fabricated diode or synthetic ratio reduction must not become a successful protection result before native feedback is implemented.
-                case .protectionDevice:
-                    return blocked(code: "antenna_protection_feedback_unimplemented", message: "Antenna protection requires exact source device insertion and derived post-repair antenna evidence.",
-                        entity: netID, actions: ["implement_native_antenna_feedback"])
-                }
-            }
-            strategies.append(strategy)
-            repaired += 1
-        }
-        guard repaired > 0 else {
-            return blocked(
-                code: "antenna_target_missing",
-                message: "No routed net exceeds its declared antenna ratio limit.",
-                actions: ["run_drc_antenna_analysis", "provide_antenna_ratios"]
-            )
-        }
-        guard verifyAndRecordRepair(
-            input: input,
-            output: &output,
-            configuration: configuration,
-            stage: PhysicalDesignStage.antennaRepair.rawValue,
-            strategy: uniqueStrings(strategies).joined(separator: "+"),
-            targetIDs: repairIDs,
-            details: ["rechecked_antenna_ratio_and_native_geometry"]
-        ) == nil else {
-            return blocked(
-                code: "antenna_repair_verification_failed",
-                message: "Antenna repair candidates did not pass native post-repair verification.",
-                actions: ["review_antenna_repair_strategy", "rerun_drc_antenna_analysis"]
-            )
-        }
-        output.metadata["antennaRepairStatus"] = "candidate_repairs_applied"
-        return completed(
-            output,
-            actions: ["rerun_drc_antenna_analysis", "review_jumper_rules"],
-            metrics: metrics(for: output) + [PhysicalDesignMetric(name: "antennaRepairs", value: Double(repaired), unit: "repairs")],
-            note: "Antenna repair candidates were applied; the external DRC oracle remains authoritative."
-        )
-    }
-
     private func fillInsertion(
         _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
+        configuration: PhysicalDesignConfiguration,
+        processGeometry: PhysicalDesignProcessGeometry?
     ) -> Outcome {
+        do { return try fillInsertionPrepared(input, configuration: configuration, processGeometry: processGeometry) }
+        catch is CancellationError { return cancelled(actions: ["resume_from_the_last_immutable_revision"]) }
+        catch { return blocked(code: "fill_geometry_admission_failed", message: error.localizedDescription, actions: ["repair_exact_fill_geometry_or_check_budget"]) }
+    }
+
+    private func fillInsertionPrepared(_ input: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration,
+        processGeometry: PhysicalDesignProcessGeometry?) throws -> Outcome {
         guard let core = input.core else {
             return blocked(code: "core_geometry_missing", message: "Fill insertion requires a core rectangle.", actions: ["run_floorplan"])
         }
         var output = input
         let repairConstraints = configuration.repairConstraints ?? .default
+        var admission = try PhysicalDesignFillAdmission(snapshot: input, configuration: configuration, geometry: processGeometry)
         guard output.fills.isEmpty else {
-            guard fillViolationCount(output, repairConstraints: repairConstraints) == 0 else {
+            var valid = true
+            for index in output.fills.indices {
+                if try !admission.accepts(output.fills[index], existing: output.fills.enumerated().filter { $0.offset != index }.map(\.element)) { valid = false; break }
+            }
+            guard valid else {
                 return blocked(
                     code: "existing_fill_invalid",
                     message: "Existing fill geometry violates native density, spacing or exclusion checks.",
@@ -1869,8 +1857,9 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 note: "Existing fill geometry already satisfies native checks; no new fill was inserted."
             )
         }
-        let step = configuration.fillWindowSize + max(configuration.fillSpacing, repairConstraints.minimumFillSpacing)
-        guard step > 0 else {
+        let stepSum = configuration.fillWindowSize.addingReportingOverflow(max(configuration.fillSpacing, repairConstraints.minimumFillSpacing))
+        let step = stepSum.partialValue
+        guard !stepSum.overflow, step > 0 else {
             return blocked(code: "invalid_fill_grid", message: "Fill grid step must be positive.", actions: ["correct_fill_configuration"])
         }
         let fillWidth = max(configuration.siteWidth, configuration.fillWindowSize / 4)
@@ -1882,7 +1871,6 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             return blocked(code: "fill_geometry_overflow", message: "Fill insertion cannot establish a safe starting coordinate within the core.", actions: ["reduce_fill_spacing", "move_the_core_geometry"])
         }
         var y = initialY
-        let maximumFillArea = Double(core.width) * Double(core.height) * repairConstraints.maximumFillDensity
         while true {
             if Task.isCancelled {
                 return cancelled(actions: ["resume_from_the_last_immutable_revision"])
@@ -1901,13 +1889,8 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 let (xEnd, xEndOverflow) = x.addingReportingOverflow(fillWidth)
                 guard !xEndOverflow, xEnd <= core.maxX else { break }
                 let geometry = PhysicalDesignSnapshot.Rect(x: x, y: y, width: fillWidth, height: fillHeight)
-                let currentFillArea = output.fills.reduce(0.0) { $0 + Double($1.geometry.width) * Double($1.geometry.height) }
-                let conflicts = output.cells.contains { cell in
-                    cell.placed && PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height).intersects(geometry)
-                }
-                    || output.blockages.contains { $0.intersects(geometry) }
-                    || output.powerStructures.contains { $0.geometry.expanded(by: repairConstraints.minimumFillSpacing).intersects(geometry) }
-                if !conflicts, currentFillArea + Double(fillWidth) * Double(fillHeight) <= maximumFillArea {
+                let fill = PhysicalDesignSnapshot.Fill(id: "fill_\(id)", layer: configuration.preferredRoutingLayers[0], geometry: geometry)
+                if try admission.accepts(fill, existing: output.fills) {
                 output.fills.append(
                     PhysicalDesignSnapshot.Fill(
                         id: "fill_\(id)",
@@ -1928,6 +1911,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         guard !output.fills.isEmpty else {
             return blocked(code: "fill_area_unavailable", message: "The core is too small for the configured fill grid.", actions: ["reduce_fill_window_size"])
         }
+        invalidateRoutingMeasurements(in: &output)
         if let verificationDiagnostic = verifyAndRecordRepair(
             input: input,
             output: &output,
@@ -1940,7 +1924,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
             return Outcome(snapshot: nil, status: .blocked, diagnostics: [verificationDiagnostic], candidateActions: ["reduce_fill_density", "adjust_fill_spacing"])
         }
         output.metadata["fillStatus"] = "inserted"
-        return completed(output, actions: ["run_density_drc", "run_lvs"], metrics: metrics(for: output))
+        return completed(output, actions: ["run_density_drc", "run_lvs"], metrics: metrics(for: output) + [.init(name: "fillGeometryChecks", value: Double(admission.checks), unit: "checks")])
     }
 
     private func redundantViaInsertion(
@@ -1951,7 +1935,13 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         guard !input.vias.isEmpty else {
             return blocked(code: "vias_missing", message: "Redundant-via insertion requires existing vias.", actions: ["run_detailed_routing"])
         }
+        guard let processGeometry else {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Unresolved smoke contact origins do not own metal
+            // footprints. Redundancy cannot succeed until both source metal connections are proven.
+            return blocked(code: "redundant_via_sources_required", message: "Redundant contacts require exact fixed process geometry.", actions: ["provide_exact_contact_and_conductor_sources"])
+        }
         var output = input
+        var checks = 0
         guard let core = output.core else {
             return blocked(code: "core_geometry_missing", message: "Redundant-via insertion requires a core rectangle.", actions: ["run_floorplan"])
         }
@@ -1981,25 +1971,30 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 (-repairConstraints.minimumViaSpacing, repairConstraints.minimumViaSpacing),
                 (-repairConstraints.minimumViaSpacing, -repairConstraints.minimumViaSpacing)
             ]
-            guard let offset = offsets.first(where: { deltaX, deltaY in
+            var selectedOffset: (Int64, Int64)?
+            do {
+            for (deltaX, deltaY) in offsets {
+                try Task.checkCancellation()
                 let (x, xOverflow) = via.x.addingReportingOverflow(deltaX)
                 let (y, yOverflow) = via.y.addingReportingOverflow(deltaY)
-                guard !xOverflow, !yOverflow, core.containsPoint(x: x, y: y) else { return false }
-                if let processGeometry {
-                    var candidate = via
-                    candidate.x = x
-                    candidate.y = y
-                    do {
-                        guard try processGeometry.viaFits(candidate, within: core) else { return false }
-                    } catch {
-                        // An out-of-range translated footprint rejects this bounded location candidate.
-                        return false
+                guard !xOverflow, !yOverflow, core.containsPoint(x: x, y: y) else { continue }
+                var candidate = via; candidate.x = x; candidate.y = y
+                guard try processGeometry.viaFits(candidate, within: core),
+                      output.vias.allSatisfy({ manhattan(x, y, $0.x, $0.y) >= repairConstraints.minimumViaSpacing }),
+                      try processGeometry.redundantContactConnected(candidate, snapshot: output,
+                        checks: &checks, maximumChecks: repairConstraints.maximumGeometryChecks, minimumSpacing: configuration.implementationConstraints?.routeSpacing ?? 0) else { continue }
+                var sourceCuts: [LayoutIR.IRBoundary] = []
+                for cell in output.cells {
+                    for name in try processGeometry.requireMaster(cell.master).pins.keys.sorted() {
+                        sourceCuts += try processGeometry.pinShapes(master: cell.master, pin: name, orientation: cell.orientation, x: cell.x, y: cell.y).filter { processGeometry.sourceLayers[$0.layer]?.type == .cut }
                     }
                 }
-                return output.vias.allSatisfy { existing in
-                    existing.id == via.id || manhattan(x, y, existing.x, existing.y) >= repairConstraints.minimumViaSpacing
-                }
-            }) else { continue }
+                guard try processGeometry.routingCutsFit(candidate, against: output.vias, sourceCuts: sourceCuts) else { continue }
+                selectedOffset = (deltaX, deltaY); break
+            }
+            } catch is CancellationError { return cancelled(actions: ["resume_from_the_last_immutable_revision"]) }
+            catch { return blocked(code: "redundant_via_geometry_invalid", message: error.localizedDescription, actions: ["repair_exact_contact_geometry_or_check_budget"]) }
+            guard let offset = selectedOffset else { continue }
             var candidate = PhysicalDesignSnapshot.Via(
                     id: id,
                     netID: via.netID,
@@ -2022,6 +2017,7 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
                 actions: ["increase_via_spacing", "rerun_detailed_routing"]
             )
         }
+        invalidateRoutingMeasurements(in: &output)
         if let verificationDiagnostic = verifyAndRecordRepair(
             input: input,
             output: &output,
@@ -2035,63 +2031,6 @@ public struct PhysicalDesignNativeMutationEngine: Sendable {
         }
         output.metadata["redundantViaStatus"] = "inserted"
         return completed(output, actions: ["run_via_drc", "run_lvs"], metrics: metrics(for: output))
-    }
-
-    private func hotspotRepair(
-        _ input: PhysicalDesignSnapshot,
-        configuration: PhysicalDesignConfiguration
-    ) -> Outcome {
-        var output = input
-        let repairConstraints = configuration.repairConstraints ?? .default
-        guard output.core != nil else {
-            return blocked(code: "core_geometry_missing", message: "Hotspot repair requires a core rectangle.", actions: ["run_floorplan"])
-        }
-        let unresolved = output.hotspots.filter { !$0.resolved }
-        guard !unresolved.isEmpty else {
-            return blocked(code: "hotspot_target_missing", message: "No unresolved physical hotspots are present.", actions: ["provide_hotspot_analysis"])
-        }
-        for index in output.hotspots.indices where !output.hotspots[index].resolved {
-            let candidate = output.hotspots[index].geometry.expanded(by: repairConstraints.hotspotRepairMargin)
-            if let core = output.core, !core.contains(candidate) {
-                return blocked(
-                    code: "hotspot_repair_outside_core",
-                    message: "Hotspot repair candidate \(output.hotspots[index].id) would extend outside the core.",
-                    entity: output.hotspots[index].id,
-                    actions: ["reduce_hotspot_repair_margin", "increase_core_area"]
-                )
-            }
-            if output.cells.contains(where: { cell in
-                cell.placed && PhysicalDesignSnapshot.Rect(x: cell.x, y: cell.y, width: cell.width, height: cell.height).intersects(candidate)
-            }) {
-                return blocked(
-                    code: "hotspot_repair_cell_conflict",
-                    message: "Hotspot repair candidate \(output.hotspots[index].id) intersects a placed cell.",
-                    entity: output.hotspots[index].id,
-                    actions: ["move_the_cell", "reduce_hotspot_repair_margin"]
-                )
-            }
-            output.hotspots[index].resolved = true
-            output.hotspots[index].resolution = "native_windowed_geometry_repair"
-            output.blockages.append(candidate)
-        }
-        if let verificationDiagnostic = verifyAndRecordRepair(
-            input: input,
-            output: &output,
-            configuration: configuration,
-            stage: PhysicalDesignStage.hotspotRepair.rawValue,
-            strategy: "windowed_hotspot_repair",
-            targetIDs: unresolved.map(\.id),
-            details: ["rechecked_core_bounds_cell_conflicts_and_blockage_candidate"]
-        ) {
-            return Outcome(snapshot: nil, status: .blocked, diagnostics: [verificationDiagnostic], candidateActions: ["review_hotspot_window", "rerun_drc_hotspot_analysis"])
-        }
-        output.metadata["hotspotRepairStatus"] = "candidate_repairs_applied"
-        return completed(
-            output,
-            actions: ["rerun_drc_hotspot_analysis"],
-            metrics: metrics(for: output) + [PhysicalDesignMetric(name: "hotspotsRepaired", value: Double(unresolved.count), unit: "hotspots")],
-            note: "Hotspot repair candidates were applied; the external DRC oracle remains authoritative."
-        )
     }
 
     private func specialCellMutationFailure(_ input: PhysicalDesignSnapshot, configuration: PhysicalDesignConfiguration,

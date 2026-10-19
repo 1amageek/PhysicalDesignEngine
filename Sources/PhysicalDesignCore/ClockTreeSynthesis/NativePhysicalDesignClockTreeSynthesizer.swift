@@ -18,7 +18,9 @@ struct NativePhysicalDesignClockTreeSynthesizer {
                 var routed = candidate.snapshot
                 do {
                     for netID in candidate.family.sorted() {
-                        routed = try PhysicalDesignSourceRouter().route(routed, configuration: configuration, mode: "cts", onlyNetID: netID, geometry: geometry).snapshot
+                        // FIXME(INCOMPLETE_IMPLEMENTATION): CTS has no source-face-aware terminal-jog admission. This candidate profile uses preferred-axis generation until jogs preserve every declared exposed electrode and pass numerical admission.
+                        routed = try PhysicalDesignSourceRouter().route(routed, configuration: configuration,
+                            mode: "cts", onlyNetID: netID, geometry: geometry, bypassingLayers: [], terminalTrackJogs: false).snapshot
                     }
                 } catch let error as PhysicalDesignSourceRouter.Failure {
                     if !buffered, modes.count == 2, ["routing_path_unavailable", "routing_pin_access_unavailable", "routing_connectivity_missing"].contains(error.code) { continue }
@@ -32,6 +34,7 @@ struct NativePhysicalDesignClockTreeSynthesizer {
                 for id in pinIDs {
                     guard let pin = pins[id] else { throw invalid("candidate pin identity") }
                     if pin.direction == "input" {
+                        if pin.id == clock.sourcePinID && pin.cellID == nil { continue }
                         guard let cell = pin.cellID.flatMap({ cells[$0] }) else { throw invalid("source-bound input cell") }
                         loads[id] = try characterization.library.pinCapacitance(cell: cell.master, pin: pin.name)
                         capacitanceSources[id] = try characterization.library.pinCapacitanceSource(cell: cell.master, pin: pin.name).rawValue

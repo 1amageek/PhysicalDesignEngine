@@ -4,30 +4,37 @@
 
 PhysicalDesignCore is the package's state, executor, mutation and persistence module.
 Parent: [package design](../../DESIGN.md). Child:
+[DEFImport](DEFImport/DESIGN.md),
 [TechnologyConstraints](TechnologyConstraints/DESIGN.md),
 [ProcessInputs](ProcessInputs/DESIGN.md),
 [MasterGeometry](MasterGeometry/DESIGN.md),
 [LegalPlacement](LegalPlacement/DESIGN.md),
 [ClockTreeSynthesis](ClockTreeSynthesis/DESIGN.md),
 [RoutingGeometry](RoutingGeometry/DESIGN.md), and
+[RoutingSourceAdoption](RoutingSourceAdoption/DESIGN.md), and
 [ProcessGeometry](ProcessGeometry/DESIGN.md), and
 [StandardLayoutExport](StandardLayoutExport/DESIGN.md), and
-[TopPorts](TopPorts/DESIGN.md).
+[TopPorts](TopPorts/DESIGN.md), and
+[RepairMeasurement](RepairMeasurement/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
 The module owns native request execution and canonical snapshots. PDKKit owns
-process manifest semantics; swift-mask-data owns standard parsing. Host approval,
+process manifest semantics; swift-mask-data owns the standard LEF/rule input codecs.
+[DEFImport](DEFImport/DESIGN.md) owns the bounded native DEF input adapter. Host approval,
 release and database persistence remain outside this module.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
+| [DEFImport](DEFImport/DESIGN.md) | child | Bounded public DEF parser | Native standard input and exact dimensional declarations | Declaration grammar cannot create or replace cell geometry |
+| [RepairMeasurement](RepairMeasurement/DESIGN.md) | child | Exact source/rule-based repair verdict | NativeDRC and actual conductor capture | Legacy scalar ratios are unverified |
 | [Package](../../DESIGN.md) | parent | Execution and artifact invariants | Public stage behavior | Production remains blocked |
 | [TechnologyConstraints](TechnologyConstraints/DESIGN.md) | child | Verified snapshot preparation | PDK/LEF to native tracks | No process qualification claim |
 | [RoutingGeometry](RoutingGeometry/DESIGN.md) | child | Source-bound access, search and conductor/contact geometry | Bounded native routing | Canonical widths and exact source geometry are required |
-| [LegalPlacement](LegalPlacement/DESIGN.md) | child | Bounded legal-row allocation | Exact occupied intervals and source poses | Geometry allocation does not establish timing-driven closure |
+| [RoutingSourceAdoption](RoutingSourceAdoption/DESIGN.md) | child | Checked explicit routing source extension | Fresh input revision preserves exact parent geometry | Lineage transport alone grants no adoption authority |
+| [LegalPlacement](LegalPlacement/DESIGN.md) | child | Bounded legal-row allocation and characterized pre-route selection | Exact source poses and modeled setup cost | Pre-route cost does not establish routed timing closure |
 | [ClockTreeSynthesis](ClockTreeSynthesis/DESIGN.md) | child | Explicit source-bound CTS and passive RC model observations | Bounded lower-contract composition | Model convergence cannot grant physical signoff |
 | [ProcessGeometry](ProcessGeometry/DESIGN.md) | child | Exact mapped cell/pin/site/via shapes | Native process projection | Projection alone does not prove native closure |
 | [MasterGeometry](MasterGeometry/DESIGN.md) | child | Required exact LEF master dimensions | Canonical cell construction | No fabricated dimensions |
@@ -47,25 +54,106 @@ ProcessInputs -> ProcessGeometry -> canonical input admission -> mutation -> out
 
 ## Contracts and Invariants
 
+`NativePhysicalDesignExecutor.currentImplementationVersion` owns the default
+native algorithm identity used by every stage wrapper. Version 1.2.0 identifies
+the exact orthogonal-union PRL spacing enforcement owned by RoutingGeometry. Provenance and the
+saved run manifest retain the same version; this identity grants no qualification.
+Version 1.8.0 additionally identifies explicit refusal of retained LEF antenna
+declarations at the shared ProcessInputs and ProcessGeometry admission boundary.
+Version 1.9.0 additionally identifies the characterized pre-route placement profile
+and retained source/candidate cost evidence owned by LegalPlacement.
+Version 1.10.0 additionally identifies the exact qualified CUT enclosure and
+minimum enclosed hole-area admission owned by [ProcessGeometry](ProcessGeometry/DESIGN.md).
+
 Canonical snapshot schema 2 retains standard cell orientation, source-bound process
 references, pin layer, row site and fixed-via master. ProcessGeometry admits exact
 source geometry before and after mutation. Public bare mutation cannot bypass intake.
 The native result's physical reference is JSON for lossless same-source resume; DEF
 remains the separate bounded standard interchange artifact.
 
-Request and run-manifest schema 7 consume checked immutable
+Request schema 8 (with strict legacy-7 nil-policy admission) and run-manifest
+schema 7 consume checked immutable
 [PDK identity schema 2](../../../PDKKit/Sources/PDKCore/Identity/DESIGN.md).
+[TechnologyConstraints](TechnologyConstraints/DESIGN.md#source-routing-width-policy)
+owns optional per-layer source-default width selection and its backward-compatible
+uniform numeric behavior. Result schema remains 7 and snapshot schema remains 2.
 The complete manifest reference is the sole digest authority; metadata is checked
-against actual retained bytes by process intake. Old nested or envelope schemas
+against actual retained bytes by process intake. Other old nested or envelope schemas
 are rejected rather than defaulted.
 
 The package design owns stage/result and artifact contracts. With explicit tracks,
 every generated signal/ECO/clock segment must lie on at least one declared track
 of the same layer and direction: coordinate minus origin is nonnegative, divisible
 by spacing and less than count in track units. Checked subtraction rejects overflow.
-Canonical cells require explicit dimensions. The DEF standard-format adapter
-resolves admitted LEF masters or requires complete explicit smoke dimensions;
-missing or contradictory geometry fails before snapshot publication.
+
+The store owns anticipated binding construction. Preparation has no persistence
+side effects; a store without this capability refuses before any writes. The
+executor preencodes all four dependent artifacts, commits one existing atomic
+batch, and checks returned bindings and retained bytes before completion.
+
+### Bounded artifact reads
+
+`PhysicalDesignArtifactStore.read(_:maximumBytes:)` is a protocol requirement.
+Its default explicitly refuses unsupported bounded access; it never calls the
+legacy read requirement. A logical source budget therefore cannot be satisfied
+by checking only the declared reference size before an unbounded file load.
+The concrete memory and filesystem stores keep `read(_:)` as compatibility
+entry points, delegating with the exact reference byte count as their bound.
+
+The memory actor checks cancellation, declared size and actual retained Data size
+before digest work or returning the owner. The filesystem store uses the fixed
+CircuiteFoundation FileSystem root capability and exact-reference read session.
+The existing project-root relative path mapping is retained; the store registers
+that actual root/path with the lower capability without conferring authority on
+an input root label. Containment compares the canonical filesystem path itself:
+the root path is admitted independently of a URL's directory representation flag,
+and descendants must start with the root path plus a separator. This admits legal
+flat artifacts even when the root URL was formed without a trailing slash; path
+normalization, symlink checks and outside-root refusal remain unchanged.
+Standard no-follow traversal and regular-file admission,
+actual file-size preflight, chunked digest verification and generation-change
+checks belong to that lower owner. An enlarged replacement or growth cannot
+cause whole-file materialization outside the selected bound.
+
+Returned Data is accumulated only from admitted pages, checking each page against
+the remaining exact byte count before append. The caller-facing Data boundary
+requires this bounded copy; page storage is retained only during its append.
+The completed receipt, returned byte count and digest must all match the binding.
+The operational page ceiling is at most one MiB, clamped to the exact content
+size; page/work ceilings are checked arithmetic derived from that size. No new
+wall-clock timeout is inferred by this byte-only API; Task cancellation remains
+checked before acquisition, during lower digest work and between pages. Empty
+content with a zero bound remains valid: the lower positive metadata budget of
+one cannot admit body bytes because exact expected size zero is checked first.
+
+Each read owns one capability/session and awaits both termination receipts on
+success and failure. Close failure is explicit and retains any original failure.
+Cleanup waits are not skipped by Task cancellation. A path-precheck refusal remains
+`invalidPath`; a descriptor-relative lower intake refusal is `readFailed` retaining
+the lower cause, including symlink traversal. Neither classification admits bytes.
+No descriptor/session escapes
+the call, no shared state is added to the filesystem value and the memory store
+keeps actor isolation. Byte and page bounds do not measure allocator overhead or
+process RSS. The bounded-store regression suite covers protocol dispatch/default
+refusal, actual filesystem enlargement and nonregular inputs, exact digest/count,
+zero/exact caps, and cancellation without introducing an unbounded fallback.
+
+Fill uses actual retained conductor footprints and exact source OBS/PORT/contact
+polygons for clearance. Existing fills also satisfy pairwise clearance. Density
+is the configured fill-area ceiling in each configured window, without a foundry
+minimum-density claim. DEF FILLS retains every layer and rectangle. Redundant
+fixed contacts require positive-area connection to same-net retained metal on
+both routing layers; a displaced contact cannot become success from origin
+proximity alone. New contacts satisfy source cut spacing before publication.
+Source-free contacts without resolved footprints refuse this operation.
+
+Source-bound power planning routes existing explicit SPECIALNETS power inputs
+through the finite special router. It cannot fabricate top ports or select layers
+from index parity. Unsupported synthetic source-bound grid requests refuse.
+Antenna and hotspot measurement use [RepairMeasurement](RepairMeasurement/DESIGN.md).
+Stage III never treats scalar ratio arithmetic or a resolved flag as physical completion.
+Canonical DEF cell admission and declaration grammar are owned by
+[DEFImport](DEFImport/DESIGN.md).
 With exact process inputs, the DEF adapter constructs the invocation projection
 when explicit UNITS is admitted and returns it to the executor for reuse. ROW uses
 the exact oriented SITE dimensions; STEP defines repetition and does not define
@@ -126,9 +214,9 @@ Source-free buffer insertion fails. ECO insertion publishes the exact split-net
 geometry candidate with invalidated route/clock evidence and an explicit routing
 follow-up; it does not implicitly run a second mutating routing stage. Source-bound CTS preserves original cell poses and unrelated routes, then creates
 fresh unpublished clock families before measured model constraints admit a tree. Functional equivalence and timing
-closure remain separate. Antenna protection insertion stays explicitly unsupported
-until B7 can derive and recheck antenna metrics; no fabricated diode or ratio
-improvement is a successful protection result.
+closure remain separate. Source-bound antenna protection uses the exact device and
+NativeDRC diffusion rule contract in [RepairMeasurement](RepairMeasurement/DESIGN.md).
+A rule verdict never fabricates a numerical ratio or process qualification.
 
 [LegalPlacement](LegalPlacement/DESIGN.md) owns native placement candidate search,
 caller/structural ceilings and pin pose changes. The module composes that contract
@@ -204,3 +292,13 @@ crossing wires, endpoint caps, fixed-contact footprints, disjoint retained geome
 unknown geometry, bounded failure/cancellation, immutable API artifacts and route
 change versus no-change invalidation. Existing routing tests own source search and
 standard export; characterized CTS and host feedback are not repeated here.
+
+## Host serialization dependency adoption
+
+LogicDesignReference host encoding is supplied by LogicDesignSerialization.
+The portable LogicIR value remains independent of Foundation and codecs.
+This dependency adoption preserves request semantics and exact content identity.
+
+Manufacturing-grid legality and exact source reconstruction are owned by
+[ProcessGeometry](ProcessGeometry/DESIGN.md), including technology-only Native
+execution. Executor admission checks output before immutable persistence.

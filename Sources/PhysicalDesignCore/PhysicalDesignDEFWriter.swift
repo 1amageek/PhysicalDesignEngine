@@ -34,7 +34,8 @@ public struct PhysicalDesignDEFWriter: Sendable {
                 for segment in route.segments {
                     guard let width = segment.widthDBU else { throw PhysicalDesignDEFExportError.unsupportedProcessGeometry("Normal-net conductor width is unqualified.") }
                     do {
-                        _ = try processGeometry.routingWidthAndSpacing(layer: segment.layer, units: snapshot.unitsPerMicron, width: width, explicitSpecialWidth: net.routingClass == .special)
+                        // Serialization preserves geometry; source routing owns its AREA verdict.
+                        _ = try processGeometry.routingWidthAndSpacing(layer: segment.layer, units: snapshot.unitsPerMicron, width: width, explicitSpecialWidth: net.routingClass == .special, areaHandledSeparately: true)
                         _ = try segment.qualifiedFootprint()
                     } catch let error as PhysicalDesignRoutingSourceError {
                         throw PhysicalDesignDEFExportError.unsupportedProcessGeometry(error.message)
@@ -74,7 +75,7 @@ public struct PhysicalDesignDEFWriter: Sendable {
         ] { try text.line(line) }
         for row in sortedRows {
             // FIXME(INCOMPLETE_IMPLEMENTATION): Unqualified smoke rows have no LEF site source. The explicit smoke STEP-y height is retained until every such caller supplies a standard site definition; it does not prove process correctness.
-            let stepY = processGeometry == nil ? row.height : 0
+            let stepY = processGeometry == nil || row.siteName == nil ? row.height : 0
             try text.line("ROW \(row.id) \(row.siteName ?? "coreSite") \(row.originX) \(row.originY) \(row.orientation.rawValue) DO \(row.siteCount) BY 1 STEP \(row.siteWidth) \(stepY) ;")
         }
         for track in snapshot.implementationState?.tracks.sorted(by: { $0.id < $1.id }) ?? [] {
@@ -168,6 +169,14 @@ public struct PhysicalDesignDEFWriter: Sendable {
                 try text.line("- PLACEMENT RECT ( \(blockage.x) \(blockage.y) ) ( \(blockage.maxX) \(blockage.maxY) ) ;")
             }
             try text.line("END BLOCKAGES")
+        }
+
+        if !snapshot.fills.isEmpty {
+            try text.line("FILLS \(snapshot.fills.count) ;")
+            for fill in snapshot.fills.sorted(by: { $0.id < $1.id }) {
+                try text.line("- LAYER \(try layerName(fill.layer)) RECT ( \(fill.geometry.x) \(fill.geometry.y) ) ( \(fill.geometry.maxX) \(fill.geometry.maxY) ) ;")
+            }
+            try text.line("END FILLS")
         }
 
         if !sortedPowerStructures.isEmpty {
