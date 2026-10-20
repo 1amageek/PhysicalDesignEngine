@@ -328,9 +328,88 @@ a fresh live assessment/Native Flow; no decoded Flow authority is created.
 Only the new helper's qualification marker is closed. The existing public
 whole-candidate operation marker belongs to separate strict controlled Runtime,
 STA and CLI completion and is retained. Global admissible initial-set inclusion,
-the full actual 56-device/contact Native circuit, all-history continuation, PVT
-and source-precision guarantees remain unproved; this finite evidence grants no
-physical-contact/foundry qualification.
+actual-56 constitutive F/Q, all-history continuation, all-corner PVT and
+source-precision guarantees remain unproved; the preparation-only evidence below
+does not grant physical-contact/foundry qualification.
+
+### Preparation-Only Actual Circuit Join
+
+The same source-to-ideal-connection transformation also has an internal
+`prepare(source:control:)` entry returning an immutable `Preparation`: the exact
+source preparation, derived circuit, source-row/instance/branch mapping and its
+original storage reservation. It accepts no Flow request, OriginalD, initial
+coordinates, branch-current bounds, preconditioner or charge box. This is a
+preparation result, not a selected forest, conditional Flow, root or global
+initial-set certificate. Its `validate` uses the same actual voltage-source fact
+join as the existing Flow path.
+
+Both entries delegate to one transformation. The existing Flow entry additionally
+copies the supplied source laws and appends the same constant-zero laws, preserving
+all existing caller numerical values, checks, work order and storage quantities.
+The preparation-only entry omits only the absent Flow request/source-law array;
+its exact stored result and derived instance/branch/row buffers are admitted before
+construction. Copies share the immutable circuit buffers and exact original lease.
+The actual Native owner and its inspection record have their own existing leases;
+preparing does not evaluate model F/Q or require a constitutive precision snapshot.
+
+```text
+same captured source -> one R0-to-V0 transformation
+                       -> Preparation -> ordinary Native setup + actual source facts
+                       -> existing Flow request + zero laws -> existing Flow checks
+```
+
+The focused qualification passed 14 declarations / 15 cases without skips,
+including actual R/C/V Native preparation without numerical proposals, distinct
+original nodes, the actual zero-branch F/Q fact, equality against the existing
+Flow transformation, storage/work/cancellation refusals and last-copy refund.
+The same-candidate TT driver then passed genuine ordinary Native preparation
+with the exact captured 56 model/card/binding identities, 21,437 passive rows,
+15 positive-zero rows and four original voltage sources. It checked 10,565
+positive resistors, 10,857 capacitors, 56 OSDI devices, 19 independent voltage
+sources, all 15 raw physical pins and every model's raw/active/global aliases.
+Observed dimension is 5,973, with 5,955 nodes and 280 model-owned nodes; the
+source-only circuit had 5,675 nodes. No proposed initial/current/domain bounds
+were supplied or synthesized.
+
+The exact ordinary simulation nominal parameter was forwarded through public
+Core `82eb35e8bc57402880db3529c8a1dc2045349d87` under the same retained TT
+ambient/model/source conditions. All resolved parameter types, order, names,
+scopes, Given flags, real bits and raw-node facts matched the unchanged R9
+artifact through the verification driver's typed JSON decoder. That decoder's
+transport correction and wrong-type preflight are verification-only; no
+production model value or tolerance changed. The post-unwind close record proves
+all logical live/temporary bytes returned to zero, 5,060,751 acquisitions matched
+releases, and actual Native/bootstrap/library closure succeeded without secondary
+failure. This closes this entry's preparation qualification only; no actual-56
+constitutive F/Q, selected forest, global initial inclusion or history follows.
+
+The old source profile allows 6,000,000,000 live bytes. Keeping the exact r9 SDK
+caps (16,000,000 metadata, 64,000,000 storage and 64,000,000 workspace bytes per
+model), Native's existing pre-admission alone is
+`N = 56 * (16,000,000 + 64,000,000 + 64,000,000) + maximumAdapterBytes`, or
+8,064,000,000 plus the adapter allowance. If `A` is the explicitly selected Native
+maximum allocation allowance, it must satisfy `A > N` and cover ordinary compiler,
+metadata and simultaneous Native temporaries under the existing Native contract.
+The one shared source owner therefore needs an operational live allowance of at
+least `6,000,000,000 + A + I` to conservatively offer both complete phase envelopes.
+For the standalone driver, `I = 16,000,000 + 64,000,000 + 64,000,000 =
+144,000,000` admits its distinct input-profile library/model bootstrap before
+startup and remains retained until that library closes; it is not one of the
+56 fresh Native model owners. Captured fixture/oracle input bytes are separately
+bounded caller-owned verification inputs, not unadmitted Native result payload.
+This is a declared simultaneous logical reservation allowance, not actual payload,
+physical duplication, RSS or a passing claim under the old 6 GB profile. Original
+100 billion cumulative work, 4 GB temporary, 2 GB frontend/transform ceilings and
+exact SDK caps are preserved unless a separately justified execution plan changes
+an operational allowance. The TT-first driver used A=10,000,000,000 and a
+16,144,000,000-byte combined logical live envelope, with the unchanged SDK floor
+8,064,000,000 and checked adapter/non-adapter remainder shares of 968,000,000
+each. Actual guards determined admission; the split was not assumed sufficient.
+Observed logical peaks were 14,624,957,237 live and 2,562,944,671 temporary bytes,
+not process RSS or physical-duplication claims. The bounded driver retained all
+first-failure receipts, stopped on each concrete refusal, and passed the final TT
+preparation after causal driver-only corrections. Global initial inclusion,
+source precision, all-corner behavior and all-history guarantees remain open.
 
 ## Runtime Flows
 

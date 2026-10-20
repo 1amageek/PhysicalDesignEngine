@@ -8,6 +8,17 @@ internal final class PhysicalLogicWholeCandidateIdealConnections: Sendable {
         let instanceIndex: Int
         let branch: Branch
     }
+    /// Source-only transformation ownership; no numerical proposal or selected-forest claim.
+    struct Preparation: Sendable {
+        let source: PreparedSPICESimulation
+        let circuit: CircuitIR
+        let rows: [Row]
+        fileprivate let storage: SPICESourceStorageReservation
+
+        func validate(_ fact: NativeVoltageSourceFact, control: PhysicalLogicWholeCandidateControl) throws -> Bool {
+            try PhysicalLogicWholeCandidateIdealConnections.validate(fact, source: source, rows: rows, control: control)
+        }
+    }
     let source: PreparedSPICESimulation
     let circuit: CircuitIR
     let request: NativePrescribedVoltageFlowRequest
@@ -17,8 +28,20 @@ internal final class PhysicalLogicWholeCandidateIdealConnections: Sendable {
         rows: [Row], storage: SPICESourceStorageReservation) {
         self.source = source; self.circuit = circuit; self.request = request; self.rows = rows; self.storage = storage
     }
+    static func prepare(source: PreparedSPICESimulation,
+        control: PhysicalLogicWholeCandidateControl) throws -> Preparation? {
+        try build(source: source, flow: nil, control: control)?.preparation
+    }
     static func prepare(source: PreparedSPICESimulation, flow: NativePrescribedVoltageFlowRequest,
         control: PhysicalLogicWholeCandidateControl) throws -> Self? {
+        guard let built = try build(source: source, flow: flow, control: control) else { return nil }
+        guard let request = built.request else { throw failure("Missing supplied Flow request") }
+        let preparation = built.preparation
+        return Self(source: preparation.source, circuit: preparation.circuit, request: request,
+            rows: preparation.rows, storage: preparation.storage)
+    }
+    private static func build(source: PreparedSPICESimulation, flow: NativePrescribedVoltageFlowRequest?,
+        control: PhysicalLogicWholeCandidateControl) throws -> (preparation: Preparation, request: NativePrescribedVoltageFlowRequest?)? {
         var definition: ParsedSubcircuit?, call: ParsedComponent?
         for candidate in source.netlist.subcircuits {
             try control.check()
@@ -46,22 +69,28 @@ internal final class PhysicalLogicWholeCandidateIdealConnections: Sendable {
         guard count <= control.limits.maximumAssociations else { throw failure("Connection count exceeds admission") }
         let input = source.circuit
         let branchCount = input.branches.count.addingReportingOverflow(count)
-        let sourceCount = flow.sources.count.addingReportingOverflow(count)
+        let sourceCount = (flow?.sources.count ?? 0).addingReportingOverflow(count)
         guard !branchCount.overflow, !sourceCount.overflow else { throw failure("Connection capacity overflow") }
         let indexes = try PhysicalLogicWholeCandidateIndex(count: input.instances.count, control: control) { input.instances[$0].name }
-        var bytes = UInt64(MemoryLayout<Self>.stride)
-        // Admit the fixed stored payload rather than the size of the class reference.
-        bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<PreparedSPICESimulation>.stride))
-        bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<CircuitIR>.stride))
-        bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<NativePrescribedVoltageFlowRequest>.stride))
-        bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<SPICESourceStorageReservation>.stride))
+        var bytes: UInt64
+        if flow != nil {
+            bytes = UInt64(MemoryLayout<Self>.stride)
+            // Admit the fixed stored payload rather than the size of the class reference.
+            bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<PreparedSPICESimulation>.stride))
+            bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<CircuitIR>.stride))
+            bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<NativePrescribedVoltageFlowRequest>.stride))
+            bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<SPICESourceStorageReservation>.stride))
+        } else {
+            bytes = UInt64(MemoryLayout<Preparation>.stride)
+        }
         func array<T>(_ type: T.Type, _ count: Int) throws {
             bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, UInt64(MemoryLayout<[T]>.stride))
             bytes = try PhysicalLogicWholeCandidateControl.sum(bytes,
                 PhysicalLogicWholeCandidateControl.product(UInt64(count), UInt64(MemoryLayout<T>.stride)))
         }
         try array(Instance.self, input.instances.count); try array(Branch.self, branchCount.partialValue)
-        try array(Row.self, count); try array(NativePrescribedVoltageFlowSource.self, sourceCount.partialValue)
+        try array(Row.self, count)
+        if flow != nil { try array(NativePrescribedVoltageFlowSource.self, sourceCount.partialValue) }
         let individual = try PhysicalLogicWholeCandidateControl.sum(UInt64(MemoryLayout<[Branch]>.stride + MemoryLayout<Branch>.stride),
             UInt64(MemoryLayout<[String: ParameterValue]>.stride + MemoryLayout<(String, ParameterValue)>.stride))
         bytes = try PhysicalLogicWholeCandidateControl.sum(bytes, PhysicalLogicWholeCandidateControl.product(UInt64(count), individual))
@@ -73,8 +102,11 @@ internal final class PhysicalLogicWholeCandidateIdealConnections: Sendable {
         var instances: [Instance] = []; instances.reserveCapacity(input.instances.count)
         for instance in input.instances { try control.check(); instances.append(instance) }
         var rows: [Row] = []; rows.reserveCapacity(count)
-        var sources: [NativePrescribedVoltageFlowSource] = []; sources.reserveCapacity(sourceCount.partialValue)
-        for law in flow.sources { try control.check(); sources.append(law) }
+        var sources: [NativePrescribedVoltageFlowSource] = []
+        if let flow {
+            sources.reserveCapacity(sourceCount.partialValue)
+            for law in flow.sources { try control.check(); sources.append(law) }
+        }
         for ordinal in definition.body.components.indices {
             try control.check()
             let component = definition.body.components[ordinal]
@@ -93,9 +125,11 @@ internal final class PhysicalLogicWholeCandidateIdealConnections: Sendable {
                   original.model == nil, original.mos == nil, original.diode == nil, original.osdi == nil,
                   original.ownedBranches.isEmpty, original.ownedNodes.isEmpty, original.referencedBranches.isEmpty,
                   original.referencedNodes.isEmpty, original.opticalNodes.isEmpty else { throw failure("Unsupported declared ideal-connection form") }
-            for law in flow.sources {
-                try control.check()
-                guard law.deviceIndex != index else { throw failure("Caller cannot replace the declared connection law") }
+            if let flow {
+                for law in flow.sources {
+                    try control.check()
+                    guard law.deviceIndex != index else { throw failure("Caller cannot replace the declared connection law") }
+                }
             }
             let next = maximum.addingReportingOverflow(1)
             guard !next.overflow else { throw failure("Connection branch identity overflow") }; maximum = next.partialValue
@@ -104,21 +138,30 @@ internal final class PhysicalLogicWholeCandidateIdealConnections: Sendable {
             instances[index] = .init(name: original.name, typeName: "vsource", nodes: original.nodes,
                 parameters: ["v": .real(0)], ownedBranches: [branch])
             branches.append(branch); rows.append(.init(sourceOrdinal: ordinal, instanceIndex: index, branch: branch))
-            sources.append(.init(deviceIndex: index, zeroVoltage: 0, oneVoltage: 0, timeOrigin: 0, timeScale: 1,
-                initialNormalized: 0...0, normalized: 0...0, normalizedDerivativePerSecond: 0...0))
+            if flow != nil {
+                sources.append(.init(deviceIndex: index, zeroVoltage: 0, oneVoltage: 0, timeOrigin: 0, timeScale: 1,
+                    initialNormalized: 0...0, normalized: 0...0, normalizedDerivativePerSecond: 0...0))
+            }
         }
         guard rows.count == count else { throw failure("Incomplete declared connection inventory") }
         try control.check()
         let circuit = CircuitIR(nodes: input.nodes, branches: branches, instances: instances, groundNode: input.groundNode,
             nodeNames: input.nodeNames, branchNames: input.branchNames, opticalNodes: input.opticalNodes,
             opticalConnections: input.opticalConnections, evaluationEnvironment: input.evaluationEnvironment)
-        // Numerical proposals describe this FINAL circuit. Do not infer new current bounds or change hints.
-        let request = NativePrescribedVoltageFlowRequest(originalLower: flow.originalLower, originalUpper: flow.originalUpper,
-            startTime: flow.startTime, duration: flow.duration, sources: sources, algebraicRows: flow.algebraicRows,
-            dynamicInitialCoordinates: flow.dynamicInitialCoordinates, initial: flow.initial, chargeBox: flow.chargeBox, window: flow.window)
-        return Self(source: source, circuit: circuit, request: request, rows: rows, storage: storage)
+        let request: NativePrescribedVoltageFlowRequest?
+        if let flow {
+            // Numerical proposals describe this FINAL circuit. Do not infer new current bounds or change hints.
+            request = NativePrescribedVoltageFlowRequest(originalLower: flow.originalLower, originalUpper: flow.originalUpper,
+                startTime: flow.startTime, duration: flow.duration, sources: sources, algebraicRows: flow.algebraicRows,
+                dynamicInitialCoordinates: flow.dynamicInitialCoordinates, initial: flow.initial, chargeBox: flow.chargeBox, window: flow.window)
+        } else { request = nil }
+        return (Preparation(source: source, circuit: circuit, rows: rows, storage: storage), request)
     }
     func validate(_ fact: NativeVoltageSourceFact, control: PhysicalLogicWholeCandidateControl) throws -> Bool {
+        try Self.validate(fact, source: source, rows: rows, control: control)
+    }
+    private static func validate(_ fact: NativeVoltageSourceFact, source: PreparedSPICESimulation, rows: [Row],
+        control: PhysicalLogicWholeCandidateControl) throws -> Bool {
         for row in rows {
             try control.check()
             let original = source.circuit.instances[row.instanceIndex]

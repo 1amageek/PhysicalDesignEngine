@@ -168,6 +168,95 @@ struct WholeCandidateIdealConnectionTests {
         }
         resources.expectRefund()
     }
+    @Test func preparationOnlyNeedsNoFlowProposalAndMatchesTheExistingTransformation() async throws {
+        let resources = try WholeCandidateFlowResources()
+        do {
+            let source = try await source(text, resources: resources)
+            let control = try PhysicalLogicWholeCandidateControl.make(resources: resources, cancellation: .init(), limits: WholeCandidateFlowFixture.limits())
+            let prepared = try PhysicalLogicWholeCandidateIdealConnections.prepare(source: source, control: control)
+            let connection = try #require(prepared)
+            #expect(connection.rows.count == 1 && connection.circuit.nodes == source.circuit.nodes)
+            #expect(connection.circuit.nodeNames == source.circuit.nodeNames)
+            let row = connection.rows[0], original = source.circuit.instances[row.instanceIndex]
+            #expect(original.typeName == "resistor" && original.nodes[0] != original.nodes[1])
+            #expect(connection.circuit.branches.count == source.circuit.branches.count + 1)
+            let conditions = try source.configuration.options.operatingConditions()
+            let circuit = try NativeCircuitPreparer().prepare(ir: connection.circuit, registry: .standard(),
+                operatingConditions: conditions, limits: WholeCandidateFlowFixture.limits().native,
+                numericalLimits: source.configuration.numericalLimits, resources: control)
+            do {
+                try circuit.withIndependentVoltageSources(cancellation: .init()) { view in
+                    #expect(view.sources.count == 2)
+                    var matched = 0
+                    for fact in view.sources {
+                        if try connection.validate(fact, control: control) {
+                            matched += 1
+                            #expect(fact.positiveNode == original.nodes[0] && fact.negativeNode == original.nodes[1])
+                            #expect(fact.branch == row.branch && fact.dcVoltage.bitPattern == 0)
+                        }
+                    }
+                    #expect(matched == 1)
+                    #expect(view.preparation.plan.topology.variableMap[.nodeVoltage(original.nodes[0])] != nil)
+                    #expect(view.preparation.plan.topology.variableMap[.nodeVoltage(original.nodes[1])] != nil)
+                    #expect(view.preparation.plan.topology.variableMap[.branchCurrent(row.branch)] != nil)
+                }
+            } catch {
+                let primary = error
+                do { try circuit.close() }
+                catch { throw WholeCandidateFlowFixture.Failure.cleanup(primary: primary, secondary: error) }
+                throw primary
+            }
+            try circuit.close()
+            // Parity is checked separately; preparing above never required this numerical proposal.
+            let existing = try PhysicalLogicWholeCandidateIdealConnections.prepare(source: source, flow: proposal(source), control: control)
+            let flow = try #require(existing)
+            #expect(flow.circuit.nodes == connection.circuit.nodes && flow.circuit.branches == connection.circuit.branches)
+            #expect(flow.circuit.instances.count == connection.circuit.instances.count)
+            for index in flow.circuit.instances.indices {
+                let first = flow.circuit.instances[index], second = connection.circuit.instances[index]
+                #expect(first.name == second.name && first.typeName == second.typeName && first.nodes == second.nodes)
+                #expect(first.ownedBranches == second.ownedBranches)
+            }
+            #expect(flow.rows[0].sourceOrdinal == row.sourceOrdinal && flow.rows[0].instanceIndex == row.instanceIndex && flow.rows[0].branch == row.branch)
+        }
+        resources.expectRefund()
+    }
+    @Test func preparationOnlyPreservesControlRefusalsAndLastCopyReservation() async throws {
+        let resources = try WholeCandidateFlowResources()
+        do {
+            let source = try await source(text, resources: resources)
+            let token = CancellationToken()
+            let control = try PhysicalLogicWholeCandidateControl.make(resources: resources, cancellation: token, limits: WholeCandidateFlowFixture.limits())
+            let baseline = resources.counts
+            resources.refuseNextReservation()
+            do { _ = try PhysicalLogicWholeCandidateIdealConnections.prepare(source: source, control: control); Issue.record("Storage refusal ignored") }
+            catch PhysicalLogicWholeCandidateFlowFailure.resource {}
+            resources.refuseNextCharge()
+            do { _ = try PhysicalLogicWholeCandidateIdealConnections.prepare(source: source, control: control); Issue.record("Work refusal ignored") }
+            catch PhysicalLogicWholeCandidateFlowFailure.resource {}
+            resources.cancelAfterNextCharge(token)
+            do { _ = try PhysicalLogicWholeCandidateIdealConnections.prepare(source: source, control: control); Issue.record("Cancellation ignored") }
+            catch PhysicalLogicWholeCandidateFlowFailure.cancelled {}
+            #expect(resources.counts.live == baseline.live && resources.counts.temporary == baseline.temporary)
+            let fresh = try PhysicalLogicWholeCandidateControl.make(resources: resources, cancellation: .init(), limits: WholeCandidateFlowFixture.limits())
+            let freshBaseline = resources.counts
+            #expect(freshBaseline.live > baseline.live)
+            #expect(freshBaseline.temporary == baseline.temporary)
+            var original = try PhysicalLogicWholeCandidateIdealConnections.prepare(source: source, control: fresh)
+            let retained = resources.counts.live
+            #expect(retained > freshBaseline.live)
+            var copy = original; original = nil
+            #expect(copy?.rows.count == 1 && resources.counts.live == retained)
+            withExtendedLifetime(copy) {}
+            copy = nil
+            let released = resources.counts
+            #expect(released.live == freshBaseline.live)
+            #expect(released.temporary == freshBaseline.temporary)
+            // Both baseline owners and the new control remain live until these comparisons finish.
+            withExtendedLifetime((source, control, fresh)) {}
+        }
+        resources.expectRefund()
+    }
     /// Hints are explicit proposals for the FINAL Native dimension; production never fills them in.
     private func wholeProposal(_ f: WholeCandidateFlowFixture, sdk: WholeCandidateFlowSDKFixture,
         resources: WholeCandidateFlowResources) async throws -> NativePrescribedVoltageFlowRequest {
