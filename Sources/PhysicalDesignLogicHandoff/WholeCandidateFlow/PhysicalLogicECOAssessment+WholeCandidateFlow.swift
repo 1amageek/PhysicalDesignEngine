@@ -48,7 +48,11 @@ extension PhysicalLogicECOAssessment {
             try control.check()
             try PhysicalLogicWholeCandidateSourceValidation.validate(self, preparedSTA: preparedSTA,
                 request: request, source: source, control: control)
-            let circuit = try await Self.prepareNative(source: source, request: request, control: control)
+            let connections = try PhysicalLogicWholeCandidateIdealConnections.prepare(source: source,
+                flow: request.native.flow, control: control)
+            let nativeFlow = connections?.request ?? request.native.flow
+            let circuit = try await Self.prepareNative(source: source, ir: connections?.circuit ?? source.circuit,
+                request: request, control: control)
             let result: PhysicalLogicWholeCandidateFlow
             do {
                 try control.check()
@@ -57,19 +61,19 @@ extension PhysicalLogicECOAssessment {
                 let pairs = try PhysicalLogicWholeCandidateJoin.pairs(assessment: self, timing: timing,
                     request: request, source: source, control: control)
                 try PhysicalLogicWholeCandidateJoin.actualSources(circuit, source: source, timing: timing, slices: slices,
-                    request: request, pairs: pairs.span, control: control)
-                let flow = try await circuit.certifyPrescribedVoltageFlow(request: request.native.flow,
+                    request: request, pairs: pairs.span, connections: connections, control: control)
+                let flow = try await circuit.certifyPrescribedVoltageFlow(request: nativeFlow,
                     capture: request.native.capture, range: request.native.range,
                     limits: limits.flow, cancellation: cancellation)
                 try control.check()
                 let observations = try flow.observeVoltages(pairs: pairs.span, limits: limits.observations, cancellation: cancellation)
                 try control.check()
                 try PhysicalLogicWholeCandidateJoin.validate(observations: observations, timing: timing,
-                    slices: slices, source: source, request: request, control: control)
+                    slices: slices, source: source, request: request, connections: connections, control: control)
                 let storage = try control.reserve(PhysicalLogicWholeCandidateFlow.retainedByteCount, kind: .liveOwnedBytes)
                 result = PhysicalLogicWholeCandidateFlow(assessment: self, preparedSTA: preparedSTA,
                     sourcePreparation: source, observations: observations, timingContext: timing,
-                    jointSlices: slices, rail: request.rail, storage: storage)
+                    jointSlices: slices, rail: request.rail, connections: connections, storage: storage)
             } catch {
                 let primary = PhysicalLogicWholeCandidateControl.failure(error)
                 do { try circuit.close() }
@@ -84,21 +88,21 @@ extension PhysicalLogicECOAssessment {
         } catch let failure as PhysicalLogicWholeCandidateFlowFailure { throw failure }
         catch { throw PhysicalLogicWholeCandidateControl.failure(error) }
     }
-    private static func prepareNative(source: PreparedSPICESimulation,
+    private static func prepareNative(source: PreparedSPICESimulation, ir: CircuitIR,
         request: PhysicalLogicWholeCandidateFlowRequest, control: PhysicalLogicWholeCandidateControl)
         async throws -> PreparedNativeCircuit {
         try control.check()
         let conditions = try source.configuration.options.operatingConditions()
         let preparer = NativeCircuitPreparer()
         if let runtime = request.native.osdi, let snapshot = request.native.constitutive {
-            return try await preparer.prepare(ir: source.circuit, registry: .standard(), operatingConditions: conditions,
+            return try await preparer.prepare(ir: ir, registry: .standard(), operatingConditions: conditions,
                 limits: control.limits.native, numericalLimits: source.configuration.numericalLimits,
                 resources: control, osdi: runtime, constitutive: snapshot, cancellation: control.cancellation)
         }
         guard request.native.osdi == nil, request.native.constitutive == nil else {
             throw PhysicalLogicWholeCandidateFlowFailure.invalidInput("Incomplete actual OSDI snapshot policy")
         }
-        return try preparer.prepareNativeConstitutive(ir: source.circuit, registry: .standard(), operatingConditions: conditions,
+        return try preparer.prepareNativeConstitutive(ir: ir, registry: .standard(), operatingConditions: conditions,
             limits: control.limits.native, numericalLimits: source.configuration.numericalLimits,
             resources: control, cancellation: control.cancellation)
     }

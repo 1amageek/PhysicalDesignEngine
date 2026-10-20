@@ -16,9 +16,9 @@ public final class PhysicalLogicWholeCandidateFlow: Sendable {
     internal init(assessment: PhysicalLogicECOAssessment, preparedSTA: PreparedSTAExecution,
         sourcePreparation: PreparedSPICESimulation, observations: NativePrescribedVoltageFlowVoltageObservations,
         timingContext: STAConservativeSourceContext, jointSlices: SPICEAccountedCollection<STAConservativeSourceJointSlice>,
-        rail: PhysicalLogicWholeCandidateRail, storage: SPICESourceStorageReservation) {
+        rail: PhysicalLogicWholeCandidateRail, connections: PhysicalLogicWholeCandidateIdealConnections? = nil, storage: SPICESourceStorageReservation) {
         payload = Payload(assessment: assessment, preparedSTA: preparedSTA, sourcePreparation: sourcePreparation,
-            observations: observations, timingContext: timingContext, jointSlices: jointSlices, rail: rail, storage: storage)
+            observations: observations, timingContext: timingContext, jointSlices: jointSlices, rail: rail, connections: connections, storage: storage)
     }
     private struct Payload: Sendable {
         let assessment: PhysicalLogicECOAssessment
@@ -28,6 +28,7 @@ public final class PhysicalLogicWholeCandidateFlow: Sendable {
         let timingContext: STAConservativeSourceContext
         let jointSlices: SPICEAccountedCollection<STAConservativeSourceJointSlice>
         let rail: PhysicalLogicWholeCandidateRail
+        let connections: PhysicalLogicWholeCandidateIdealConnections?
         let storage: SPICESourceStorageReservation
     }
 }

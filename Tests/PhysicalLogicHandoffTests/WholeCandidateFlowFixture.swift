@@ -118,7 +118,7 @@ struct WholeCandidateFlowFixture {
     let library: TimingArtifactBinding
     let manifest: TimingArtifactBinding
 
-    static func make(root: URL) async throws -> Self {
+    static func make(root: URL, zeroInputContact: Bool = false) async throws -> Self {
         let helper = PhysicalLogicHandoffTests()
         func bind(_ data: Data, _ name: String, _ format: ArtifactFormat) throws -> TimingArtifactBinding {
             let b = try helper.input(data, name: name, format: format, root: root)
@@ -200,10 +200,10 @@ struct WholeCandidateFlowFixture {
         func ref(_ net: NetName, _ name: String) -> NodeRef { .init(netName: net, nodeName: .init(name)) }
         let ir = ParasiticIR(version: ParasiticIR.currentVersion, cornerID: .init("typical"), units: .canonical,
             nets: [.init(name: ni, nodes: [node("a"), node("new-buffer:A", instance: "new-buffer")],
-                    totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 1),
+                    totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: zeroInputContact ? 0 : 1),
                 .init(name: no, nodes: [node("new-buffer:Y", instance: "new-buffer"), node("y")],
                     totalGroundCapF: 1, totalCouplingCapF: 0, totalResistanceOhm: 1)],
-            elements: [.init(id: "Ri", kind: .resistor, nodeA: ref(ni, "a"), nodeB: ref(ni, "new-buffer:A"), value: 1, source: .userDefined),
+            elements: [.init(id: "Ri", kind: .resistor, nodeA: ref(ni, "a"), nodeB: ref(ni, "new-buffer:A"), value: zeroInputContact ? 0 : 1, source: .userDefined),
                 .init(id: "Ro", kind: .resistor, nodeA: ref(no, "new-buffer:Y"), nodeB: ref(no, "y"), value: 1, source: .userDefined),
                 .init(id: "Co", kind: .capacitor, nodeA: ref(no, "new-buffer:Y"), nodeB: nil, value: 1, source: .userDefined)], metadata: [:])
         // SPEF uses actual logical port names. The SPICE mapping below preserves each physical terminal separately.

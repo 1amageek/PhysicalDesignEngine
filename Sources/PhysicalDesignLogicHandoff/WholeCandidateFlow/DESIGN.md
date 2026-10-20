@@ -99,8 +99,9 @@ bits and multiplicity through public writer, cold parser, whole composition and
 actual lowering. Counts alone cannot prove equality.
 
 Use the actual `SPICESimulationPreparer` checked-source catalog/include routes and
-external MOS preparation results, then pass that exact immutable circuit and
-operating conditions to `NativeConstitutiveCircuitPreparing`. Retain the source
+external MOS preparation results, then apply only the declared ideal-connection transformation below and pass the
+checked derived immutable circuit and same operating conditions to
+`NativeConstitutiveCircuitPreparing`. Retain the source
 input/configuration identities and compare them to actual Native `plan.ir`,
 instance setup receipts, raw/active/global projection and Flow scope. The
 per-model setup witness is not a prepared whole circuit. No SPICE model physics,
@@ -249,6 +250,87 @@ Core observation owner (which retains its Flow) and lower reservations. Public d
 executable authority. A result copy retains the same owners; no per-copy budget
 or per-inspection array is created. Borrowed spans are lexical and cannot cross
 await or escape their immutable owner.
+
+## Declared Zero-Resistance Connections
+
+The exact captured SPEF is the declared circuit model. An exactly positive-zero
+binary64 resistor between two distinct canonical nodes declares the ideal
+constraint V(a)-V(b)=0. This is mathematical netlist interpretation, not a new
+layout/contact, extraction, foundry or PVT qualification. No decoded evidence,
+profile string or caller boolean grants physical authority. Negative zero,
+negative/nonfinite values and unsupported source forms do not silently become a
+connection. The positive-resistor primitive and its finite r>0 admission stay
+unchanged.
+
+Original SPEF bytes/reference, cold passive multiset, ParsedSubcircuit rows and
+the checked source-preparation circuit retain every resistor value bit and raw
+endpoint. After their existing exact transfer check, an internal immutable
+`PhysicalLogicWholeCandidateIdealConnections` maps only generated `whole_pex`
+positive-zero R rows to the existing Native independent DC voltage-source
+primitive with voltage exactly +0.0. The derived circuit keeps every node ID,
+node name, instance name/order and all nonconnection instances unchanged. Each
+mapped instance owns one new, checked unique branch ID. The original source is
+never rewritten and the mapping retains its exact source component ordinal,
+instance index and new branch identity. Thus the prepared Native F/Q equations,
+not a per-model setup observation, implement the declared zero-resistance law:
+
+```text
+original R0(a,b) row retained
+   -> Native V0(a,b), branch i
+   -> F[a]+=i; F[b]-=i; F[branch]=Va-Vb; Q=0
+   -> selected constant-zero source in the existing checked forest
+   -> original endpoint voltage equality and reconstructed contact current
+```
+
+The constant-zero source uses zeroVoltage=oneVoltage=0, initial/window U=[0,0]
+and SI a.e. dU/dt=[0,0]. It is an internal ideal-connection category, never an
+independent Timing input or prescribed endogenous output. The Native source and
+returned Flow scope must match each retained source row, signed endpoints, actual
+instance/device index, fresh branch, DC waveform and selected zero law. Every
+connection must occur exactly once; extra or missing sources fail. Cyclic or
+redundant ideal constraints retain the existing forest's typed refusal instead of
+being dropped or approximated. No rmin, alias collapse or generic R0 admission is
+added to Core.
+
+Only source assumptions are extended internally. All caller OriginalD endpoints,
+initial/window Z/Y, algebraic selectors, dynamic-initial parameters and charge
+boxes are passed unchanged and checked against the FINAL actual circuit/reduced
+order. In particular, no branch-current domain bound or numerical hint is
+synthesized. The retained source circuit and derived Native circuit have equal
+instance/node counts; the mapping explicitly accounts for added branches and
+changed primitive kinds before publication.
+
+Construction pre-admits exact fixed arrays for derived instances, old+new branch
+slots, mapping rows and selected-source slots, plus every new one-entry parameter
+map and owned-branch payload, before allocation. Input nodes, names, source/model
+backing and nonconnection values are immutable shared input; no physical duplicate
+is claimed. The one existing operation control charges all scans/copies, checks
+cancellation before/after reservations and keeps its original cumulative owner.
+The result retains the connection mapping and construction lease with the source
+preparation and actual Flow until the last result copy. No callback executes under
+a lock; all new stored state is immutable on the existing host-only path.
+
+The finite declared-connection profile is qualified. The retained
+`qualification-r1.json` (SHA-256
+`6e388df0c86db523d2664450535a1e268536d1b228c3224aa4070d11eaea0809`)
+and one `root-review-r1.json` (SHA-256
+`a49eb1c90711b8d3a5868355c4d8018424990c465a4c1131885784dc63531d89`)
+bind 12 declarations / 13 cases / zero skips: four new connection tests and eight
+affected whole-candidate tests. Completed unchanged tests are composed with the
+single corrected pure RC test; failed CE bit-identity assertions are not counted
+as success. The tests execute actual controlled Native F/Q and nonzero contact
+current/charge evolution, both endpoint voltage and SI-rate enclosures, exact
+positive-zero/distinct-node refusal, final-dimension refusal, cumulative resource
+failure/cancellation and last-copy refund. The actual SDK case saves and cold
+reloads the SAME checked R0 candidate, rereads its exact SPEF, and then constructs
+a fresh live assessment/Native Flow; no decoded Flow authority is created.
+
+Only the new helper's qualification marker is closed. The existing public
+whole-candidate operation marker belongs to separate strict controlled Runtime,
+STA and CLI completion and is retained. Global admissible initial-set inclusion,
+the full actual 56-device/contact Native circuit, all-history continuation, PVT
+and source-precision guarantees remain unproved; this finite evidence grants no
+physical-contact/foundry qualification.
 
 ## Runtime Flows
 

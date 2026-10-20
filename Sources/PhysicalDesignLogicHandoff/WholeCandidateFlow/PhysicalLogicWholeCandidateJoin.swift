@@ -121,14 +121,17 @@ internal enum PhysicalLogicWholeCandidateJoin {
     static func actualSources(_ circuit: borrowing PreparedNativeCircuit, source: PreparedSPICESimulation,
         timing: STAConservativeSourceContext, slices: SPICEAccountedCollection<STAConservativeSourceJointSlice>,
         request: PhysicalLogicWholeCandidateFlowRequest,
-        pairs: borrowing Span<NativePrescribedVoltageFlowVoltagePair>, control: PhysicalLogicWholeCandidateControl) throws {
+        pairs: borrowing Span<NativePrescribedVoltageFlowVoltagePair>,
+        connections: PhysicalLogicWholeCandidateIdealConnections?, control: PhysicalLogicWholeCandidateControl) throws {
         let one = try PhysicalLogicWholeCandidateSourceValidation.node(named: request.rail.oneNode, in: source, control: control)
         do {
             try circuit.withIndependentVoltageSources(cancellation: control.cancellation) { view in
-                var rails = 0, primaryCount = 0
+                var rails = 0, primaryCount = 0, connectionCount = 0
                 for fact in view.sources {
                     try control.check()
-                    if try control.symbol(fact.instance.name, request.rail.sourceName) {
+                    if let connections, try connections.validate(fact, control: control) {
+                        connectionCount += 1
+                    } else if try control.symbol(fact.instance.name, request.rail.sourceName) {
                         guard fact.positiveNode == one, fact.negativeNode == .ground,
                               fact.dcVoltage.bitPattern == request.rail.oneVoltage.bitPattern,
                               case .dc(let value) = fact.waveform, value.bitPattern == request.rail.oneVoltage.bitPattern else {
@@ -172,7 +175,8 @@ internal enum PhysicalLogicWholeCandidateJoin {
                 }
                 var expected = 0
                 for binding in request.sourceBindings { try control.check(); if binding.sourceDeviceName != nil { expected += 1 } }
-                guard rails == 1, primaryCount == expected, request.native.flow.sources.count == expected else {
+                guard rails == 1, primaryCount == expected, connectionCount == (connections?.rows.count ?? 0),
+                      request.native.flow.sources.count == expected else {
                     throw PhysicalLogicWholeCandidateFlowFailure.source("Incomplete actual independent-source inventory")
                 }
             }
@@ -189,7 +193,7 @@ internal enum PhysicalLogicWholeCandidateJoin {
     static func validate(observations: NativePrescribedVoltageFlowVoltageObservations,
         timing: STAConservativeSourceContext, slices: SPICEAccountedCollection<STAConservativeSourceJointSlice>,
         source: PreparedSPICESimulation, request: PhysicalLogicWholeCandidateFlowRequest,
-        control: PhysicalLogicWholeCandidateControl) throws {
+        connections: PhysicalLogicWholeCandidateIdealConnections?, control: PhysicalLogicWholeCandidateControl) throws {
         guard observations.count == timing.record.sources.count, slices.count == observations.count else {
             throw PhysicalLogicWholeCandidateFlowFailure.family(sourceIndex: -1, reason: "Incomplete same-owner observations")
         }
@@ -249,7 +253,8 @@ internal enum PhysicalLogicWholeCandidateJoin {
                     }
                 }
             }
-            guard selectedCount == scope.sources.count else { throw PhysicalLogicWholeCandidateFlowFailure.source("Flow prescribes an unassociated source") }
+            let connectionCount = try connections?.validate(scope.sources, control: control) ?? 0
+            guard selectedCount + connectionCount == scope.sources.count else { throw PhysicalLogicWholeCandidateFlowFailure.source("Flow prescribes an unassociated source") }
         }
     }
 }
