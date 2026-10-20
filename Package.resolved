@@ -1,5 +1,5 @@
 {
-  "originHash" : "02175fc042f4645c0d6b6a291c88e3afa5de6beb4c6492af3a8b427208fb6eed",
+  "originHash" : "c21bfc3233bbf67d27c92ee9df97a01e76b18ab8a1d62b1b4dea8ce558334ca9",
   "pins" : [
     {
       "identity" : "circuitefoundation",
@@ -14,7 +14,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1amageek/CoreSpice.git",
       "state" : {
-        "revision" : "cfcadac5aeff5d95681d2d91c0bf3e75bd35f169"
+        "revision" : "70ebb46d96edf58a173fccc3f76ccb163076238f"
       }
     },
     {
@@ -38,7 +38,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1amageek/LogicEngine.git",
       "state" : {
-        "revision" : "a6dead5545439c8b5fb2dd9860bf498d8f62be56"
+        "revision" : "1152018bd0034e9e9926f974c3bb6f232fe569d9"
       }
     },
     {
@@ -46,7 +46,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1amageek/PDKKit.git",
       "state" : {
-        "revision" : "f59dfd1dbdd20545ddf97e6a0ab9a956ad7ca809"
+        "revision" : "2c35305fd943174b98009368cf0481f3b308718f"
       }
     },
     {
@@ -54,7 +54,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1amageek/PEXEngine.git",
       "state" : {
-        "revision" : "8b8ead61d08ba9a6f43c191b1897f7bac09c530c"
+        "revision" : "b1bbf83af9218590ff47bb6c8c31482a1dd03bb0"
       }
     },
     {
@@ -113,7 +113,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1amageek/TimingEngine.git",
       "state" : {
-        "revision" : "be979a9e3095e811f5d7cc4d5f74668142d9c052"
+        "revision" : "bc88162612c089c66d1a4022230d23958a7738c0"
       }
     },
     {

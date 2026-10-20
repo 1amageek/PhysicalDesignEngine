@@ -1,7 +1,7 @@
 # PhysicalDesignLogicHandoff
 
 ## Purpose and Scope
-Parent: [Package](../../DESIGN.md). Child: [CheckedCandidatePersistence](CheckedCandidatePersistence/DESIGN.md). Host-only actual-cell logical
+Parent: [Package](../../DESIGN.md). Children: [CheckedCandidatePersistence](CheckedCandidatePersistence/DESIGN.md) and the design-gated [WholeCandidateFlow](WholeCandidateFlow/DESIGN.md). Host-only actual-cell logical
 connectivity admission, additive ECO functional admission, and an explicit
 same-candidate normal-power STA binding for a supplied physical snapshot.
 
@@ -21,6 +21,7 @@ positions, pin shapes or cell function are inferred or fabricated.
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Physical boundary | Host handoff | Logical check only |
 | [CheckedCandidatePersistence](CheckedCandidatePersistence/DESIGN.md) | child | Atomic checked candidate export/reload | Exact standard source/proof artifact handoff | Raw references are not verified owners |
+| [WholeCandidateFlow](WholeCandidateFlow/DESIGN.md) | child | Actual whole-candidate Native producer and complete Timing/Native source join | Separate electrical-source/rail/time authority | No whole seal on unproved internal-output premises |
 | [PhysicalDesignCore](../PhysicalDesignCore/DESIGN.md) | depends on | PhysicalDesignSnapshot | Supplied physical state | Geometry requires independent admission |
 | [Runtime](../../../LogicEngine/Sources/LogicEngineRuntime/DESIGN.md) | depends on | LogicVerifiedSynthesis | Checked baseline actual cells | Legacy artifacts cannot construct this owner |
 | [LogicProof](../../../LogicEngine/Sources/LogicProof/DESIGN.md) | depends on | LogicEquivalenceProblem, check, independent RUP recheck | Candidate functional proof | Inconclusive never grants acceptance; proof owners remain exact |
@@ -67,7 +68,9 @@ traversed or certified.
 PhysicalLogicHandoffTests checks source/save/reload followed by exact physical
 connectivity admission; wrong master, pin rewiring, missing correspondence and
 resource exhaustion fail. Runtime owns functional proof and physical owners own
-source-bound geometry/view validation. This module adds no dependency to Core.
+source-bound geometry/view validation. These existing operations add no direct
+Core dependency; electrical composition is owned by the
+[WholeCandidateFlow child](WholeCandidateFlow/DESIGN.md).
 
 ## Exact LogicEngine Retirement Adoption
 
@@ -310,7 +313,7 @@ use the same prepared owner through Timing's public initial-context protocol;
 that lower API requires a published exact dependency revision before adoption.
 Only an explicitly tagged primary-port entry is a candidate independent physical
 source. A prescribed cell output remains a Timing boundary assumption and cannot
-be promoted to an independent physical source by this operation. Physical does
+be promoted to an independent physical source by this operation. This STA-only operation does
 not construct voltage laws, time or rail mappings, source jets or causal proofs.
 
 The completed-result operation is
@@ -380,3 +383,13 @@ The [CheckedCandidatePersistence child](CheckedCandidatePersistence/DESIGN.md)
 owns the additive publication and checked reload contract. Detailed-routing consumers
 use its exact saved candidate source-netlist and certificate references; functional
 assessment and normal-power STA binding remain this module's existing contracts.
+
+
+## Whole-Candidate Conditional Electrical Flow
+
+The [WholeCandidateFlow child](WholeCandidateFlow/DESIGN.md) owns the actual
+SPICE/PEX-to-controlled-Native producer and complete join with Timing's checked
+source family. Existing functional/STA binding is a prerequisite, not its
+electrical proof. The child owns numeric PG/rail/gauge association and
+endogenous-output obligations. Public source adoption and production qualification
+remain explicit; these existing STA-only operations do not acquire that authority.

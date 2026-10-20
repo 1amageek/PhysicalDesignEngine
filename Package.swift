@@ -12,7 +12,7 @@ let logicDesignDependency: Package.Dependency = .package(
 )
 
 let pdkKitDependency: Package.Dependency = .package(url: "https://github.com/1amageek/PDKKit.git",
-    revision: "f59dfd1dbdd20545ddf97e6a0ab9a956ad7ca809"
+    revision: "2c35305fd943174b98009368cf0481f3b308718f"
 )
 
 let swiftMaskDataDependency: Package.Dependency = .package(
@@ -37,19 +37,24 @@ let package = Package(
         .executable(name: "physical-design", targets: ["PhysicalDesignCLI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/1amageek/LogicEngine.git", revision: "a6dead5545439c8b5fb2dd9860bf498d8f62be56"),
+        .package(url: "https://github.com/1amageek/swift-osdi.git", exact: "1.2.0"),
+        .package(url: "https://github.com/1amageek/LogicEngine.git", revision: "1152018bd0034e9e9926f974c3bb6f232fe569d9"),
         circuiteFoundationDependency,
         logicDesignDependency,
         pdkKitDependency,
         swiftMaskDataDependency,
-        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "cfcadac5aeff5d95681d2d91c0bf3e75bd35f169"),
-        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "8b8ead61d08ba9a6f43c191b1897f7bac09c530c"),
+        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "70ebb46d96edf58a173fccc3f76ccb163076238f"),
+        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "b1bbf83af9218590ff47bb6c8c31482a1dd03bb0"),
         .package(url: "https://github.com/1amageek/DRCEngine.git", revision: "05724746320b56c41fc40c1bfe3366015ad54d65"),
-        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "be979a9e3095e811f5d7cc4d5f74668142d9c052"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "bc88162612c089c66d1a4022230d23958a7738c0"),
         .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "8c66b7bd6b44cab884b75ded9788a4ec548a1919"),
     ],
     targets: [
         .target(name: "PhysicalDesignLogicHandoff", dependencies: ["PhysicalDesignCore",
+            .product(name: "CoreSpice", package: "CoreSpice"),
+            .product(name: "CoreSpiceIO", package: "CoreSpice"),
+            .product(name: "PEXCore", package: "PEXEngine"),
+            .product(name: "PEXParsers", package: "PEXEngine"),
             .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
             .product(name: "TimingCore", package: "TimingEngine"),
             .product(name: "STAEngine", package: "TimingEngine"),
@@ -59,8 +64,14 @@ let package = Package(
             .product(name: "LogicIR", package: "LogicDesign"),
             .product(name: "LogicKernelCore", package: "LogicDesign"),
                 .product(name: "LogicDesignSerialization", package: "LogicDesign"),
-            .product(name: "CircuiteFoundation", package: "CircuiteFoundation")], exclude: ["DESIGN.md", "CheckedCandidatePersistence/DESIGN.md"]),
+            .product(name: "CircuiteFoundation", package: "CircuiteFoundation")], exclude: ["DESIGN.md", "CheckedCandidatePersistence/DESIGN.md", "WholeCandidateFlow/DESIGN.md"],
+            swiftSettings: [.enableExperimentalFeature("Lifetimes"), .enableExperimentalFeature("LifetimeDependence")]),
         .testTarget(name: "PhysicalLogicHandoffTests", dependencies: ["PhysicalDesignLogicHandoff", "PhysicalDesignCore",
+            .product(name: "CoreSpice", package: "CoreSpice"),
+            .product(name: "CoreSpiceIO", package: "CoreSpice"),
+            .product(name: "OSDIContracts", package: "swift-osdi"),
+            .product(name: "OSDIRuntime", package: "swift-osdi"),
+            .product(name: "CircuiteFoundationFileSystem", package: "CircuiteFoundation"),
             .product(name: "PEXNative", package: "PEXEngine"),
             .product(name: "PEXParsers", package: "PEXEngine"),
             .product(name: "TimingCore", package: "TimingEngine"),
