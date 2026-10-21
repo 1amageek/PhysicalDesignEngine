@@ -3,21 +3,21 @@ import PackageDescription
 
 let circuiteFoundationDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/CircuiteFoundation.git",
-    revision: "5f132c58209123433e0e479e1ea61096e46061ba"
+    exact: "26.1021.1"
 )
 
 let logicDesignDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/LogicDesign.git",
-    revision: "5e1d3eec838a0add91c617413682d186a5182335"
+    revision: "9fbffcb1dfbf37517dfc05aa0f37f53c6a5e7659"
 )
 
 let pdkKitDependency: Package.Dependency = .package(url: "https://github.com/1amageek/PDKKit.git",
-    revision: "1bd686f8a4b47a90ef136b5f7dbcca7390971b8e"
+    revision: "82fddd548af704b3f0723eada8e5b09df2dad6e4"
 )
 
 let swiftMaskDataDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/swift-mask-data.git",
-    revision: "67410f834bdfa8a098c2ec0bfe3675210f658277"
+    revision: "4d6f160e405707220589ea0fcbf71c959204b610"
 )
 
 let package = Package(
@@ -37,17 +37,17 @@ let package = Package(
         .executable(name: "physical-design", targets: ["PhysicalDesignCLI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/1amageek/swift-osdi.git", exact: "1.2.0"),
-        .package(url: "https://github.com/1amageek/LogicEngine.git", revision: "c322b4f16c4673ba7b0c0776dbb1abb2d816d7eb"),
+        .package(url: "https://github.com/1amageek/swift-osdi.git", exact: "1.2.2"),
+        .package(url: "https://github.com/1amageek/LogicEngine.git", revision: "1da6db83737c7147a4a16185d2feda5758de1026"),
         circuiteFoundationDependency,
         logicDesignDependency,
         pdkKitDependency,
         swiftMaskDataDependency,
-        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "82eb35e8bc57402880db3529c8a1dc2045349d87"),
-        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "b1bbf83af9218590ff47bb6c8c31482a1dd03bb0"),
-        .package(url: "https://github.com/1amageek/DRCEngine.git", revision: "05724746320b56c41fc40c1bfe3366015ad54d65"),
-        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "812036ecfcbbefdb784be344c8a1087c7eec8766"),
-        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "8c66b7bd6b44cab884b75ded9788a4ec548a1919"),
+        .package(url: "https://github.com/1amageek/CoreSpice.git", revision: "2b22cd478a03e2d119587d583b3e8e8a870f3de8"),
+        .package(url: "https://github.com/1amageek/PEXEngine.git", revision: "af89be07e9a5f87e945993860442851e1c69c3e3"),
+        .package(url: "https://github.com/1amageek/DRCEngine.git", revision: "00467d1c849d2b7de8119a892168e2b9f3676afb"),
+        .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "bbca740b65543c2a8c0737317e6dd1c258d18ee4"),
+        .package(url: "https://github.com/1amageek/semiconductor-layout.git", revision: "3dc3e731cdf7135ee6285a36c16e7caafd6cd9bf"),
     ],
     targets: [
         .target(name: "PhysicalDesignLogicHandoff", dependencies: ["PhysicalDesignCore",

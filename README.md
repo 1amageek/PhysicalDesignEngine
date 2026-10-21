@@ -106,3 +106,16 @@ foundry, all-history, or release qualification. Existing geometry and other test
 receipts retain their original unchanged source/graph scope.
 
 See `DESIGN.md`, `INTERFACES.md`, `CAPABILITY.md`, and `GOAL_STATUS.md` for exact responsibility and maturity boundaries.
+
+
+## Current Public Dependency Consumer
+
+The consumer migration's exact eleven-edge public floor and finite behavioral
+scope are owned by
+[DESIGN.md](DESIGN.md#final-public-dependency-consumer-migration). Its qualification
+passed 25 declarations / 27 expanded cases in five suites, with no skips, after
+building the same public-graph CLI and test product. The selected real CLI
+primary/derived CTS candidates retain JSON/DEF; each actual saved candidate is
+independently functionally rechecked and bound to saved/reloaded STA. The STA
+profile uses pre-route star RC plus caller-selected D-pin load, not same-routed
+LVS or complete physical closure. Historical model preparation is not CLI proof.

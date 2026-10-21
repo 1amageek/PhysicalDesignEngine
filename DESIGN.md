@@ -300,3 +300,58 @@ Historical evidence is retained with its original source and graph premises.
 This is a finite source/API prerequisite qualification, not complete physical
 implementation, all-phase/history continuation, foundry accuracy, signoff or
 release eligibility. Native production intent remains explicitly unsupported.
+
+## Final Public Dependency Consumer Migration
+
+This consumer migration starts from sole public parent
+`a73fb6877117a8331be0ca2d93ef12ce7328ace8`. It keeps the existing eleven direct
+edges, all Physical numerical, source, model, PVT, quota and artifact semantics,
+and retained MIT and third-party notices. The historical source prerequisite and
+its runtime receipts above retain their original graph premises.
+
+| Direct dependency | Current canonical public requirement |
+|---|---|
+| CircuiteFoundation | exact `26.1021.1` |
+| LogicDesign | `9fbffcb1dfbf37517dfc05aa0f37f53c6a5e7659` |
+| PDKKit | `82fddd548af704b3f0723eada8e5b09df2dad6e4` |
+| swift-mask-data | `4d6f160e405707220589ea0fcbf71c959204b610` |
+| swift-osdi | exact `1.2.2` |
+| LogicEngine | `1da6db83737c7147a4a16185d2feda5758de1026` |
+| CoreSpice | `2b22cd478a03e2d119587d583b3e8e8a870f3de8` |
+| PEXEngine | `af89be07e9a5f87e945993860442851e1c69c3e3` |
+| DRCEngine | `00467d1c849d2b7de8119a892168e2b9f3676afb` |
+| TimingEngine | `bbca740b65543c2a8c0737317e6dd1c258d18ee4` |
+| semiconductor-layout | `3dc3e731cdf7135ee6285a36c16e7caafd6cd9bf` |
+
+Canonical HTTPS resolution must produce one clean public source-control graph;
+paths, mirrors, edits and private-history substitutions are not admitted. Lower
+accountant, codec, failure and retained-owner contracts remain lower-owned. This
+consumer checks its actual calls against those published contracts rather than
+copying their implementation or adjusting numerical/resource ceilings.
+
+The bounded same-graph CLI/test build and focused behavioral profile passed:
+25 test declarations, 27 expanded cases in five suites, with no skips. The profile
+uses the existing WholeCandidate ideal connection/flow, checked-candidate
+persistence, normal-power STA binding and actual primary/derived public CLI CTS
+tests, including explicit capture quota refusal through both API and CLI. It checks original source binding,
+actual Native preparation, cancellation/resource refusal and final-copy refunds;
+the CLI must write candidate JSON/DEF, then independent functional recheck and
+saved/reloaded strict STA must bind that same candidate. Checked functional
+persistence remains a separate public API, not a fabricated CLI command.
+
+The CTS STA evidence is source-coefficient pre-route star RC plus explicit caller
+D-pin load. It is not same-routed LVS, extracted full signoff or all-gate closure;
+independent synthetic DRC candidates cannot be merged into that candidate's
+claims. The retained custom Actual56 preparation driver is not public CLI
+execution evidence. All-phase/history, global initial/source proof, full routing
+and foundry qualification remain open with their existing owners. The fixture
+source/model bytes and original numerical assertions remain unchanged.
+
+The operational consumer profile fixes Swift 6.4.0/macOS 27 SDK and jobs 2.
+From the first qualification child, one continuous 2400-second deadline includes
+coordination and failed phases; build aggregate is 1800 seconds, runtime aggregate
+240 seconds and canonical resolve 150 seconds. RSS is limited to 6 GiB and scratch
+growth to 2 GiB, with 5 GiB fresh-start and 3.5 GiB emergency free-disk guards.
+No physical correctness or release eligibility is inferred from these operational
+bounds. Exact source/graph, compiled outputs and retained CLI artifacts provide
+the finite evidence; the migration must be reviewed before publication.
